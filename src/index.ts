@@ -6,6 +6,7 @@ import type { EditEvent, EventType, ThreePaneView } from './core/pop/types.js';
 import { OPFSStorage, WriteAheadLog, CrashRecoveryManager, type RecoveryReport } from './core/storage/index.js';
 import { NarrativeBridge } from './core/ipc/NarrativeBridge.js';
 import type { NarrativeRpcResponse } from './core/ipc/NarrativeRpcProtocol.js';
+import { VerticalViewport } from './core/editor/VerticalViewport.js';
 
 export class PlotailorIDE {
   private engine = new WorldOntologyEngine();
@@ -16,6 +17,7 @@ export class PlotailorIDE {
   private recoveryManager: CrashRecoveryManager;
   private latestRecoveryReport: RecoveryReport | null = null;
   private narrativeBridge = new NarrativeBridge();
+  private viewport = new VerticalViewport();
 
   constructor() {
     this.storage = new OPFSStorage();
@@ -61,6 +63,10 @@ export class PlotailorIDE {
 
   getNarrativeBridge(): NarrativeBridge {
     return this.narrativeBridge;
+  }
+
+  getViewport(): VerticalViewport {
+    return this.viewport;
   }
 
   /**
@@ -119,3 +125,6 @@ export * from './core/storage/index.js';
 export * from './core/ipc/NarrativeRpcProtocol.js';
 export * from './core/ipc/NarrativeEngine.js';
 export * from './core/ipc/NarrativeBridge.js';
+export * from './core/editor/AozoraParser.js';
+export * from './core/editor/ScrollNormalizer.js';
+export * from './core/editor/VerticalViewport.js';
