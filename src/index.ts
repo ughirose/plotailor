@@ -1,9 +1,11 @@
-import type { StateDeltaEvent, SubgraphSlice } from '@schema';
+import type { StateDeltaEvent, SubgraphSlice, NarrativeContext } from '@schema';
 import { WorldOntologyEngine } from '@core';
 import { PoPAuditEngine } from './core/pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from './core/pop/ThreePaneAuditView.js';
 import type { EditEvent, EventType, ThreePaneView } from './core/pop/types.js';
 import { OPFSStorage, WriteAheadLog, CrashRecoveryManager, type RecoveryReport } from './core/storage/index.js';
+import { NarrativeBridge } from './core/ipc/NarrativeBridge.js';
+import type { NarrativeRpcResponse } from './core/ipc/NarrativeRpcProtocol.js';
 
 export class PlotailorIDE {
   private engine = new WorldOntologyEngine();
@@ -13,6 +15,7 @@ export class PlotailorIDE {
   private wal: WriteAheadLog;
   private recoveryManager: CrashRecoveryManager;
   private latestRecoveryReport: RecoveryReport | null = null;
+  private narrativeBridge = new NarrativeBridge();
 
   constructor() {
     this.storage = new OPFSStorage();
@@ -23,8 +26,13 @@ export class PlotailorIDE {
     this.latestRecoveryReport = this.recoveryManager.recoverSession();
   }
 
-  renderScene(slice: SubgraphSlice): void {
+  async renderScene(slice: SubgraphSlice): Promise<void> {
     console.log(`Rendering scene for slice ${slice.id}`);
+    await this.narrativeBridge.call('processSlice', { slice });
+  }
+
+  async evaluateNarrativeContext(context: NarrativeContext): Promise<NarrativeRpcResponse<'evaluateNarrative'>> {
+    return this.narrativeBridge.call('evaluateNarrative', { context });
   }
 
   getEngine(): WorldOntologyEngine {
@@ -49,6 +57,10 @@ export class PlotailorIDE {
 
   getRecoveryManager(): CrashRecoveryManager {
     return this.recoveryManager;
+  }
+
+  getNarrativeBridge(): NarrativeBridge {
+    return this.narrativeBridge;
   }
 
   /**
@@ -104,3 +116,6 @@ export * from './core/pop/MerkleHashChain.js';
 export * from './core/pop/PoPAuditEngine.js';
 export * from './core/pop/ThreePaneAuditView.js';
 export * from './core/storage/index.js';
+export * from './core/ipc/NarrativeRpcProtocol.js';
+export * from './core/ipc/NarrativeEngine.js';
+export * from './core/ipc/NarrativeBridge.js';
