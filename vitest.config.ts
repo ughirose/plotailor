@@ -10,8 +10,9 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@schema': path.resolve(__dirname, '../packages/schema/src/index.ts'),
-      '@core': path.resolve(__dirname, '../worldcraft/src/index.ts'),
+      '@schema': path.resolve(__dirname, 'src/mocks/external-packages.ts'),
+      '@core': path.resolve(__dirname, 'src/mocks/external-packages.ts'),
+      '@nano': path.resolve(__dirname, 'src/mocks/external-packages.ts'),
       '@editor': path.resolve(__dirname, 'src/index.ts'),
       '@editor/*': path.resolve(__dirname, 'src/*'),
     },
