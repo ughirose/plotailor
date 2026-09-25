@@ -54,10 +54,20 @@ class PlotailorApp {
 
   constructor() {
     this.editorBody = document.getElementById('editorBody') as HTMLDivElement;
+    if (window.innerWidth <= 768) {
+      this.leftPaneOpen = false;
+      this.rightPaneOpen = false;
+    }
     this.init();
   }
 
   private init() {
+    if (window.innerWidth <= 768) {
+      const paneL = document.getElementById('paneLeft');
+      const paneR = document.getElementById('paneRight');
+      if (paneL) paneL.style.display = 'none';
+      if (paneR) paneR.style.display = 'none';
+    }
     this.bindEvents();
     this.loadChapter(this.currentChapterId);
     this.renderLeftPane();
