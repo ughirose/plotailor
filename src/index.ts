@@ -134,3 +134,8 @@ export * from './core/storage/MobileResilientStorage.js';
 export * from './core/runtime/WorkerHotSwapManager.js';
 export * from './core/workspace/ThreePaneWorkspace.js';
 export * from './core/editor/cm6ImeGuard.js';
+export * from './core/audit/PoPCertificateExporter.js';
+export * from './core/editor/RubyDecorationExtension.js';
+export * from './ui/LoreInspectorDock.js';
+export * from './core/storage/EncryptedOPFSStorage.js';
+
