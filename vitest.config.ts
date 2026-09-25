@@ -5,10 +5,14 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
+    include: ['tests/**/*.{test,spec}.ts'],
   },
   resolve: {
     alias: {
-      '@editor': path.resolve(__dirname, 'src'),
+      '@schema': path.resolve(__dirname, '../packages/schema/src/index.ts'),
+      '@core': path.resolve(__dirname, '../worldcraft/src/index.ts'),
+      '@editor': path.resolve(__dirname, 'src/index.ts'),
+      '@editor/*': path.resolve(__dirname, 'src/*'),
     },
   },
 });
