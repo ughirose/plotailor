@@ -10,14 +10,14 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@schema": ["../packages/schema/src/index.ts"],
-      "@schema/*": ["../packages/schema/src/*"],
-      "@core": ["../worldcraft/src/index.ts"],
-      "@core/*": ["../worldcraft/src/*"],
+      "@schema": ["src/mocks/schema.ts"],
+      "@schema/*": ["src/mocks/schema.ts"],
+      "@core": ["src/mocks/core.ts"],
+      "@core/*": ["src/mocks/core.ts"],
       "@editor": ["src/index.ts"],
       "@editor/*": ["src/*"],
-      "@nano": ["../narrative-nano/src/index.ts"],
-      "@nano/*": ["../narrative-nano/src/*"]
+      "@nano": ["src/mocks/nano.ts"],
+      "@nano/*": ["src/mocks/nano.ts"]
     }
   },
   "include": ["src/**/*", "tests/**/*"]
