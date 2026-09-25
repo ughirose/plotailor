@@ -4,8 +4,10 @@ import path from 'path';
 export default defineConfig({
   root: '.',
   server: {
-    port: 5173,
-    host: true,
+    port: 8080,
+    host: '0.0.0.0',
+    strictPort: true,
+    allowedHosts: true,
   },
   resolve: {
     alias: {
