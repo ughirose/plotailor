@@ -132,3 +132,4 @@ export * from './core/editor/LoreLinter.js';
 export * from './core/nlp/AhoCorasickAutomaton.js';
 export * from './core/storage/MobileResilientStorage.js';
 export * from './core/runtime/WorkerHotSwapManager.js';
+export * from './core/workspace/ThreePaneWorkspace.js';
