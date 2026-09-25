@@ -167,10 +167,15 @@ class PlotailorApp {
 
   private parseMarkupToHtml(text: string): string {
     let out = text;
-    // Bouten: <<<<傍点>>>>
-    out = out.replace(/<{4}(.+?)>{4}/g, '<span class="bouten">$1</span>');
-    // Ruby: 親文字<<るび>> or 親文字＜＜るび＞＞ or 親文字《るび》
-    out = out.replace(/([^\s<《＜]+?)(?:<<|＜＜|《)(.+?)(?:>>|＞＞|》)/g, '<ruby>$1<rt>$2</rt></ruby>');
+    // 1. Bouten (傍点): 《《傍点》》 or <<<<傍点>>>> or ＜＜＜＜傍点＞＞＞＞
+    out = out.replace(/(?:《《|<{4}|＜{4})([^》>＞\r\n]+?)(?:》》|>{4}|＞{4})/g, '<span class="bouten">$1</span>');
+
+    // 2. Explicit Ruby (明示的ルビ): ｜親文字《るび》 or |親文字<<るび>> or ｜親文字＜＜るび＞＞
+    out = out.replace(/[｜|]([^《<＜\r\n]+?)(?:《|<<|＜＜)([^》>＞\r\n]+?)(?:》|>>|＞＞)/g, '<ruby>$1<rt>$2</rt></ruby>');
+
+    // 3. Implicit Kanji Ruby (暗黙的漢字ルビ): 直前の漢字（CJK統合漢字・々・〆・ヵ・ヶ）のみを親文字とする
+    out = out.replace(/([\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF々〆ヵヶ]+)(?:《|<<|＜＜)([^》>＞\r\n]+?)(?:》|>>|＞＞)/g, '<ruby>$1<rt>$2</rt></ruby>');
+
     return out;
   }
 
@@ -208,8 +213,17 @@ class PlotailorApp {
     const node = sel.anchorNode;
     if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
       const val = node.nodeValue;
-      // Match ruby pattern: 文字<<るび>>
-      const rubyMatch = val.match(/([^\s<《＜]+?)(?:<<|＜＜|《)([^>>》]+?)(?:>>|＞＞|》)/);
+
+      // 1. Check explicit ruby: ｜親文字<<るび>>
+      let rubyMatch = val.match(/[｜|]([^《<＜\r\n]+?)(?:《|<<|＜＜)([^》>＞\r\n]+?)(?:》|>>|＞＞)/);
+      let isExplicit = true;
+
+      // 2. Check implicit kanji ruby: 漢字<<るび>>
+      if (!rubyMatch) {
+        rubyMatch = val.match(/([\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF々〆ヵヶ]+)(?:《|<<|＜＜)([^》>＞\r\n]+?)(?:》|>>|＞＞)/);
+        isExplicit = false;
+      }
+
       if (rubyMatch && rubyMatch.index !== undefined) {
         const fullMatch = rubyMatch[0];
         const base = rubyMatch[1];

@@ -365,7 +365,8 @@ html, body {
 /* Ruby and Bouten Typography */
 ruby {
   ruby-position: over;
-  -webkit-ruby-position: before;
+  -webkit-ruby-position: over;
+  ruby-align: center;
 }
 
 rt {
@@ -373,12 +374,18 @@ rt {
   color: var(--color-gold);
   font-weight: 500;
   letter-spacing: 0.02em;
+  line-height: 1;
+  text-align: center;
+  user-select: none;
 }
 
 .bouten {
   -webkit-text-emphasis: filled sesame var(--color-gold);
   text-emphasis: filled sesame var(--color-gold);
+  -webkit-text-emphasis-position: over right;
+  text-emphasis-position: over right;
 }
+
 
 /* Pane 3: Right Inspector & Lore Dock */
 .pane-right {
