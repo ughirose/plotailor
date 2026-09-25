@@ -14,3 +14,4 @@ export class PlotailorIDE {
 }
 
 export * from './core/ipc/SharedMemoryProtocol.js';
+export * from './ui/LoreInspectorDock.js';
