@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plotailor 執筆室 | 文芸長編特化の統合執筆IDE</title>
+  <meta name="description" content="Plotailor（プロテイラー）本格執筆IDE。設定資料と本文がひとつに溶け合う3ペイン画面、縦書き組版、事故ゼロの完全ローカル暗号化保存、創作プロセス証明（PoP）。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="stylesheet" href="/src/app/app.css">
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Top Header & Navigation -->
+    <header class="ide-header">
+      <div class="ide-header-left">
+        <a href="/" class="ide-brand" title="LPトップへ戻る">
+          <img src="/favicon.png" alt="Plotailor">
+          <span>Plotailor</span>
+        </a>
+        <div class="work-title-badge">
+          <span>作品:</span>
+          <strong>星辰の境界線</strong>
+          <span style="color: var(--color-border);">|</span>
+          <select class="chapter-select" id="chapterSelect" aria-label="章選択">
+            <option value="ch1" selected>第一章 双月の巡る夜に</option>
+            <option value="ch2">第二章 帝都の影と密書</option>
+            <option value="ch3">第三章 忘却の砦</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="ide-header-center">
+        <span class="stat-chip secure" title="ブラウザ内ローカル暗号化ストレージ（OPFS AES-GCM-256）稼働中">
+          🔒 暗号化ローカル保存済
+        </span>
+        <span class="stat-chip pop-score" id="popHeaderScore" title="Human-Centric Authoring Score（打鍵・推敲エントロピー解析）">
+          PoP: HCIS 1.18 ✦
+        </span>
+        <span class="stat-chip" id="charCountHeader">
+          3,420 文字（原稿用紙 8.6 枚）
+        </span>
+      </div>
+
+      <div class="ide-header-right">
+        <button class="ide-btn" id="btnToggleLeftPane" title="左ペインの開閉">◨ 目次</button>
+        <button class="ide-btn" id="btnToggleOrientation" title="縦書き／横書きの切り替え">縦書き</button>
+        <button class="ide-btn" id="btnToggleTheme" title="和紙色／夜間色の切り替え">和紙色</button>
+        <button class="ide-btn" id="btnFullscreen" title="集中執筆全画面モード">⛶ 全画面</button>
+        <button class="ide-btn btn-primary" id="btnExportAozora" title="青空文庫形式をクリップボードにコピー">青空形式出力</button>
+        <button class="ide-btn" id="btnToggleRightPane" title="右ペイン（伏線・因果インスペクタ）の開閉">◧ 伏線</button>
+      </div>
+    </header>
+
+    <!-- 3-Pane Workspace -->
+    <main class="ide-workspace">
+      <!-- Left Pane: Chapter Outline & Lore Navigation -->
+      <aside class="pane-left" id="paneLeft">
+        <div class="pane-tabs">
+          <button class="pane-tab-btn active" data-tab="toc">原稿目次</button>
+          <button class="pane-tab-btn" data-tab="lore">登場人物・世界観</button>
+          <button class="pane-tab-btn" data-tab="timeline">年表・暦</button>
+        </div>
+        <div class="pane-content" id="leftPaneContent">
+          <!-- Populated by JavaScript -->
+        </div>
+      </aside>
+
+      <!-- Center Pane: Writing Canvas -->
+      <section class="pane-center" id="paneCenter">
+        <div class="editor-toolbar">
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <span style="font-weight: 500;" id="activeChapterTitle">第一章 双月の巡る夜に</span>
+            <span style="color: var(--color-text-dim);">—</span>
+            <span style="font-size: 11px; color: var(--color-text-dim);">ルビ打鍵: 《るび》, &lt;&lt;るび&gt;&gt; | 傍点: &lt;&lt;&lt;&lt;傍点&gt;&gt;&gt;&gt;</span>
+          </div>
+          <div>
+            <span id="saveStatusIndicator" style="font-size: 11px; color: var(--color-text-muted);">自動保存: 0.4秒前</span>
+          </div>
+        </div>
+
+        <div class="canvas-wrapper" id="canvasWrapper">
+          <div class="editor-body" id="editorBody" contenteditable="true" spellcheck="false"></div>
+        </div>
+      </section>
+
+      <!-- Right Pane: Lore & Foreshadowing Inspector & PoP Audit Dock -->
+      <aside class="pane-right" id="paneRight">
+        <div class="pane-tabs">
+          <button class="pane-tab-btn active" data-dock-tab="lore">伏線・設定</button>
+          <button class="pane-tab-btn" data-dock-tab="causality">因果DAG</button>
+          <button class="pane-tab-btn" data-dock-tab="pop">PoP創作証明</button>
+        </div>
+        <div class="dock-content" id="dockContent">
+          <!-- Populated by JavaScript -->
+        </div>
+      </aside>
+    </main>
+
+    <!-- Bottom Status Bar -->
+    <footer class="ide-footer">
+      <div class="ide-footer-left">
+        <span>行: <strong id="cursorLine">1</strong>, 列: <strong id="cursorCol">1</strong></span>
+        <span>|</span>
+        <span>選択文字数: <strong id="selectionLength">0</strong></span>
+        <span>|</span>
+        <span>入力速度: <strong id="typingSpeed">340</strong> 字/分</span>
+      </div>
+      <div class="ide-footer-right">
+        <span>⚙️ Narrative-Nano Wasm SIMD: <strong style="color: var(--color-success);">Ready (0.6μs)</strong></span>
+        <span>|</span>
+        <span>ゼロ代名詞補完: <strong style="color: var(--color-gold);">10格Biaffine有効</strong></span>
+        <span>|</span>
+        <span>Zero-Telemetry: <strong style="color: var(--color-success);">Protected</strong></span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Fullscreen Exit Floating Button -->
+  <button class="fullscreen-exit-btn" id="btnExitFullscreen">
+    <span>✕</span> 全画面執筆を終了 (Esc)
+  </button>
+
+  <script type="module" src="/src/app/main.ts"></script>
+</body>
+</html>

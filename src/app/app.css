@@ -1,0 +1,488 @@
+/* ==========================================================================
+   Plotailor Full Writing IDE Styles (app.css)
+   Aesthetic: 和洋折衷クラシック文芸モダン (深藍, 金箔, 漆黒, 和紙・羊皮紙)
+   ========================================================================== */
+
+:root {
+  --color-bg-dark: #0e1117;
+  --color-bg-sidebar: #131720;
+  --color-bg-panel: #161b22;
+  --color-border: #2d333b;
+  --color-border-subtle: #21262d;
+  --color-gold: #cfa85c;
+  --color-gold-hover: #dfba6e;
+  --color-gold-subtle: rgba(207, 168, 92, 0.15);
+  --color-text-main: #e6edf3;
+  --color-text-muted: #8b949e;
+  --color-text-dim: #6e7681;
+  --color-accent: #388bfd;
+  --color-success: #3fb950;
+  --color-warning: #d29922;
+  --color-danger: #f85149;
+
+  /* Literary Canvas (Washi & Night) */
+  --canvas-bg-washi: #faf7ee;
+  --canvas-text-washi: #222222;
+  --canvas-border-washi: #e5dec9;
+  --canvas-bg-night: #0b0e14;
+  --canvas-text-night: #d8e2ec;
+
+  --font-serif: "Shippori Mincho", "Noto Serif JP", "Yu Mincho", "Hiragino Mincho ProN", serif;
+  --font-mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --header-height: 48px;
+  --footer-height: 28px;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-main);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* App Container */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* Top Navigation / Status Header */
+.ide-header {
+  height: var(--header-height);
+  background-color: var(--color-bg-sidebar);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  user-select: none;
+  z-index: 100;
+}
+
+.ide-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ide-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--color-gold);
+  font-weight: 600;
+  font-size: 15px;
+  letter-spacing: 0.05em;
+}
+
+.ide-brand img {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+}
+
+.work-title-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-subtle);
+  font-size: 13px;
+  color: var(--color-text-main);
+}
+
+.work-title-badge .chapter-select {
+  background: transparent;
+  border: none;
+  color: var(--color-text-main);
+  font-family: inherit;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+.work-title-badge .chapter-select option {
+  background-color: var(--color-bg-sidebar);
+  color: var(--color-text-main);
+}
+
+.ide-header-center {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.stat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border-subtle);
+  font-family: var(--font-mono);
+}
+
+.stat-chip.secure {
+  color: var(--color-success);
+}
+
+.stat-chip.pop-score {
+  color: var(--color-gold);
+}
+
+.ide-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ide-btn {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-main);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ide-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: var(--color-gold);
+  color: var(--color-gold);
+}
+
+.ide-btn.active {
+  background-color: var(--color-gold-subtle);
+  border-color: var(--color-gold);
+  color: var(--color-gold);
+}
+
+.ide-btn.btn-primary {
+  background: linear-gradient(135deg, #cfa85c 0%, #b88f40 100%);
+  color: #0e1117;
+  font-weight: 600;
+  border: none;
+}
+
+.ide-btn.btn-primary:hover {
+  background: linear-gradient(135deg, #dfba6e 0%, #cfa85c 100%);
+  color: #000;
+}
+
+/* 3-Pane Workspace Body */
+.ide-workspace {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  height: calc(100% - var(--header-height) - var(--footer-height));
+  overflow: hidden;
+  position: relative;
+}
+
+/* Pane 1: Left Navigation & Lore Sidebar */
+.pane-left {
+  width: 260px;
+  background-color: var(--color-bg-sidebar);
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.pane-tabs {
+  display: flex;
+  background-color: rgba(0, 0, 0, 0.2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.pane-tab-btn {
+  flex: 1;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.pane-tab-btn:hover {
+  color: var(--color-text-main);
+}
+
+.pane-tab-btn.active {
+  color: var(--color-gold);
+  border-bottom-color: var(--color-gold);
+  background-color: rgba(207, 168, 92, 0.05);
+}
+
+.pane-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.nav-section-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-dim);
+  margin-bottom: 8px;
+}
+
+.chapter-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 6px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.15s;
+  color: var(--color-text-main);
+}
+
+.chapter-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.chapter-item.active {
+  background-color: var(--color-gold-subtle);
+  color: var(--color-gold);
+  font-weight: 600;
+}
+
+.chapter-char-count {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+}
+
+/* Pane 2: Center Writing Canvas */
+.pane-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--canvas-bg-washi);
+  color: var(--canvas-text-washi);
+  position: relative;
+  overflow: hidden;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.pane-center.theme-night {
+  background-color: var(--canvas-bg-night);
+  color: var(--canvas-text-night);
+}
+
+.editor-toolbar {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background-color: rgba(0, 0, 0, 0.03);
+  border-bottom: 1px solid var(--canvas-border-washi);
+  font-size: 12px;
+}
+
+.pane-center.theme-night .editor-toolbar {
+  background-color: rgba(255, 255, 255, 0.03);
+  border-bottom-color: var(--color-border);
+}
+
+.canvas-wrapper {
+  flex: 1;
+  width: 100%;
+  height: calc(100% - 38px);
+  position: relative;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+}
+
+.editor-body {
+  width: 100%;
+  max-width: 860px;
+  min-height: 100%;
+  padding: 40px 48px;
+  outline: none;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  line-height: 2.1;
+  letter-spacing: 0.03em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Vertical Writing Mode */
+.pane-center.vertical-rl .canvas-wrapper {
+  overflow-x: auto;
+  overflow-y: hidden;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.pane-center.vertical-rl .editor-body {
+  writing-mode: vertical-rl;
+  -webkit-writing-mode: vertical-rl;
+  height: 100%;
+  width: auto;
+  max-width: none;
+  padding: 36px 40px;
+  line-height: 2.3;
+}
+
+/* Ruby and Bouten Typography */
+ruby {
+  ruby-position: over;
+  -webkit-ruby-position: before;
+}
+
+rt {
+  font-size: 0.55em;
+  color: var(--color-gold);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.bouten {
+  -webkit-text-emphasis: filled sesame var(--color-gold);
+  text-emphasis: filled sesame var(--color-gold);
+}
+
+/* Pane 3: Right Inspector & Lore Dock */
+.pane-right {
+  width: 300px;
+  background-color: var(--color-bg-panel);
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.dock-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.dock-card {
+  background-color: var(--color-bg-sidebar);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.dock-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.dock-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-gold);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dock-card-body {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.6;
+}
+
+/* Bottom Status Bar */
+.ide-footer {
+  height: var(--footer-height);
+  background-color: var(--color-bg-sidebar);
+  border-top: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: 11px;
+  color: var(--color-text-dim);
+  user-select: none;
+}
+
+.ide-footer-left, .ide-footer-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Fullscreen Mode */
+body.fullscreen-active .ide-header,
+body.fullscreen-active .ide-footer,
+body.fullscreen-active .pane-left,
+body.fullscreen-active .pane-right {
+  display: none !important;
+}
+
+body.fullscreen-active .ide-workspace {
+  height: 100vh !important;
+}
+
+body.fullscreen-active .pane-center {
+  width: 100vw !important;
+}
+
+/* Fullscreen Floating Controls */
+.fullscreen-exit-btn {
+  display: none;
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  background-color: rgba(14, 17, 23, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--color-gold);
+  color: var(--color-gold);
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+body.fullscreen-active .fullscreen-exit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
