@@ -4,7 +4,7 @@
  * Strict compliance with the 3-Pane Integrated IDE Constitution:
  * - Left Pane: WorldCraft Lore Tree & Character Subgraph Dock
  * - Center Pane: CodeMirror 6 Vertical Writing Mode & Aozora Parser Viewport
- * - Right Pane: Proof of Process (PoP) Merkle Inspector & Real-time Consistency Panel
+ * - Right Pane: Proof of Process (PoP) Merkle Inspector, Consistency Panel & OPFS Revision History
  * - Prohibition: Zero single-use modal dialogs. Everything is docked and inline.
  */
 
@@ -17,6 +17,7 @@ import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
 import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
 import { OPFSStorage } from '../storage/OPFSStorage.js';
+import { RevisionHistoryManager } from '../storage/RevisionHistoryManager.js';
 import { WorkerHotSwapManager, type WorkerInstance } from '../runtime/WorkerHotSwapManager.js';
 
 export interface WorkspaceState {
@@ -24,7 +25,7 @@ export interface WorkspaceState {
   rawText: string;
   isComposing: boolean;
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
-  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
+  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance' | 'revision-history';
   diagnostics: LoreDiagnostic[];
   isSaving: boolean;
   lastSavedTimestamp: number;
@@ -36,7 +37,9 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private rawStorage: OPFSStorage;
   private storage: MobileResilientStorage;
+  private revisionManager: RevisionHistoryManager;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
 
@@ -50,15 +53,20 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
-    this.storage = new MobileResilientStorage(new OPFSStorage());
+    this.rawStorage = new OPFSStorage();
+    this.storage = new MobileResilientStorage(this.rawStorage);
+
+    const docId = `doc-${Date.now()}`;
+    this.revisionManager = new RevisionHistoryManager(this.rawStorage, docId);
 
     if (options?.worker) {
       this.hotSwapManager = new WorkerHotSwapManager(options.worker);
     }
 
+    const initialText = options?.initialText ?? '';
     this.state = {
-      currentDocumentId: `doc-${Date.now()}`,
-      rawText: options?.initialText ?? '',
+      currentDocumentId: docId,
+      rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
@@ -66,6 +74,10 @@ export class ThreePaneWorkspace {
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
+
+    if (initialText) {
+      this.revisionManager.createSnapshot(initialText, 'Initial document state');
+    }
   }
 
   public getState(): WorkspaceState {
@@ -78,6 +90,10 @@ export class ThreePaneWorkspace {
 
   public getHotSwapManager(): WorkerHotSwapManager | null {
     return this.hotSwapManager;
+  }
+
+  public getRevisionManager(): RevisionHistoryManager {
+    return this.revisionManager;
   }
 
   /**
@@ -109,6 +125,7 @@ export class ThreePaneWorkspace {
 
   /**
    * Safe atomic save to OPFS in background without stalling the UI.
+   * Also creates a generation snapshot in RevisionHistoryManager.
    */
   public async autoSave(): Promise<boolean> {
     if (this.state.isComposing || this.state.isSaving) {
@@ -124,11 +141,20 @@ export class ThreePaneWorkspace {
       });
 
       await this.storage.writeSafe(`${this.state.currentDocumentId}.json`, payload);
+      this.revisionManager.createSnapshot(this.state.rawText, 'Auto-save snapshot');
       this.state.lastSavedTimestamp = Date.now();
       return true;
     } finally {
       this.state.isSaving = false;
     }
+  }
+
+  /**
+   * Safe non-destructive rollback to target revision (undo tree protection).
+   */
+  public rollbackToRevision(targetRevisionId: string): void {
+    const { restoredContent } = this.revisionManager.rollback(targetRevisionId);
+    this.onTextChange(restoredContent, false);
   }
 
   /**
@@ -151,7 +177,15 @@ export class ThreePaneWorkspace {
     rightPane: { activeTab: string; contentHtml: string };
   } {
     const parsedHtml = this.viewport.renderContent(this.state.rawText);
-    const auditViewModel = this.auditView.render();
+
+    let rightPaneHtml = '';
+    if (this.state.activeRightTab === 'pop-audit') {
+      rightPaneHtml = `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`;
+    } else if (this.state.activeRightTab === 'revision-history') {
+      rightPaneHtml = this.revisionManager.renderDockViewHtml();
+    } else {
+      rightPaneHtml = `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`;
+    }
 
     return {
       leftPane: {
@@ -165,10 +199,7 @@ export class ThreePaneWorkspace {
       },
       rightPane: {
         activeTab: this.state.activeRightTab,
-        contentHtml:
-          this.state.activeRightTab === 'pop-audit'
-            ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+        contentHtml: rightPaneHtml,
       },
     };
   }
