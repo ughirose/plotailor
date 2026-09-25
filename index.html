@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Plotailor ＆ WorldCraft — 次世代文学執筆・世界観統合IDE</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Shippori+Mincho:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- App Header & Navigation Bar -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-logo">P</div>
+        <div class="brand-name">Plotailor &amp; WorldCraft</div>
+        <div class="brand-badge">Integrated IDE</div>
+      </div>
+
+      <nav class="nav-tabs">
+        <button class="nav-btn active" data-tab="landing">
+          <span>🌟</span> ランディング
+        </button>
+        <button class="nav-btn" data-tab="editor">
+          <span>✍️</span> 3ペインエディタ
+        </button>
+        <button class="nav-btn" data-tab="debug">
+          <span>🔬</span> Narrative-Nano 検証
+        </button>
+      </nav>
+
+      <div class="status-badge-group">
+        <div class="status-pill">
+          <span class="status-dot"></span>
+          <span>Wasm SIMD / OPFS Ready</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Container -->
+    <main>
+      <!-- View 1: Landing Page -->
+      <section id="view-landing" class="view-container active"></section>
+
+      <!-- View 2: 3-Pane Non-Modal Editor -->
+      <section id="view-editor" class="view-container"></section>
+
+      <!-- View 3: Narrative-Nano Debug Playground -->
+      <section id="view-debug" class="view-container"></section>
+    </main>
+
+    <script type="module" src="/src/web/main.ts"></script>
+  </body>
+</html>
