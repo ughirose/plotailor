@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ヘルプ＆作家操作ガイド | Plotailor（プロテイラー）</title>
+  <meta name="description" content="Plotailorの公式操作ガイド・ヘルプポータル。執筆プロジェクトの始め方、3ペイン画面の使い方、縦書き・ルビ記法、世界観設定の登録、創作プロセス証明（PoP）の発行、自動保存の仕組みを丁寧に解説します。">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Navigation Header -->
+  <header class="site-header">
+    <div class="header-container">
+      <a href="index.html" class="brand-logo">
+        <div class="brand-icon">P</div>
+        <span>Plotailor</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">← ランディングページへ戻る</a></li>
+        <li><a href="index.html#mockup">エディタ体験</a></li>
+        <li><a href="index.html#beta-join" class="nav-cta">クローズドβ参加</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main>
+    <!-- Help Hero & Search -->
+    <section class="help-hero">
+      <div class="hero-badge">作家向け操作マニュアル & 困ったときの知恵袋</div>
+      <h1 class="hero-title" style="font-size: 2.2rem; margin-bottom: 0.75rem;">
+        Plotailor ヘルプ＆ガイドポータル
+      </h1>
+      <p style="color: var(--text-secondary); max-width: 600px; margin: 0 auto;">
+        世界観の整理から縦書き執筆、創作証明書の発行まで。執筆を止めないためのすべての操作手順をまとめています。
+      </p>
+
+      <div class="search-box-container">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="helpSearchInput" class="search-input" placeholder="キーワードで検索（例：縦書き、ルビ、保存、PoP、バックアップ）...">
+      </div>
+    </section>
+
+    <!-- Help Layout -->
+    <div class="help-layout">
+      <!-- Left Category Sidebar -->
+      <aside class="help-sidebar">
+        <div class="pane-heading" style="margin-bottom: 1rem;">
+          <span>カテゴリ別メニュー</span>
+        </div>
+        <ul class="category-nav">
+          <li><button class="category-btn active" data-category="all">すべて表示</button></li>
+          <li><button class="category-btn" data-category="intro">【はじめに】基本操作・3ペイン</button></li>
+          <li><button class="category-btn" data-category="world">【世界観・設定】人物・拠点・年表</button></li>
+          <li><button class="category-btn" data-category="editor">【エディタ機能】縦書き・ルビ・原稿枚数</button></li>
+          <li><button class="category-btn" data-category="pop">【創作証明】推敲ログと真正性証明</button></li>
+          <li><button class="category-btn" data-category="data">【データ管理】自動保存とバックアップ</button></li>
+          <li><button class="category-btn" data-category="faq">【よくある質問】FAQ・トラブル解決</button></li>
+        </ul>
+
+        <div style="margin-top: 2rem; padding: 1.25rem; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); font-size: 0.82rem; color: var(--text-secondary);">
+          <div style="font-weight: 600; color: var(--accent-gold); margin-bottom: 0.5rem;">💡 アプリ内呼び出し</div>
+          Plotailorエディタの画面右上「？」アイコンからいつでもこのヘルプを呼び出せます。
+        </div>
+      </aside>
+
+      <!-- Main Articles Container -->
+      <section class="help-articles">
+        <div id="helpNoResults" style="display: none; padding: 3rem 1rem; text-align: center; background: var(--bg-surface); border-radius: var(--radius-md);">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+          <h3 style="color: var(--text-primary); margin-bottom: 0.5rem;">一致する記事が見つかりませんでした</h3>
+          <p style="color: var(--text-muted); font-size: 0.9rem;">別の単語（「ルビ」「保存」「設定」など）でお試しいただくか、カテゴリボタンを選択してください。</p>
+        </div>
+
+        <!-- Section 1: Intro -->
+        <article class="guide-article" data-category="intro">
+          <div class="article-category-badge">はじめに</div>
+          <h2 class="article-title">執筆プロジェクトの始め方と「3ペイン画面」の見方</h2>
+          <div class="article-content">
+            <p>
+              Plotailorを起動すると、長編小説執筆に特化した「3ペイン（3分割）画面」が開きます。従来のメモ帳や汎用エディタのように、設定ファイルやプロットシートを別ウィンドウで探す必要はありません。
+            </p>
+            
+            <h4>画面を構成する3つのエリア</h4>
+            <ul>
+              <li><strong>左ペイン【世界観・設定資料】:</strong> 登場人物、拠点・地理、歴史年表、魔法体系などを一覧化。クリックひとつで本文中の該当箇所を照合できます。</li>
+              <li><strong>中央ペイン【執筆エディタ】:</strong> 本文を集中して書くメイン領域。縦書き・横書きの即座切り替え、青空文庫ルビ表示、文字数および400字詰原稿用紙換算が常時表示されます。</li>
+              <li><strong>右ペイン【専属執筆アシスタント & 創作ログ】:</strong> 本文中で言及された設定の整合性をリアルタイムで検知し、矛盾がないかを静かに見守ります。また、作家自身の推敲プロセスを暗号学的に記録します。</li>
+            </ul>
+
+            <div class="callout-box">
+              <div class="callout-title">ペインの折りたたみ</div>
+              執筆に100%没頭したいときは、ショートカットキー（<code>Ctrl + B</code> または 画面右上の全画面アイコン）で左右のペインをワンタッチで隠し、純粋な原稿用紙だけに集中できます。
+            </div>
+          </div>
+        </article>
+
+        <!-- Section 2: World Bible -->
+        <article class="guide-article" data-category="world">
+          <div class="article-category-badge">世界観・設定</div>
+          <h2 class="article-title">人物・拠点・年表の登録と本文中からのクイック呼び出し</h2>
+          <div class="article-content">
+            <p>
+              長編や群像劇で最も多い「あのキャラの目の色は何色だったか」「この事件は作中時間の何年前だったか」という迷いをゼロにします。
+            </p>
+
+            <h4>設定エンティティの登録手順</h4>
+            <ol>
+              <li>左ペインの「＋新規設定追加」をクリックします。</li>
+              <li>カテゴリ（「人物」「拠点・国」「歴史年表」「用語・概念」）を選択します。</li>
+              <li>名称、別名・愛称、外見的特徴、口調サンプル、時系列関係を入力して保存します。</li>
+            </ol>
+
+            <h4>本文中での呼び出し（スマートリンク）</h4>
+            <p>
+              本文を執筆中、登録された人物や拠点の名前を入力すると、エディタが自動的に認識して下線（または縦書き時の側線）を表示します。クリックすると右ペインにその人物の詳細カードが即座に展開され、別の作業画面に移動することなく素早く確認できます。
+            </p>
+          </div>
+        </article>
+
+        <!-- Section 3: Editor -->
+        <article class="guide-article" data-category="editor">
+          <div class="article-category-badge">エディタ機能</div>
+          <h2 class="article-title">縦書き/横書き切替、ルビ入力、文字カウントと原稿用紙換算</h2>
+          <div class="article-content">
+            <p>
+              文芸出版・商業小説の標準である縦書き組版と、Web小説で標準的な青空文庫形式のルビ記法をネイティブサポートしています。
+            </p>
+
+            <h4>縦書きと横書きの切り替え</h4>
+            <p>
+              画面上部の「縦書き／横書き」切り替えボタンを押すだけで、原稿のレイアウトが一瞬で切り替わります。執筆時はPCのキーボード入力に馴染む横書きで行い、完成した章の推敲・リズム確認時には縦書きに切り替えるといった柔軟な執筆スタイルが可能です。
+            </p>
+
+            <h4>ルビ（ふりがな）の入力形式</h4>
+            <p>青空文庫形式に準拠しています：</p>
+            <ul>
+              <li><code>｜星見の塔《アストラル・スパイア》</code> → 漢字の上に「アストラル・スパイア」とルビが振られます。</li>
+              <li><code>私《わたくし》</code> → 漢字直後の二重山括弧でも自動認識されます。</li>
+            </ul>
+
+            <h4>文字数・原稿用紙換算</h4>
+            <p>
+              エディタ上部のステータスバーには、純粋な本文文字数（空白・改行の除外設定可能）とともに、<strong>「原稿用紙換算 約 ○.○ 枚」</strong>（400字詰め基準）がリアルタイム表示されます。公募賞の規定枚数管理や、Web連載の1話あたりの分量コントロールが直感的に行えます。
+            </p>
+          </div>
+        </article>
+
+        <!-- Section 4: PoP -->
+        <article class="guide-article" data-category="pop">
+          <div class="article-category-badge">創作証明</div>
+          <h2 class="article-title">推敲ログと「創作プロセス証明書（PoP）」の発行手順</h2>
+          <div class="article-content">
+            <p>
+              生成AIの普及により、「この作品は本当に人間が手で書いたのか？」という疑念が文芸界や新人賞の選考現場で議論されるようになっています。Plotailorは、作家の尊厳と真正性を守るための「Proof of Process（創作プロセス証明）」を備えています。
+            </p>
+
+            <h4>PoPの仕組み</h4>
+            <p>
+              あなたが文章を書き、削り、構成を組み替えた「推敲のタイムスタンプとハッシュダイジェスト」をPC内部で安全に記録します。本文そのものを外部に漏らすことなく、「人間が段階的に思考を重ねて完成させた」という事実のみを暗号学的に数学的証明します。
+            </p>
+
+            <h4>証明書の発行手順</h4>
+            <ol>
+              <li>原稿が完成したら、右ペインの「創作証明」メニューを選択します。</li>
+              <li>「証明書の発行」をクリックします。</li>
+              <li>作品名、作家名（ペンネーム）、執筆期間、推敲打鍵ログの要約が含まれたPDFまたは検証用JSONスタンプがダウンロードされます。</li>
+            </ol>
+
+            <div class="callout-box">
+              <div class="callout-title">コンテスト・新人賞への提出</div>
+              ダウンロードした証明書ハッシュコードを応募シートの自由記述欄や、あとがきに記載することで、完全な自作・手書き推敲作品であることを客観的に証明できます。
+            </div>
+          </div>
+        </article>
+
+        <!-- Section 5: Data Management -->
+        <article class="guide-article" data-category="data">
+          <div class="article-category-badge">データ管理</div>
+          <h2 class="article-title">自動保存の仕組みとバックアップ（.worldpack）のエクスポート・インポート</h2>
+          <div class="article-content">
+            <p>
+              「パソコンが突然再起動して書いた原稿が消えた」という悪夢を、技術の力で過去のものにします。
+            </p>
+
+            <h4>超高信頼ローカル保存の仕組み</h4>
+            <p>
+              Plotailorはブラウザ内部の高速専用ファイルシステム（OPFS: Origin Private File System）に直結しています。キーを一文字打つたびにローカルディスクへ差分保存が行われるため、万が一ブラウザがクラッシュしたりPCの電源が落ちても、直前に入力した一文字まで完全に復元されます。
+            </p>
+
+            <h4>.worldpack（ワールドパック）形式でのバックアップ</h4>
+            <p>
+              本文だけでなく、登録したすべての登場人物、拠点、年表、相関図、推敲履歴をまるごと1つのファイル（<code>作品名.worldpack</code>）として書き出すことができます。
+            </p>
+            <ul>
+              <li><strong>エクスポート:</strong> メニューの「作品の保存」→「.worldpackを書き出す」をクリック。</li>
+              <li><strong>インポート:</strong> 別のPCや新しい環境で「.worldpackを開く」からファイルを選ぶだけで、一瞬ですべての執筆環境が蘇ります。</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- Section 6: FAQ -->
+        <article class="guide-article" data-category="faq">
+          <div class="article-category-badge">よくある質問</div>
+          <h2 class="article-title">よくある質問・トラブルシューティング</h2>
+          <div class="article-content">
+            <div class="faq-item">
+              <div class="faq-question">
+                <span>Q. インターネット接続がない完全オフラインの環境でも執筆できますか？</span>
+                <span class="faq-toggle-icon">+</span>
+              </div>
+              <div class="faq-answer">
+                はい、完全に利用可能です。Plotailorはエディタ、世界観データベース、リアルタイム推敲アシスタントのすべてがお手元のパソコン内部で完結して動作します。新幹線の中、飛行機の中、電波の届かない山奥の執筆合宿でも全く問題なく動作します。
+              </div>
+            </div>
+
+            <div class="faq-item">
+              <div class="faq-question">
+                <span>Q. 私の書いた小説や設定が、AIの学習データとして勝手に吸い取られることはありませんか？</span>
+                <span class="faq-toggle-icon">+</span>
+              </div>
+              <div class="faq-answer">
+                一切ありません。原稿データや設定資料は外部サーバーへ一切送信されず、あなたのPCのローカル領域にのみ厳重に保存されます。プライベートな創作世界が学習や外部漏洩に晒される危険はゼロです。
+              </div>
+            </div>
+
+            <div class="faq-item">
+              <div class="faq-question">
+                <span>Q. カクヨムや小説家になろうなどの投稿サイトへそのまま貼り付けられますか？</span>
+                <span class="faq-toggle-icon">+</span>
+              </div>
+              <div class="faq-answer">
+                はい。エディタ右上の「Web投稿用コピー」機能を使うことで、主要投稿サイト（カクヨム、小説家になろう、ノベルアップ+等）の各ルビ記法に合わせて自動フォーマットされた本文をクリップボードに瞬時にコピーできます。
+              </div>
+            </div>
+
+            <div class="faq-item">
+              <div class="faq-question">
+                <span>Q. ブラウザのキャッシュをクリアすると原稿が消えてしまいますか？</span>
+                <span class="faq-toggle-icon">+</span>
+              </div>
+              <div class="faq-answer">
+                通常の履歴・Cookieの消去では削除されない「高耐久性ストレージ領域」を使用していますが、ブラウザの完全リセットを行う場合に備え、1章書き終えるごとに<code>.worldpack</code>ファイル形式でPCの任意のフォルダ（DocumentsやDropbox等）にバックアップを保存しておくことを強く推奨いたします。
+              </div>
+            </div>
+
+            <div class="faq-item">
+              <div class="faq-question">
+                <span>Q. 利用料金はかかりますか？</span>
+                <span class="faq-toggle-icon">+</span>
+              </div>
+              <div class="faq-answer">
+                現在募集中の先行クローズドβテスト期間中は、すべての機能を完全無料でご利用いただけます。正式リリース後も、個人作家様の基本執筆環境はフリープランとして無償提供される予定です。
+              </div>
+            </div>
+          </div>
+        </article>
+      </section>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <div class="brand-logo" style="margin-bottom: 0.75rem;">
+          <div class="brand-icon">P</div>
+          <span>Plotailor</span>
+        </div>
+        <p>長編Web小説家・世界観クリエイターのための、事故ゼロで美しく紡げる統合執筆環境。</p>
+      </div>
+
+      <div class="footer-nav">
+        <div class="footer-col">
+          <h5>ポータルリンク</h5>
+          <ul>
+            <li><a href="index.html">ランディングページ</a></li>
+            <li><a href="index.html#features">5大特長</a></li>
+            <li><a href="index.html#pop-proof">創作プロセス証明（PoP）</a></li>
+            <li><a href="index.html#beta-join">クローズドβ参加</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      &copy; 2026 Plotailor Project. All rights reserved. 作家の尊厳と物語の可能性を支え続けます。
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>

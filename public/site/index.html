@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plotailor（プロテイラー） | 世界観を紡ぐ長編作家のための専用執筆環境</title>
+  <meta name="description" content="長編Web小説家・ファンタジー作家へ。設定資料と本文がひとつに溶け合う3ペイン画面、美しい日本語縦書き組版、事故ゼロの完全ローカル保存、そして作家の推敲軌跡を証明する創作プロセス証明（PoP）を搭載。">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Navigation Header -->
+  <header class="site-header">
+    <div class="header-container">
+      <a href="index.html" class="brand-logo">
+        <div class="brand-icon">P</div>
+        <span>Plotailor</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#features">特長</a></li>
+        <li><a href="#pop-proof">創作プロセス証明</a></li>
+        <li><a href="#mockup">エディタ体験</a></li>
+        <li><a href="help.html">ヘルプ・使い方</a></li>
+        <li><a href="#beta-join" class="nav-cta js-open-beta-modal">クローズドβに参加</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <main>
+    <!-- Hero Section -->
+    <section class="hero-section">
+      <div class="hero-badge">
+        ✦ 長編Web小説家・世界観クリエイターのための次世代執筆環境
+      </div>
+      <h1 class="hero-title">
+        設定の迷路から解放され、<br>物語の核心へと没頭する。
+      </h1>
+      <p class="hero-subtitle">
+        Plotailor（プロテイラー）は、設定資料・縦書き本文・リアルタイム推敲がひとつに溶け合う、長編作家専用の執筆統合環境です。<br>
+        ブラウザが落ちても1文字も消えない信頼性と、あなたの創作軌跡を証明する安心をあなたに。
+      </p>
+      <div class="hero-actions">
+        <a href="#beta-join" class="btn btn-primary js-open-beta-modal">先行クローズドβに申し込む（無料）</a>
+        <a href="help.html" class="btn btn-secondary">操作ガイド・ヘルプを見る</a>
+      </div>
+    </section>
+
+    <!-- Interactive 3-Pane Mockup Section -->
+    <section class="mockup-container" id="mockup">
+      <div class="mockup-window">
+        <div class="mockup-header">
+          <div class="window-dots">
+            <span class="window-dot dot-red"></span>
+            <span class="window-dot dot-yellow"></span>
+            <span class="window-dot dot-green"></span>
+          </div>
+          <div class="mockup-titlebar">
+            <span>第3章「星見の塔の密約」 - 統合執筆キャンバス</span>
+          </div>
+          <div class="mockup-controls">
+            <button class="mock-btn active" id="toggleOrientation">横書き表示</button>
+            <button class="mock-btn" id="toggleTheme">夜間ダーク色</button>
+          </div>
+        </div>
+
+        <div class="pane-grid">
+          <!-- Left Pane: World Bible -->
+          <aside class="pane-left">
+            <div class="pane-heading">
+              <span>世界観・設定資料（3ペイン左）</span>
+              <span style="font-size: 0.7rem; color: var(--text-muted);">クイック参照</span>
+            </div>
+            <div class="world-card-list">
+              <div class="world-card active" data-entityId="elena">
+                <div class="world-card-title">
+                  <span>エレーナ・フォルトナー</span>
+                  <span class="badge-tag">主要人物</span>
+                </div>
+                <div class="world-card-desc">
+                  王宮筆頭調停官。銀灰色の髪と碧眼。冷徹に見えて情に厚い。
+                </div>
+              </div>
+
+              <div class="world-card" data-entityId="astral-tower">
+                <div class="world-card-title">
+                  <span>星見の塔</span>
+                  <span class="badge-tag lore">帝国拠点</span>
+                </div>
+                <div class="world-card-desc">
+                  古代天文台跡。標高3,200m、年間を通じて冷酷な吹雪が吹き荒れる。
+                </div>
+              </div>
+
+              <div class="world-card" data-entityId="chronicle">
+                <div class="world-card-title">
+                  <span>双月食の変（星暦742年）</span>
+                  <span class="badge-tag">歴史年表</span>
+                </div>
+                <div class="world-card-desc">
+                  12年前の政変。幼きエレーナの家門が追放された運命の夜。
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <!-- Center Pane: Writing Editor (Supports Vertical RL) -->
+          <div class="pane-center">
+            <div class="editor-toolbar">
+              <div class="editor-stats">
+                <span id="mockCharCount">1,482 文字</span>
+                <span>/</span>
+                <span id="mockPageCount">原稿用紙換算 約 3.7 枚</span>
+              </div>
+              <div style="font-size: 0.72rem; color: var(--accent-gold);">
+                ● ローカル瞬時保存済み（損失ゼロ）
+              </div>
+            </div>
+
+            <!-- Vertical Mode Enabled by Default in this mockup -->
+            <div class="editor-content-area vertical-mode" id="editorContentArea">
+              <p>
+                冷涼な夜風が、石造りの回廊を吹き抜けていく。
+              </p>
+              <p>
+                「待たせましたわね」
+              </p>
+              <p>
+                宵闇の中から現れたのは、<ruby><span class="highlight-entity">エレーナ</span><rt>えれーな</rt></ruby>だった。銀灰色の長髪が星灯りに淡く揺らめき、鋭い碧眼が射すような光を放っている。
+              </p>
+              <p>
+                見上げる先には、雲海を貫く巨塔――かつて古代星導師たちが築いたとされる禁足地、<span class="highlight-entity">星見の塔</span>が静まり返っていた。標高三千メートルを超えるこの高嶺では、息を吸うたびに肺腑が凍てつくような感覚に襲われる。
+              </p>
+              <p>
+                「<span class="highlight-entity">双月食の変</span>から、今日でちょうど十二年。……あの日奪われた真実の記録を、今夜こそ取り戻します」
+              </p>
+              <p>
+                彼女の手には、青白く脈動する刻印石が握られていた。過去の傷跡を払うように、静かな決意が足音とともに塔の扉へと吸い込まれていく。
+              </p>
+            </div>
+          </div>
+
+          <!-- Right Pane: Realtime Writer Assistant & PoP -->
+          <aside class="pane-right">
+            <div class="pane-heading">
+              <span>専属執筆アシスタント（3ペイン右）</span>
+            </div>
+
+            <div class="assistant-card">
+              <div class="assistant-header">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm.5 4.5v4.25l3 1.8-.75 1.2-3.75-2.25V4.5h1.5z"/></svg>
+                <span id="assistantContextTitle">エレーナ・フォルトナー（主要人物）</span>
+              </div>
+              <div class="assistant-body" id="assistantContextDesc">
+                銀灰色の髪と透徹した碧眼を持つ。第3章で《星見の塔》への潜入記録と整合性を確認中。本文中での口調「〜ですわ」のブレを検知中。
+              </div>
+            </div>
+
+            <div class="assistant-card">
+              <div class="assistant-header">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/></svg>
+                <span>世界観・設定の整合性チェック</span>
+              </div>
+              <div class="assistant-body">
+                ・人物の年齢と年表（双月食の変：12年前）の時系列矛盾なし。<br>
+                ・厳冬期の星見の塔に対する外套・防寒描写の確認済み。
+              </div>
+            </div>
+
+            <div class="assistant-card">
+              <div class="assistant-header">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 1a2 2 0 0 1 2 2v2H6V3a2 2 0 0 1 2-2zm3 4V3a3 3 0 1 0-6 0v2H3a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2z"/></svg>
+                <span>創作真正性ログ（PoP）</span>
+              </div>
+              <div class="assistant-body">
+                作家本人のキーストロークおよび推敲プロセスを暗号学的に記録中。
+                <div class="pop-badge-pill">
+                  ✓ 創作プロセス証明書 発行可能
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section" id="features">
+      <div class="section-header">
+        <div class="section-tag">Crafted for Novelists</div>
+        <h2 class="section-title">物語を愛するすべての書き手に、<br>妥協なき執筆環境を。</h2>
+      </div>
+
+      <div class="features-grid">
+        <!-- Feature 1 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7"/></svg>
+          </div>
+          <h3 class="feature-title">設定資料・本文・推敲が1つの画面で完結</h3>
+          <p class="feature-description">
+            もう無数の別タブや別メモを行き来する必要はありません。左に世界観、中央に執筆、右に推敲。視線移動だけで必要な設定をすべて手元に呼び出せます。
+          </p>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          </div>
+          <h3 class="feature-title">文芸・出版基準の美しい日本語縦書き執筆</h3>
+          <p class="feature-description">
+            日本語小説の呼吸を整える縦書き表示と青空文庫形式ルビ（<code>｜漢字《ルビ》</code>）を完全サポート。原稿用紙換算枚数もリアルタイムで把握できます。
+          </p>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3 class="feature-title">執筆中の事故ゼロ。超高信頼ローカル保護</h3>
+          <p class="feature-description">
+            クラウド障害やブラウザクラッシュが起きても、あなたの原稿は1文字も消えません。PC内の安全な孤立領域（OPFS）に毎秒安全に書き込まれます。
+          </p>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <h3 class="feature-title">待ち時間ゼロ。世界観を見守る専用アシスタント</h3>
+          <p class="feature-description">
+            外部通信による待機時間を排除。PC内部で瞬時に動作するAIが、登場人物の口調や伏線、過去の出来事との矛盾をリアルタイムに静かに見守ります。
+          </p>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+          </div>
+          <h3 class="feature-title">創作プロセスの真正性証明（PoP）</h3>
+          <p class="feature-description">
+            AI自動生成が溢れる時代だからこそ、人間作家が悩み、試行錯誤し、推敲を重ねた軌跡を客観的に証明。文芸賞応募や読者への信頼を確固たるものにします。
+          </p>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="feature-card">
+          <div class="feature-icon-wrapper">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+          </div>
+          <h3 class="feature-title">完全な自由。1ファイルで持ち運べる設定集</h3>
+          <p class="feature-description">
+            独自パッケージ形式（<code>.worldpack</code>）により、長大な世界観設定や推敲履歴をまるごと1ファイルでエクスポート可能。ベンダーロックインの心配はありません。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- PoP Special Section -->
+    <section class="pop-section" id="pop-proof">
+      <div class="pop-container">
+        <div>
+          <div class="section-tag">Proof of Process</div>
+          <h2 class="section-title">あなたの「推敲の足跡」が、<br>作品の真実の証明になる。</h2>
+          <p style="color: var(--text-secondary); margin: 1.25rem 0 1.75rem; line-height: 1.8;">
+            物語を一文字ずつ紡ぎ、悩み、書き直した時間の重みは、AIの一括生成では決して生み出せない尊いものです。<br><br>
+            Plotailorの「創作プロセス証明（PoP）」は、執筆中のキー入力や段落再構築の時系列ダイジェストを改ざん不可能な形で記録。「人間が確かに自分の意志で創り上げた作品」であることをワンクリックで証明書として出力できます。
+          </p>
+          <ul style="color: var(--text-secondary); margin-left: 1.5rem; line-height: 2;">
+            <li>公募新人賞やコンテスト提出時の「純手書き・自作真正性証明」に</li>
+            <li>同人誌奥付やあとがきに掲載するクリエイティブ・スタンプに</li>
+            <li>作品を愛してくれる読者への誠実なメッセージとして</li>
+          </ul>
+        </div>
+
+        <div class="pop-card">
+          <div class="pop-badge-certificate">
+            <div class="cert-emblem">PoP</div>
+            <div>
+              <div style="font-weight: 700; color: var(--text-primary); font-size: 1.1rem;">Plotailor 創作プロセス真正性証明書</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Cryptographic Authorship Log #PLT-2026-9481</div>
+            </div>
+          </div>
+
+          <div class="timeline-step">
+            <strong style="color: var(--text-primary);">2026-09-21 21:14</strong><br>
+            プロット構成着手：世界観エンティティ《星見の塔》《エレーナ》をリンク
+          </div>
+          <div class="timeline-step">
+            <strong style="color: var(--text-primary);">2026-09-23 23:40</strong><br>
+            第3章 草稿執筆完了（累計 8,240打鍵、推敲率 34.2%）
+          </div>
+          <div class="timeline-step">
+            <strong style="color: var(--text-primary);">2026-09-25 19:30</strong><br>
+            エレーナのセリフ調整と伏線整合性完了（最終確定）
+          </div>
+
+          <div style="margin-top: 1.5rem; padding: 0.75rem; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); font-size: 0.75rem; font-family: var(--font-mono); color: var(--accent-gold-light);">
+            SHA-256 Digest: 7e2f5b8c...a91d4e60<br>
+            検証ステータス: 完全な自律推敲プロセスを確認済み
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Beta Join Section -->
+    <section class="beta-section" id="beta-join">
+      <div class="section-tag">Limited Closed Beta</div>
+      <h2 class="section-title" style="margin-bottom: 1.25rem;">先行クローズドβテスト参加作家を募集中</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 2.5rem;">
+        商業作家様、Web小説連載中の作家様、世界観クリエイターの皆様を優先してご招待いたします。執筆スタイルに合わせた個別フィードバックもお待ちしております。
+      </p>
+
+      <div class="beta-form-card">
+        <form id="betaSignupForm">
+          <div class="form-group">
+            <label class="form-label" for="writerName">ペンネーム（作家名）</label>
+            <input type="text" id="writerName" class="form-input" placeholder="例：星野 織人" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="writerEmail">メールアドレス（ご案内送付用）</label>
+            <input type="email" id="writerEmail" class="form-input" placeholder="writer@example.com" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="writerGenre">主な執筆ジャンル</label>
+            <select id="writerGenre" class="form-select">
+              <option value="fantasy">ハイファンタジー・異世界・SF</option>
+              <option value="modern">現代ドラマ・ミステリー・文芸</option>
+              <option value="lightnovel">ライトノベル・キャラクター小説</option>
+              <option value="game">ゲームシナリオ・TRPG世界設定</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="writerMessage">最も期待する機能・現在の執筆における課題（任意）</label>
+            <textarea id="writerMessage" class="form-textarea" rows="3" placeholder="例：人物の口調や設定の矛盾が増えて困っている、縦書きでの推敲をスムーズにしたい等"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+            クローズドβテストに申し込む
+          </button>
+        </form>
+
+        <div id="betaFormSuccess" style="display: none; text-align: center; padding: 2rem 1rem;">
+          <div style="font-size: 2.5rem; margin-bottom: 1rem;">✨</div>
+          <h3 style="font-family: var(--font-serif); font-size: 1.3rem; margin-bottom: 0.5rem;">お申し込みありがとうございます</h3>
+          <p style="color: var(--text-secondary); font-size: 0.95rem;">
+            先行テスト版のご案内準備が整い次第、ご登録のメールアドレス宛に招待キーとダウンロードURLをお送りいたします。
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modal Dialog for Beta Signup -->
+  <div class="modal-overlay" id="betaModal">
+    <div class="modal-dialog">
+      <button class="modal-close-btn" id="closeBetaModal">&times;</button>
+      <div style="margin-bottom: 1.5rem;">
+        <div class="section-tag">Closed Beta Registration</div>
+        <h3 style="font-family: var(--font-serif); font-size: 1.35rem; color: var(--text-primary);">
+          先行クローズドβテストへ参加
+        </h3>
+      </div>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 1.5rem;">
+        以下のフォームにご入力ください。ご案内をお送りいたします。
+      </p>
+      <form onsubmit="event.preventDefault(); document.getElementById('betaSignupForm').dispatchEvent(new Event('submit')); this.innerHTML='<div style=\'text-align:center;padding:1.5rem 0;color:var(--accent-gold-light);\'>登録が完了しました。ありがとうございます！</div>';">
+        <div class="form-group">
+          <label class="form-label">ペンネーム</label>
+          <input type="text" class="form-input" placeholder="例：星野 織人" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">メールアドレス</label>
+          <input type="email" class="form-input" placeholder="writer@example.com" required>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 1rem;">
+          今すぐ参加登録する
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <div class="brand-logo" style="margin-bottom: 0.75rem;">
+          <div class="brand-icon">P</div>
+          <span>Plotailor</span>
+        </div>
+        <p>長編Web小説家・世界観クリエイターのための、事故ゼロで美しく紡げる統合執筆環境。</p>
+      </div>
+
+      <div class="footer-nav">
+        <div class="footer-col">
+          <h5>プロダクト</h5>
+          <ul>
+            <li><a href="#features">主要特長</a></li>
+            <li><a href="#mockup">執筆画面モック</a></li>
+            <li><a href="#pop-proof">創作プロセス証明（PoP）</a></li>
+            <li><a href="#beta-join" class="js-open-beta-modal">クローズドβ参加</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h5>サポート＆ガイド</h5>
+          <ul>
+            <li><a href="help.html">ヘルプポータル</a></li>
+            <li><a href="help.html#cat-world">世界観の登録方法</a></li>
+            <li><a href="help.html#cat-editor">縦書き・ルビの書き方</a></li>
+            <li><a href="help.html#cat-data">バックアップと復元</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      &copy; 2026 Plotailor Project. All rights reserved. 執筆者の意志と真正性を最優先に設計されています。
+    </div>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
