@@ -133,3 +133,4 @@ export * from './core/nlp/AhoCorasickAutomaton.js';
 export * from './core/storage/MobileResilientStorage.js';
 export * from './core/runtime/WorkerHotSwapManager.js';
 export * from './core/workspace/ThreePaneWorkspace.js';
+export * from './core/editor/cm6ImeGuard.js';

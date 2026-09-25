@@ -8,10 +8,10 @@
  * - Prohibition: Zero single-use modal dialogs. Everything is docked and inline.
  */
 
-import type { SubgraphSlice, TermRegulation } from '@schema';
+import type { SubgraphSlice } from '@schema';
 import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
-import { LoreLinterEngine, type LoreDiagnostic } from '../editor/LoreLinter.js';
+import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';

@@ -6,7 +6,9 @@
   "types": "src/index.ts",
   "dependencies": {
     "@worldcraft/core": "workspace:*",
-    "@worldcraft/schema": "workspace:*"
+    "@worldcraft/schema": "workspace:*",
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/view": "^6.23.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -15,6 +17,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.2",
+    "jsdom": "^24.0.0",
     "typescript": "^5.4.5",
     "vitest": "^5.0.1"
   }
