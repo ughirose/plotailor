@@ -5,8 +5,15 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
-    "@worldcraft/core": "workspace:*",
-    "@worldcraft/schema": "workspace:*"
+    "@worldcraft/core": "file:packages/@worldcraft/core",
+    "@worldcraft/schema": "file:packages/@worldcraft/schema",
+    "@codemirror/state": "^6.4.0",
+    "@codemirror/view": "^6.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0",
+    "jsdom": "^24.0.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
