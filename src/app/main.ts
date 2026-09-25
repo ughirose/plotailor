@@ -291,12 +291,23 @@ class PlotailorApp {
     this.isVertical = !this.isVertical;
     const center = document.getElementById('paneCenter');
     const btn = document.getElementById('btnToggleOrientation');
+    const wrapper = document.getElementById('canvasWrapper');
     if (this.isVertical) {
       center?.classList.add('vertical-rl');
       if (btn) btn.textContent = '横書き';
+      if (wrapper) {
+        requestAnimationFrame(() => {
+          wrapper.scrollLeft = wrapper.scrollWidth;
+        });
+      }
     } else {
       center?.classList.remove('vertical-rl');
       if (btn) btn.textContent = '縦書き';
+      if (wrapper) {
+        requestAnimationFrame(() => {
+          wrapper.scrollLeft = 0;
+        });
+      }
     }
   }
 

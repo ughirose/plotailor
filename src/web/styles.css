@@ -694,11 +694,13 @@ img {
 /* Vertical Text Rendering */
 .editor-content-area.vertical-mode {
   writing-mode: vertical-rl;
+  -webkit-writing-mode: vertical-rl;
   text-orientation: mixed;
   line-height: 2.1;
   letter-spacing: 0.08em;
   font-size: 1.05rem;
   height: 100%;
+  margin-left: auto;
 }
 
 .editor-content-area.horizontal-mode {

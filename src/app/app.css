@@ -349,7 +349,7 @@ html, body {
   overflow-x: auto;
   overflow-y: hidden;
   display: flex;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 .pane-center.vertical-rl .editor-body {
@@ -357,9 +357,11 @@ html, body {
   -webkit-writing-mode: vertical-rl;
   height: 100%;
   width: auto;
+  min-width: fit-content;
   max-width: none;
-  padding: 36px 40px;
+  padding: 36px 48px;
   line-height: 2.3;
+  margin-left: auto;
 }
 
 /* Ruby and Bouten Typography */
