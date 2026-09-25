@@ -1,0 +1,212 @@
+文芸創作およびゲーム開発におけるバージョン管理技術の導入実態、産業構造、ならびに未充足領域の分析
+1. 文芸執筆における Git・GitHub の適用動向と実態
+ソフトウェア開発の手法を自然言語による創作に応用する試みは、プログラミング知識を有する作家やテクニカルライターを中心に長年実践されてきた。原稿を Markdown やプレーンテキスト形式で記述し、Visual Studio Code や Obsidian 等のエディタと Git を連携させ、GitHub のプライベートリポジトリにプッシュして版管理を行う運用形態が典型例である1。近年では、Obsidian の保管庫（Vault）全体を単一の Git リポジトリとして同期・保全する手法や、Claude Code 等の生成 AI ツールと連携させて推敲プロセスを自動化・記録するワークフローも見られる3。さらに、生成 AI の急速な普及に伴い、人間の手による創作プロセスの正当性を証明する目的で、GitHub のコミット履歴やタイムスタンプ付きの差分ログを活用する試み（VellumProof 等）も現れている6。
+歴史的には、非エンジニア向けに Git の思想を文芸執筆へ拡張しようとした「作家向け GitHub」と呼ぶべきウェブサービスが複数立ち上げられた。代表例として、ブラウザ上の Markdown 編集環境にブランチ機能とプルリクエスト（マージ要求）を統合した「Penflip」や、文書の版管理と差分受領に特化した「Draft」が存在する7。Penflip は文書をプロジェクト単位で管理し、共同編集者が独自のブランチで改稿した内容を著者が査読して本流へマージする仕組みを提供した7。しかし、作家層の多くが依然としてリッチテキストや WYSIWYG（見たままの編集）環境を選好したことや、単一文書に対する厳格なブランチ運用が一般的な執筆習慣と乖離していたことから、持続可能な事業規模を確立できずにサービスを終了した11。学術論文向けに同様の分散リポジトリ基盤を提供していた「Authorea」も、独立したエコシステムを維持するに至らず大手学術出版社へ買収・統合されている11。
+一方、小説家や脚本家の間でデファクトスタンダードとなっている「Scrivener」（Literature & Latte 社）は、章やシーン単位のバインダー管理、コルクボード機能、多様な出力フォーマット対応によって高い支持を得ている13。しかし、Scrivener はローカル環境で完結するデスクトップアプリケーションであり、Git のような分散型バージョン管理や複数人によるリアルタイム共同編集はネイティブには備えていない13。また、「Campfire」（Campfire Technology 社）や「World Anvil」といった世界設定・プロット統合型プラットフォームは、キャラクター相関図、年表、設定資料の相互参照に強みを持つものの、その本質はリレーショナルデータベース型の情報管理であり、ソフトウェア開発のようなブランチ分岐やきめ細やかな差分マージ基盤は提供していない16。
+
+ツール分類
+代表的なソフトウェア
+データ形式・アーキテクチャ
+バージョン管理・共同編集の仕組み
+利点と主な制約
+汎用開発プラットフォーム
+Git, GitHub, VS Code, Obsidian
+プレーンテキスト（Markdown, txt）2
+コミット、ブランチ、プルリクエスト2
+利点: 厳密な変更履歴の追跡、CI/CD 自動化の適用が可能19
+
+制約: CUI の学習コスト、文章コンフリクト解決の難しさ2
+文筆特化 VCS ラッパー（過去の試作）
+Penflip, Draft
+Markdown, クラウド集中管理7
+ブランチ分岐、提案受領（Review/Merge）7
+利点: Web UI による Git 概念の抽象化20
+
+制約: WYSIWYG 支持層への訴求不足、収益化難で終了11
+文芸オーサリングツール
+Scrivener (Literature & Latte)
+独自複合構造（XML/リッチテキスト）13
+スナップショット（ローカル保存）、手動バックアップ13
+利点: 長編の構成把握力、多様な出版フォーマット出力13
+
+制約: 外部 VCS との非互換、複数人同時編集の欠如14
+世界設定・プロット管理ツール
+Campfire, World Anvil
+クラウド RDBMS / モジュール型ドキュメント17
+権限分離、クラウド自動同期、ロール別アクセス制御16
+利点: 設定資料・相関図の有機的リンクと共有17
+
+制約: 行・構文レベルでの分岐・差分マージ機能は未実装
+2. ゲーム制作におけるシナリオ管理とバージョン管理システムの採用動向
+ゲーム制作におけるナラティブ（シナリオ・対話）は、単なる文章表現にとどまらず、分岐フラグや変数、ゲームロジックと密接に結合した「構造化データ」として扱われる22。そのため、シナリオ管理手法はテキスト記述とゲームエンジンの実行環境をいかに分離・統合するかによって、プレーンテキスト言語型とビジュアル管理ツール型に大別される。
+プレーンテキスト型スクリプティング言語
+インディーゲーム開発を中心に、テキストファイルそのものに分岐ロジックや状態変数を埋め込むオープンソースの専用スクリプティング言語が広く採用されている。代表的なものに、Inkle 社が開発した「Ink」や、Secret Lab 等が手掛ける「Yarn Spinner」がある22。
+Ink は、『80 Days』や『Heaven's Vault』『Overboard!』などのタイトルで実証された言語であり、独自の軽量構文を用いて分岐、状態追跡、複雑な合流構造（Weave）を記述できる25。テキスト形式（.ink）で記述されるため、エンジニアが管理する Git リポジトリへ直接コミットでき、標準的な diff ツールで差分を確認できる点が大きな利点である29。
+Yarn Spinner は、映画や演劇の脚本に似た構文を採用し、『Night in the Woods』『A Short Hike』『DREDGE』などで採用されている23。ライターが操作する執筆サーフェスと、エンジニアが管理するランタイム（Unity、Godot、汎用 C#）が明確に切り離されており、ライターが Git 上でテキストを更新し、エンジニアがエンジン側へ反映する分業体制の構築を可能にしている23。
+ビジュアル型ナラティブ設計環境
+より大規模かつ複雑な分岐設計を行う現場では、有償の専門ツール「articy:draft X」が採用されている22。articy:draft は、フローチャート状のノードエディタでセリフや分岐条件、変数を視覚的に定義し、Unity や Unreal Engine に構造化データ（JSON/XML）としてエクスポートする仕組みを持つ22。複数人での同時編集に対しては「パーティション（Partition）」と呼ばれる専有ロック方式を採用しており、内部のバージョン管理バックエンドとして Subversion（SVN）や Perforce Helix Core と透過的に連動するアーキテクチャを備えている33。
+ゲーム業界全体の VCS 環境とバイナリアセットの管理
+ゲーム制作現場では、テキストスクリプトだけでなく、数ギガバイトから数百ギガバイトに及ぶ 3D モデル、高解像度テクスチャ、非圧縮オーディオ、エンジン固有のシーンデータなどの「巨大バイナリアセット」を日常的に扱う36。そのため、ソフトウェア業界全般で支配的な Git と、ゲーム業界で選好されるシステムの住み分けには明確な技術的背景が存在する36。
+大規模な AAA スタジオでは、現在も「Perforce Helix Core（P4）」が業界標準の地位を維持している36。Perforce は中央集権型のアーキテクチャを採用しており、テラバイト級のプロジェクトにおける高速な部分同期（Sparse Sync）、ディレクトリ単位の詳細なアクセス制御（機密保持管理）、および編集中のファイル衝突を防ぐ「排他的ファイルロック（Exclusive Lock）」を提供する36。一方、Unity 社に買収された「Plastic SCM（現 Unity VCS）」は、大規模バイナリの扱いやすさとアーティスト向け GUI を兼ね備え、中規模スタジオや Unity 環境で定着している37。
+Git をゲーム制作に導入する場合は「Git LFS（Large File Storage）」を併用するか、コード用（Git）とアセット用（Perforce/Plastic）にリポジトリを分割するデュアルリポジトリ運用が採られる37。しかし、Git LFS はクラウドストレージおよび転送帯域の従量課金が発生しやすく、ロック運用の即時性にも制約がある36。
+こうした背景から、Epic Games は2026年6月の「State of Unreal」において、新たなオープンソース VCS「Lore」を発表した43。Lore は Rust 言語で記述され、Fortnite の制作基盤（UEFN）で実証された技術を基盤としている49。中央サーバーを単一の真実のソースとしながら、BLAKE3 ハッシュによるコンテンツアドレス指定、バイナリファイルの断片（チャンク）レベルでの重複排除、必要なファイルのみを作業コピーに展開する「オンデマンド・ハイドレーション」を備え、オフラインでのコミットやブランチ切り替えを高速化している49。これは、Git の柔軟な分散操作と Perforce のバイナリスケーラビリティを融合させる試みとして注目を集めている38。
+
+システム
+アーキテクチャ
+バイナリ管理手法
+ファイル競合回避
+主な採用領域・スタジオ規模
+Perforce Helix Core
+中央集権型39
+サーバー保管、部分同期（Sparse Sync）39
+排他的ファイルロック（Exclusive Lock）36
+AAA スタジオ、映像制作、大規模エンタープライズ36
+Unity VCS (Plastic SCM)
+分散／集中ハイブリッド37
+バイナリ最適化ストレージ、視覚的ブランチ管理37
+排他ロック、ビジュアルマージ37
+インディー〜中規模スタジオ、Unity 採用環境37
+Git + Git LFS
+完全分散型39
+ポインタファイルと外部ストレージによる分離37
+LFS Lock（追加設定）、外部 GUI による拡張36
+インディー開発、プログラマー主導型チーム36
+Lore (Epic Games)
+中央集権（真実のソース）＋ ローカル高速キャッシュ49
+ネイティブチャンク分割、断片レベル重複排除、遅延展開43
+サーバー制御による集中競合解決、排他ロック機能49
+Unreal Engine / UEFN エコシステム、大規模ハイブリッド開発50
+3. 市場規模、投資動向、および主要事業者の事業展開
+クリエイティブライティングおよびゲーム開発向けバージョン管理・制作基盤の領域では、独立したソフトウェア市場の形成と大規模な資本移動が確認できる。
+クリエイティブライティングソフトウェアのグローバル市場規模は、2025年時点で約7億5,420万米ドルと推計されており、2034年には年平均成長率（CAGR）10.5%で18億5,245万米ドル規模に達すると予測されている57（一部の市場調査では2025年時点で18億米ドル、2034年に43億米ドル規模に達するとの推計も存在する）58。また、映画・テレビ・ゲームの脚本に特化したスクリプトライティングソフトウェア市場は、2025年の約2億2,011万米ドルから、2034年には CAGR 18.48%のペースで10億1,263万米ドル規模まで拡大する見込みである59。さらに、画像・映像編集を含む広義のクリエイティブソフトウェア市場全体は、2025年時点で約99.9億米ドルから104億米ドルに達し、2035年には190億〜228億米ドル規模に成長すると試算されている60。
+開発支援およびバージョン管理のインフラ領域においては、非エンジニア（アーティストやシナリオライター）を含むスタジオ全体のワークフローを統合するツールに対して巨額の資本が投入されている。Perforce Software 社は2018年1月にプライベートエクイティ企業 Clearlake Capital に買収された後、2019年には Francisco Partners が同社へ資本参加し、両社による共同保有体制となった62。Perforce はその後、PRQA、Rogue Wave、Puppet（2022年）、Delphix（2024年）などの企業買収を継続し、2025年にはゲーム・デジタルアセット向けバージョン管理を手掛ける Snowtrack を傘下に収めるなど、クリエイティブ開発パイプラインの統合を推し進めている62。同社の Helix Core Cloud は月額39米ドル/ユーザーで提供され、大規模な商用 SaaS 収益基盤を確立している36。
+ゲームエンジン大手の Unity Technologies は、2020年8月に Plastic SCM の開発元である Códice Software を買収し、エンジン統合型のバージョン管理環境（Unity VCS）を構築した44。また、Git を基盤としながらアーティスト向けのファイルロックやプレビュー機能を提供するデスクトップクライアント「Anchorpoint」（月額20米ドル/ユーザー〜）や、Perforce の運用負荷を軽減するクラウド型 VCS を目指す「Diversion」など、専門ツールを取り巻く商用エコシステムが形成されている36。
+
+分野・企業
+指標 / 取引内容
+金額・規模
+時期 / 成長率
+特記事項・背景
+クリエイティブ執筆市場
+市場規模予測
+7.54億米ドル → 18.52億米ドル57
+2025年 → 2034年 (CAGR 10.5%)57
+デジタル出版・AI 連携による需要拡大57
+脚本制作ソフト市場
+市場規模予測
+2.20億米ドル → 10.12億米ドル59
+2025年 → 2034年 (CAGR 18.48%)59
+映像・インタラクティブメディア制作の増加59
+広義クリエイティブ市場
+市場規模予測
+99.9億米ドル → 190.0億米ドル60
+2025年 → 2035年 (CAGR 6.6%)60
+制作工程のデジタル化とクラウドコラボレーション60
+Perforce Software
+PE 買収・資本再編
+非公開（Clearlake / Francisco 共管）63
+2018年買収、2019年共同保有62
+Puppet, Delphix, Snowtrack 等を順次買収62
+Códice (Plastic SCM)
+Unity による買収
+非公開（Unity による完全子会社化）44
+2020年8月44
+Unity VCS としてエンジン内に統合37
+Epic Games (Lore)
+オープンソース公開
+無償公開（MIT ライセンス）49
+2026年6月46
+Fortnite/UEFN の大規模バイナリ運用実績を公開50
+4. 自然言語創作における Git / 開発者向け VCS の構造的障壁
+Git や GitHub はテキストコードの管理において卓越した信頼性を誇るが、小説家、脚本家、ゲームプランナーなどの非エンジニアが導入するにあたっては、認知モデルと技術設計の双方に起因する構造的障壁が存在する12。
+第一に、Git が前提とする「有向非巡回グラフ（DAG）」のデータ構造と、非エンジニアの直感的な作業感覚との間に大きな隔たりがある39。一般的な文筆家にとってデータの永続化とは単一の「保存」操作を意味するが、Git は作業ツリー、ステージング領域（インデックス）、ローカルリポジトリ、リモートリポジトリという多層的な状態分離を要求する2。ブランチの派生、リベース、HEAD の移動といった抽象的な概念は直感的な理解が難しく、操作の誤りによる作業データの消失リスクが常に心理的負担となる12。
+第二に、Git の標準的な差分アルゴリズム（行指向 diff）と自然言語（散文）の記述特性が根本的に適合しない問題がある12。ソースコードは1行ごとの独立性が高いのに対し、散文は段落や文の単位で論理が連続している70。エディタ側で自動折り返しを行っている場合、1段落が1行として扱われるため、句読点を1箇所修正しただけで数百文字の段落全体が置換されたと判定される12。さらに、複数人が同じ段落を編集した際に発生するマージコンフリクトでは、テキスト内に競合マーカーが直接挿入されるが、自然言語にはコンパイラのような自動構文検査が存在しないため、文脈上の不整合や表現の欠落が検出されないまま混入するリスクを排除できない70。
+第三に、文筆分野で主流となっているファイル形式の非互換性が挙げられる。多くの著作者は Microsoft Word（.docx）や Scrivener などの WYSIWYG ツールを利用しているが、これらは ZIP 圧縮された XML やバイナリ形式で保存される4。Git はこれらを不透明な単一のバイナリとして認識するため、行単位の差分表示や自動マージが機能せず、複数人による共同編集時に排他的な管理が行えなければ上書きによるデータ消失を引き起こす37。
+第四に、アクセス権管理の粒度の問題がある。Git はリポジトリ全体を作業者のローカル環境へ完全に複製する分散構造を採っているため、フォルダ単位やファイル単位での細やかなアクセス権制御が行えない36。ゲーム開発のように、外部契約のライターに対して担当チャプターの台本のみを編集可能にし、未公開の全体プロットやゲーム本体のソースコードを秘匿したい場合、Git 単体ではリポジトリ分割やサブモジュールの煩雑な設計を余儀なくされる36。これに対し、Perforce や Lore のような中央集権型システムはパス単位での厳格なアクセス制御を備えており、組織運営上の明確な優位性を持っている36。
+5. 未充足領域と「まだ存在しないもの」の技術的要件
+既存のツール群（GitHub 等のコード向け VCS、Perforce 等の大規模バイナリ VCS、Scrivener や Campfire 等の執筆オーサリング環境、Google Docs 等のリアルタイム同時編集ツール）は各領域に最適化されているものの、それらの結節点には依然として商用製品化されていない未開拓領域が残されている。
+自然言語・物語意味論に特化したセマンティック差分・マージ基盤
+現在の diff/merge ツールは、文字列の追加・削除を行単位で機械的に照合するにとどまる46。自然言語の執筆において真に求められるのは、文や段落の構造を解析し、改行位置の変更や同義語の置換を意味的に追跡できる構文木連動型のマージ機能である70。例えば、同一の台詞に対して複数のライターが異なるニュアンスの修正を加えた際、単に衝突エラーを返すのではなく、文脈上の意図を比較整理して調停案を提示するセマンティックな解決機構は、現状の市場において標準化されていない。
+プロット分岐グラフと本文テキストの双方向同期型バージョン管理
+ゲームシナリオ制作では、Twine や articy:draft のようなノードグラフによる構造設計と、リニアに文章を書き進めるテキストエディタの間に断絶が存在する22。例えば「特定の章で主要登場人物が生存するか否か」という物語の分岐を Git のブランチのように派生させた際、プロットツリーのノードと各章の本文テキストがリアルタイムに連動してフォークし、視覚的な分岐図から任意の時点の草稿を直接編集・比較できる環境は確立されていない。現状はフォルダごとの手動複製や、ノードエディタ内での冗長なブロック複製に頼る運用が一般的である。
+CRDT 型リアルタイム同時編集とスナップショット型 VCS の統合
+Google Docs や Notion、Figma などが採用する操作変換（OT）や CRDT（衝突のない複製データ型）は、複数人が同一画面で即座に入力し合う体験を実現した。しかし、これらのサービスは「実験的なブランチを切って個別に推敲し、レビューを経てから本流へ統合する」「特定のマイルストーンにタグを打ち、全体差分を包括的に検証する」といったソフトウェア工学的な管理手法を欠いている。逆に Git や Perforce は強力な履歴管理とブランチ機能を提供するが、作業はローカルに閉じており即時的な共同作業には向かない36。リアルタイムな共同編集体験を維持しながら、明示的なブランチ作成、スナップショット記録、プルリクエストによる査読フローを単一の UI で完結させるプラットフォームは、依然として未充足な領域である。
+物語整合性検証を担うナラティブ CI/CD（継続的インテグレーション）
+ソフトウェア開発における CI パイプラインは、コードのコミットごとに自動テストを実行して構文エラーやロジックの破綻を検知する。これと同様の検証プロセスを物語制作へ拡張した仕組みは実用化されていない。具体的には、原稿のコミット時に全文を走査し、章をまたいだ登場人物の身体的特徴（瞳の色や年齢）の不整合、死亡したはずのキャラクターの再登場、移動時間と距離の矛盾などを静的解析するエンジンが該当する。Campfire や World Anvil のような世界観データベースと原稿テキストを自動で照合し、設定との乖離を「ビルドエラー」あるいは「警告」として著者にフィードバックする自動化パイプラインは、今後の進化が期待されるフロンティアである17。
+6. 結論
+文芸創作やゲームシナリオにおけるバージョン管理は、個人の創意工夫による Git や GitHub の変則的な活用から始まり、Ink や Yarn Spinner に代表されるシナリオのコード化・テキスト化、さらには articy:draft のような専用の構造化ツールの登場を経て、現代の制作パイプラインへと定着してきた22。ゲーム業界全体を見渡せば、アセットの肥大化に伴い、Perforce による寡占状態に対して Unity VCS の定着や Epic Games によるオープンソース VCS「Lore」の投入など、制作基盤の主導権を巡る動きが活発化している41。
+クリエイティブ執筆および脚本制作ソフトウェア市場は2034年に向けて十数億ドル規模への安定した成長が見込まれており、関連技術への投資環境は着実に拡大している57。しかし、自然言語に特化した意味論的マージ、プロット分岐とテキスト本文の双方向連動、リアルタイム同時編集とスナップショット型版管理の融合、そして物語の整合性を自動検証するナラティブ CI/CD といった高度な課題群は、依然として決定的な商用製品が存在しない空白地帯となっている。今後、大規模言語モデルを含む自然言語処理技術がこれらの課題と統合されることで、文芸およびゲーム制作における次世代のコラボレーション基盤が具体化していくと考えられる。
+引用文献
+GitHub上に構築した小説執筆環境について - Zenn, https://zenn.dev/haoblackj/articles/8cbadb26ca16e4
+VScodeとGitHubで差分管理して小説を書こう - estampie, https://blog.estampie.work/archives/425
+小説はGitで管理しろ——時間旅行できる作業場の作り方 - note, https://note.com/mintotukinogg/n/nf6913e068f50
+文章に関わる全ての人のための Git & GitHub 入門 1-1「Git と ... - Qiita, https://qiita.com/ktkraoichi/items/6b31644e4832882310d8
+any writer write novels on github? : r/novelwriting - Reddit, https://www.reddit.com/r/novelwriting/comments/1uhw2qo/any_writer_write_novels_on_github/
+I'm Scared a Stranger Will Call My Novel AI, So I Built... - daily.dev, https://daily.dev/posts/i-m-scared-a-stranger-will-call-my-novel-ai-so-i-built-github-for-words-meet-vellumproof-formerly-ehbciklw5
+Open Writing and Publishing Platforms - OSTraining, https://ostraining.com/blog/general/open-writing/
+Building a content creation ecosystem: journalism and collaboration, https://knightlab.northwestern.edu/2014/04/02/creating-an-ecosystem-content-creation-journalism-on-the-web-and-collaboration/
+Draft. Version Control for Writing - the candler blog, https://www.candlerblog.com/2013/01/31/draft.-version-control-for-writing/
+Not Just For Coders: Top Version Control Systems For Writers, https://www.makeuseof.com/tag/not-just-for-coders-top-version-control-systems-for-writers/
+GitHub for Non-Programmers: What It Actually Gives You, https://buildtolaunch.substack.com/p/github-for-non-programmers
+Show HN: A Github for writers? - Hacker News, https://news.ycombinator.com/item?id=6617063
+Atticus vs Scrivener for Nonfiction: Which Wins in 2026? | Built&Written, https://www.builtwritten.com/blog/atticus-vs-scrivener-for-nonfiction-2026
+Scrivener Review - PCMag, https://www.pcmag.com/reviews/scrivener
+Scrivener Review: A Great 20% Discount (But Why I Don't Use It), https://kindlepreneur.com/scrivener-review/
+FAQ | World Anvil, https://www.worldanvil.com/faq
+Campfire – Write Your Book – Apps on Google Play, https://play.google.com/store/apps/details?id=com.campfiremobile&hl=en_GB
+Nuestra Historia - Campfire, https://campfirewriting.com/es/about
+Awesome Research Tools - GitHub, https://github.com/emptymalei/awesome-research
+After Editorially: The Search For Alternative Collaborative Online, https://www.smashingmagazine.com/2014/04/after-editorially-alternative-collaborative-online-writing-tools/
+Feature Guide to Subscribers - World Anvil, https://www.worldanvil.com/learn/access-rights/subscribers
+The 11 Best Tools for Game Narrative Teams (2026) - Storyflow, https://storyflow.so/blog/best-tools-game-narrative-teams-2026
+10 open source projects shaping how games actually get made, https://github.blog/open-source/gaming/beyond-the-engine-10-open-source-projects-shaping-how-games-actually-get-made/
+Best Narrative Design Tools for Game Devs (2026): 6 Picks, https://storyflow-editor.com/blog/best-narrative-design-tools-for-game-developers-2025/
+GitHub - inkle/ink: inkle's open source scripting language for writing, https://github.com/inkle/ink
+Ink – Inkle's narrative scripting language | Hacker News, https://news.ycombinator.com/item?id=34080026
+GitHub - inkle/ink-library: A collection of ink samples, tools and a list, https://github.com/inkle/ink-library
+I Just Want to Run the Program - That Old Goose Moon, https://www.goosemoon.org/posts/i-just-want-to-run-the-program/
+Top 12 Free Narrative and Dialogue Tools for Indie Games 2026, https://gamineai.com/blog/top-12-free-narrative-and-dialogue-tools-for-indie-games-2026-edition
+Integrating Ink with Unreal Engine 5: A Comprehensive Guide, https://medium.com/@Jamesroha/integrating-ink-with-unreal-engine-5-a-comprehensive-guide-be4fd0ec6a3e
+Frequently Asked Questions - Articy Draft, https://www.articy.com/en/support/frequently-asked-questions/
+Tools for Developing a Video Game's Storyline - Dante's Lab., https://www.dlab.ninja/2025/09/tools-for-developing-video-games.html
+articy:draft X Basics Multi-User I, https://www.articy.com/en/adx_basics_mu1/
+articy:draft X Basics Multi-User II, https://www.articy.com/en/adx_basics_mu2/
+Multi-user overview - Articy Help Center, https://www.articy.com/help/ad3/MU_Overview.html
+Git vs Perforce for game development - Anchorpoint, https://www.anchorpoint.app/blog/git-vs-perforce-for-game-development
+Game Dev Version Control: Git, Perforce & Managing Large Art Assets, https://thedigitalspell.com/game_developers_vcs/
+Epic Games発の次世代VCS「Lore」：大規模プロジェクトにおける, https://microarchitectures.jp/blog/epic-games-lore-next-gen-vcs-large-scale-projects/
+Git vs. Perforce P4: How to Choose (and When to Use Both), https://www.perforce.com/blog/vcs/git-vs-perforce-how-choose-and-when-use-both
+Streamline Game Dev with Unity, Unreal, Git & Perforce Integration, https://www.juegostudio.com/blog/making-tools-talk-how-to-align-pipelines-across-unity-unreal-git-and-perforce
+Perforce vs. Git vs. Unity: Why Your VCS Isn't Your Real Problem, https://artstash.io/blog/perforce-vs-git-vs-unity-vcs-isnt-your-real-problem
+Scalable Version Control | Perforce Software, https://www.perforce.com/solutions/scalable-version-control
+Epic Games Releases Lore: A Version Control System Built for, https://www.developersdigest.tech/blog/epic-games-lore-version-control-system
+Códice - High Tech Venture Investment by Byllnet Capital, https://bullnetcapital.com/company/codice/
+Unity Technologies Acquired Codice Software - 80 Level, https://80.lv/articles/unity-technologies-acquired-codice-software
+Epic Games Version Control Lore Compared with Perforce / SVN, https://dev.classmethod.jp/en/articles/lore-vs-perforce-svn-git-binary-workflow/
+LORE -- New FREE Version Control For Game Developers - YouTube, https://www.youtube.com/watch?v=rmMyN2zlguQ
+New Lore Version Control System from Epic Games, https://gamefromscratch.com/new-lore-version-control-system-from-epic-games/
+Epic Games Built Its Own Git Alternative For Handling Large Files, https://itsfoss.com/news/lore-launched/
+Lore Version Control in Unreal Editor for Fortnite, https://dev.epicgames.com/documentation/fortnite/unreal-revision-control-in-unreal-editor-for-fortnite?lang=zh-CN
+Epic Games' Git Replacement Written in Rust? Lore Explained in 5, https://www.youtube.com/watch?v=mL7deitgbV0
+Epic Games Open-Sourced Lore — A Version Control System Built, https://dev.to/jamilxt/epic-games-open-sourced-lore-a-version-control-system-built-for-massive-game-assets-5hdn
+lore/docs/faq.md at main · EpicGames/lore - GitHub, https://github.com/EpicGames/lore/blob/main/docs/faq.md
+Lore: a version control system from Epic Games optimized for non, https://www.reddit.com/r/rust/comments/1u8f7rq/lore_a_version_control_system_from_epic_games/
+Git Vs Perforce: Which Is Better For Game Development? | Assembla, https://get.assembla.com/blog/git-vs-perforce-game-development/
+Lore is a next-generation, open source version control system · GitHub, https://github.com/epicgames/lore
+Creative Writing Software Market Report 2034, https://growthmarketreports.com/report/creative-writing-software-market
+Creative Writing Software Market Research Report 2034 - Dataintelo, https://dataintelo.com/report/creative-writing-software-market
+Screen and Script Writing Software Market Size, Share, 2034, https://www.fortunebusinessinsights.com/screen-and-script-writing-software-market-111249
+Creative Software Market Size, Share & Industry Growth 2035, https://www.snsinsider.com/reports/creative-software-market-5772
+Creative Software Market | Global Market Analysis Report - 2035, https://www.futuremarketinsights.com/reports/creative-software-market
+Perforce - 2026 Company Profile, Team, Funding & Competitors, https://tracxn.com/d/companies/perforce/__bhx5nLVtpzjSwO3s1uT7zADHxqFWKVl1Nn_E9HakwSo
+Perforce - Wikipedia, https://en.wikipedia.org/wiki/Perforce
+Clearlake Capital Acquires Perforce Software, https://www.perforce.com/press-releases/clearlake-capital-acquires-perforce-software
+Perforce Software Announces Strategic Investment from Francisco, https://www.franciscopartners.com/media/perforce-software-announces-strategic-investment-from-francisco-partners
+Clearlake Capital-Backed Perforce Adds Enterprise-Grade Source, https://devops.com/clearlake-capital-backed-perforce-adds-enterprise-grade-source-code-analysis-to-its-portfolio-with-acquisition-of-prqa/
+Perforce Software, a portfolio company of Francisco Partners and, https://www.lincolninternational.com/transactions/perforce-software-a-portfolio-company-of-francisco-partners-and-clearlake-capital-has-acquired-puppet/
+Santa Monica-Based Clearlake Capital Backs Perforce's Buy of, https://labusinessjournal.com/finance/santa-monica-based-clearlake-capital-backs-perforc/
+Treat Docs Like Code: Doc Bugs and Issues | Just Write Click, https://justwriteclick.com/2015/05/19/treat-docs-like-code-doc-bugs-and-issues/
+CRDT vs AST Merge vs Git Hybrid - Aura Docs, https://docs.auravcs.com/crdt-vs-ast-merge/
+What Is Git? Version Control Explained for Non-Developers, https://www.mindstudio.ai/blog/what-is-git-version-control-explained
+Perforce vs Git : r/gamedev - Reddit, https://www.reddit.com/r/gamedev/comments/a1khv0/perforce_vs_git/
+Hey everyone, a lot of people have been interested in SmallCode, https://www.reddit.com/r/LocalLLM/comments/1tk40sz/hey_everyone_a_lot_of_people_have_been_interested/
