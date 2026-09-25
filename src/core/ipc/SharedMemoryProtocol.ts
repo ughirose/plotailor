@@ -90,17 +90,54 @@ export function calculateCapacity(
   return cap;
 }
 
+const safeAtomics = {
+  store(arr: Int32Array, idx: number, val: number): number {
+    try {
+      return Atomics.store(arr, idx, val);
+    } catch {
+      return (arr[idx] = val);
+    }
+  },
+  load(arr: Int32Array, idx: number): number {
+    try {
+      return Atomics.load(arr, idx);
+    } catch {
+      return arr[idx];
+    }
+  },
+  wait(arr: Int32Array, idx: number, val: number, timeout?: number): 'ok' | 'not-equal' | 'timed-out' {
+    try {
+      return Atomics.wait(arr, idx, val, timeout);
+    } catch {
+      return 'ok';
+    }
+  },
+  notify(arr: Int32Array, idx: number, count?: number): number {
+    try {
+      return Atomics.notify(arr, idx, count);
+    } catch {
+      return 0;
+    }
+  },
+};
+
 /**
  * SharedMemoryProtocol manages initialization and layout validation of the SharedArrayBuffer.
  */
 export class SharedMemoryProtocol {
   /**
    * Allocates and initializes a new 16MB (or custom size) SharedArrayBuffer.
+   * Gracefully falls back to ArrayBuffer in non-isolated browser contexts.
    */
   static create(byteLength: number = DEFAULT_BUFFER_SIZE): SharedArrayBuffer {
-    const sab = new SharedArrayBuffer(byteLength);
-    this.init(sab);
-    return sab;
+    if (typeof SharedArrayBuffer !== 'undefined') {
+      const sab = new SharedArrayBuffer(byteLength);
+      this.init(sab);
+      return sab;
+    }
+    const ab = new ArrayBuffer(byteLength) as unknown as SharedArrayBuffer;
+    this.init(ab);
+    return ab;
   }
 
   /**
@@ -115,19 +152,19 @@ export class SharedMemoryProtocol {
     const capacity = calculateCapacity(sab.byteLength, CONTROL_HEADER_SIZE, packetSize);
 
     // Initialize Producer control line
-    Atomics.store(ctrl, PRODUCER_WRITE_IDX, 0);
-    Atomics.store(ctrl, PRODUCER_SEQ_IDX, 0);
+    safeAtomics.store(ctrl, PRODUCER_WRITE_IDX, 0);
+    safeAtomics.store(ctrl, PRODUCER_SEQ_IDX, 0);
 
     // Initialize Consumer control line
-    Atomics.store(ctrl, CONSUMER_READ_IDX, 0);
-    Atomics.store(ctrl, CONSUMER_SEQ_IDX, 0);
+    safeAtomics.store(ctrl, CONSUMER_READ_IDX, 0);
+    safeAtomics.store(ctrl, CONSUMER_SEQ_IDX, 0);
 
     // Initialize Config line
-    Atomics.store(ctrl, CONFIG_MAGIC_IDX, MAGIC_SPSC);
-    Atomics.store(ctrl, CONFIG_VERSION_IDX, PROTOCOL_VERSION);
-    Atomics.store(ctrl, CONFIG_CAPACITY_IDX, capacity);
-    Atomics.store(ctrl, CONFIG_PACKET_SIZE_IDX, packetSize);
-    Atomics.store(ctrl, CONFIG_DATA_OFFSET_IDX, CONTROL_HEADER_SIZE);
+    safeAtomics.store(ctrl, CONFIG_MAGIC_IDX, MAGIC_SPSC);
+    safeAtomics.store(ctrl, CONFIG_VERSION_IDX, PROTOCOL_VERSION);
+    safeAtomics.store(ctrl, CONFIG_CAPACITY_IDX, capacity);
+    safeAtomics.store(ctrl, CONFIG_PACKET_SIZE_IDX, packetSize);
+    safeAtomics.store(ctrl, CONFIG_DATA_OFFSET_IDX, CONTROL_HEADER_SIZE);
   }
 
   /**
@@ -138,17 +175,17 @@ export class SharedMemoryProtocol {
       throw new Error(`Invalid buffer: byteLength (${sab.byteLength}) < CONTROL_HEADER_SIZE`);
     }
     const ctrl = new Int32Array(sab, 0, CONTROL_HEADER_SIZE / 4);
-    const magic = Atomics.load(ctrl, CONFIG_MAGIC_IDX);
+    const magic = safeAtomics.load(ctrl, CONFIG_MAGIC_IDX);
     if (magic !== MAGIC_SPSC) {
       throw new Error(`Invalid SPSC magic: 0x${magic.toString(16)} (expected 0x${MAGIC_SPSC.toString(16)})`);
     }
-    const version = Atomics.load(ctrl, CONFIG_VERSION_IDX);
+    const version = safeAtomics.load(ctrl, CONFIG_VERSION_IDX);
     if (version !== PROTOCOL_VERSION) {
       throw new Error(`Unsupported protocol version: ${version} (expected ${PROTOCOL_VERSION})`);
     }
-    const capacity = Atomics.load(ctrl, CONFIG_CAPACITY_IDX);
-    const packetSize = Atomics.load(ctrl, CONFIG_PACKET_SIZE_IDX);
-    const dataOffset = Atomics.load(ctrl, CONFIG_DATA_OFFSET_IDX);
+    const capacity = safeAtomics.load(ctrl, CONFIG_CAPACITY_IDX);
+    const packetSize = safeAtomics.load(ctrl, CONFIG_PACKET_SIZE_IDX);
+    const dataOffset = safeAtomics.load(ctrl, CONFIG_DATA_OFFSET_IDX);
 
     return { capacity, packetSize, dataOffset };
   }
@@ -181,8 +218,8 @@ export class SharedMemoryProducer {
     this.uint8View = new Uint8Array(sab);
 
     // Initial cache sync
-    this.cachedReadIndex = Atomics.load(this.ctrl, CONSUMER_READ_IDX);
-    this.localSeq = Atomics.load(this.ctrl, PRODUCER_SEQ_IDX);
+    this.cachedReadIndex = safeAtomics.load(this.ctrl, CONSUMER_READ_IDX);
+    this.localSeq = safeAtomics.load(this.ctrl, PRODUCER_SEQ_IDX);
   }
 
   /**
@@ -196,13 +233,13 @@ export class SharedMemoryProducer {
       );
     }
 
-    const writeIndex = Atomics.load(this.ctrl, PRODUCER_WRITE_IDX);
+    const writeIndex = safeAtomics.load(this.ctrl, PRODUCER_WRITE_IDX);
 
     // Check available space with cached read index first (optimistic path)
     let occupied = (writeIndex - this.cachedReadIndex) >>> 0;
     if (occupied >= this.capacity) {
       // Refresh cached read index
-      this.cachedReadIndex = Atomics.load(this.ctrl, CONSUMER_READ_IDX);
+      this.cachedReadIndex = safeAtomics.load(this.ctrl, CONSUMER_READ_IDX);
       occupied = (writeIndex - this.cachedReadIndex) >>> 0;
       if (occupied >= this.capacity) {
         return false; // Queue is full
@@ -234,8 +271,8 @@ export class SharedMemoryProducer {
     this.uint8View[slotByteOffset + SENTINEL_OFFSET] = SENTINEL_BYTE;
 
     // Release fence: Advance write index atomically
-    Atomics.store(this.ctrl, PRODUCER_WRITE_IDX, (writeIndex + 1) | 0);
-    Atomics.store(this.ctrl, PRODUCER_SEQ_IDX, seq);
+    safeAtomics.store(this.ctrl, PRODUCER_WRITE_IDX, (writeIndex + 1) | 0);
+    safeAtomics.store(this.ctrl, PRODUCER_SEQ_IDX, seq);
 
     return true;
   }
@@ -250,7 +287,7 @@ export class SharedMemoryProducer {
     while (true) {
       if (this.tryPush(payload, flags, sequenceNumber)) {
         // Notify waiting consumer
-        Atomics.notify(this.ctrl, PRODUCER_WRITE_IDX, 1);
+        safeAtomics.notify(this.ctrl, PRODUCER_WRITE_IDX, 1);
         return true;
       }
 
@@ -267,20 +304,20 @@ export class SharedMemoryProducer {
       // Wait on consumer readIndex update
       const remaining = Math.max(1, Math.floor(timeoutMs - elapsed));
       try {
-        Atomics.wait(this.ctrl, CONSUMER_READ_IDX, this.cachedReadIndex, remaining);
+        safeAtomics.wait(this.ctrl, CONSUMER_READ_IDX, this.cachedReadIndex, remaining);
       } catch {
-        // In environments where Atomics.wait is prohibited, spin/fallback
+        // In environments where safeAtomics.wait is prohibited, spin/fallback
       }
     }
   }
 
   getWriteIndex(): number {
-    return Atomics.load(this.ctrl, PRODUCER_WRITE_IDX) >>> 0;
+    return safeAtomics.load(this.ctrl, PRODUCER_WRITE_IDX) >>> 0;
   }
 
   getAvailableSlots(): number {
-    const writeIndex = Atomics.load(this.ctrl, PRODUCER_WRITE_IDX);
-    const readIndex = Atomics.load(this.ctrl, CONSUMER_READ_IDX);
+    const writeIndex = safeAtomics.load(this.ctrl, PRODUCER_WRITE_IDX);
+    const readIndex = safeAtomics.load(this.ctrl, CONSUMER_READ_IDX);
     const occupied = (writeIndex - readIndex) >>> 0;
     return this.capacity - occupied;
   }
@@ -316,7 +353,7 @@ export class SharedMemoryConsumer {
     this.uint8View = new Uint8Array(sab);
 
     // Initial cache sync
-    this.cachedWriteIndex = Atomics.load(this.ctrl, PRODUCER_WRITE_IDX);
+    this.cachedWriteIndex = safeAtomics.load(this.ctrl, PRODUCER_WRITE_IDX);
   }
 
   /**
@@ -324,13 +361,13 @@ export class SharedMemoryConsumer {
    * Returns packet on success, or null if the ring buffer is empty.
    */
   tryPop(): Packet | null {
-    const readIndex = Atomics.load(this.ctrl, CONSUMER_READ_IDX);
+    const readIndex = safeAtomics.load(this.ctrl, CONSUMER_READ_IDX);
 
     // Check available packets with cached write index first
     let available = (this.cachedWriteIndex - readIndex) >>> 0;
     if (available === 0) {
       // Refresh cached write index
-      this.cachedWriteIndex = Atomics.load(this.ctrl, PRODUCER_WRITE_IDX);
+      this.cachedWriteIndex = safeAtomics.load(this.ctrl, PRODUCER_WRITE_IDX);
       available = (this.cachedWriteIndex - readIndex) >>> 0;
       if (available === 0) {
         return null; // Queue is empty
@@ -370,8 +407,8 @@ export class SharedMemoryConsumer {
     this.uint8View[slotByteOffset + SENTINEL_OFFSET] = 0;
 
     // Release fence: Advance read index atomically
-    Atomics.store(this.ctrl, CONSUMER_READ_IDX, (readIndex + 1) | 0);
-    Atomics.store(this.ctrl, CONSUMER_SEQ_IDX, sequenceNumber);
+    safeAtomics.store(this.ctrl, CONSUMER_READ_IDX, (readIndex + 1) | 0);
+    safeAtomics.store(this.ctrl, CONSUMER_SEQ_IDX, sequenceNumber);
 
     return {
       header: {
@@ -395,7 +432,7 @@ export class SharedMemoryConsumer {
       const pkt = this.tryPop();
       if (pkt !== null) {
         // Notify waiting producer
-        Atomics.notify(this.ctrl, CONSUMER_READ_IDX, 1);
+        safeAtomics.notify(this.ctrl, CONSUMER_READ_IDX, 1);
         return pkt;
       }
 
@@ -411,20 +448,20 @@ export class SharedMemoryConsumer {
 
       const remaining = Math.max(1, Math.floor(timeoutMs - elapsed));
       try {
-        Atomics.wait(this.ctrl, PRODUCER_WRITE_IDX, this.cachedWriteIndex, remaining);
+        safeAtomics.wait(this.ctrl, PRODUCER_WRITE_IDX, this.cachedWriteIndex, remaining);
       } catch {
-        // In environments where Atomics.wait is prohibited, spin/fallback
+        // In environments where safeAtomics.wait is prohibited, spin/fallback
       }
     }
   }
 
   getReadIndex(): number {
-    return Atomics.load(this.ctrl, CONSUMER_READ_IDX) >>> 0;
+    return safeAtomics.load(this.ctrl, CONSUMER_READ_IDX) >>> 0;
   }
 
   getAvailableCount(): number {
-    const writeIndex = Atomics.load(this.ctrl, PRODUCER_WRITE_IDX);
-    const readIndex = Atomics.load(this.ctrl, CONSUMER_READ_IDX);
+    const writeIndex = safeAtomics.load(this.ctrl, PRODUCER_WRITE_IDX);
+    const readIndex = safeAtomics.load(this.ctrl, CONSUMER_READ_IDX);
     return (writeIndex - readIndex) >>> 0;
   }
 

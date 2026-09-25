@@ -8,6 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
 </head>
 <body>
 
@@ -23,6 +25,7 @@
         <li><a href="#pop-proof">創作プロセス証明</a></li>
         <li><a href="#mockup">執筆エディタ体験</a></li>
         <li><a href="site/help.html">操作ガイド</a></li>
+        <li><button class="theme-toggle-btn" id="globalThemeToggle" title="昼間（和紙色）と夜間（深藍色）を切り替え">☀️ 和紙色</button></li>
         <li><a href="#beta-join" class="nav-cta js-open-beta-modal">クローズドβに参加</a></li>
       </ul>
     </div>
@@ -60,6 +63,7 @@
             <span>第3章「星見の塔の密約」 - 統合執筆キャンバス</span>
           </div>
           <div class="mockup-controls">
+            <button class="mock-btn" id="btnFullscreenMockup" title="執筆画面を大画面・全画面で表示">⛶ 全画面執筆</button>
             <button class="mock-btn active" id="toggleOrientation">横書き表示</button>
             <button class="mock-btn" id="toggleTheme">夜間ダーク色</button>
             <button class="mock-btn" id="btnCopyAozora" title="裏で保持している青空文庫形式をクリップボードにコピー">青空文庫形式コピー</button>
@@ -170,10 +174,10 @@
             >
               <p>冷涼な夜風が、石造りの回廊を吹き抜けていく。</p>
               <p>「待たせましたわね」</p>
-              <p>宵闇の中から現れたのは、<ruby class="rendered-ruby"><span class="highlight-entity">エレーナ</span><rt>えれーな</rt></ruby>だった。銀灰色の長髪が星灯りに淡く揺らめき、鋭い碧眼が射すような光を放っている。</p>
-              <p>北の砦から帰還した<span class="highlight-entity">ヴァレリウス将軍</span>は、腰の<ruby class="rendered-ruby">紫電の剣<rt>しでんのけん</rt></ruby>にそっと手を添え、静かに頷いた。</p>
-              <p>見上げる先には、雲海を貫く巨塔――かつて古代星導師たちが築いたとされる禁足地、<span class="highlight-entity">星見の塔</span>が静まり返っていた。標高三千メートルを超えるこの高嶺では、息を吸うたびに肺腑が凍てつくような感覚に襲われる。</p>
-              <p>「<span class="highlight-entity">双月食の変</span>から、今日でちょうど十二年。……あの日奪われた真実の記録を、今夜こそ取り戻します」</p>
+              <p>宵闇の中から現れたのは、<span class="highlight-entity">エレーナ</span>だった。銀灰色の長髪が星灯りに淡く揺らめき、鋭い碧眼が射すような光を放っている。</p>
+              <p><ruby class="rendered-ruby">北の砦<rt>きたのとりで</rt></ruby>から帰還した<span class="highlight-entity">ヴァレリウス将軍</span>は、腰の<ruby class="rendered-ruby">紫電の剣<rt>しでんのけん</rt></ruby>にそっと手を添え、静かに頷いた。</p>
+              <p>見上げる先には、雲海を貫く巨塔――かつて古代星導師たちが築いたとされる禁足地、<ruby class="rendered-ruby"><span class="highlight-entity">星見の塔</span><rt>ほしみのとう</rt></ruby>が静まり返っていた。標高三千メートルを超えるこの高嶺では、息を吸うたびに肺腑が凍てつくような感覚に襲われる。</p>
+              <p>「<ruby class="rendered-ruby"><span class="highlight-entity">双月食の変</span><rt>そうげつしょくのへん</rt></ruby>から、今日でちょうど十二年。……あの日奪われた真実の記録を、今夜こそ取り戻します」</p>
               <p>若き従卒の<span class="highlight-entity">アーサー</span>は息を呑んだ。<span class="bouten-dot">予言の夜</span>は、すでに始まっていたのだ。</p>
             </div>
           </div>
@@ -315,7 +319,7 @@
             </li>
             <li>
               <div class="pop-point-dot"></div>
-              <div><strong>文芸賞や読者へ提示できる「創作証明書」を発行</strong></div>
+              <div><strong>公募新人賞やコンテスト提出時の「純手書き・自作真正性証明」に</strong></div>
             </li>
             <li>
               <div class="pop-point-dot"></div>
@@ -323,19 +327,81 @@
             </li>
           </ul>
         </div>
+
+        <div class="pop-card">
+          <div class="pop-badge-certificate">
+            <div class="cert-emblem">PoP</div>
+            <div>
+              <div style="font-weight: 700; color: var(--text-primary); font-size: 1.1rem;">Plotailor 創作プロセス真正性証明書</div>
+              <div style="font-size: 0.78rem; color: var(--text-muted);">Cryptographic Authorship Log #PLT-2026-9481</div>
+            </div>
+          </div>
+
+          <div class="timeline-step">
+            <strong style="color: var(--text-primary);">2026-09-21 21:14</strong><br>
+            プロット構成着手：世界観エンティティ《星見の塔》《エレーナ》をリンク
+          </div>
+          <div class="timeline-step">
+            <strong style="color: var(--text-primary);">2026-09-23 23:40</strong><br>
+            第3章 草稿執筆完了（累計 8,240打鍵、推敲率 34.2%）
+          </div>
+          <div class="timeline-step">
+            <strong style="color: var(--text-primary);">2026-09-25 19:30</strong><br>
+            エレーナのセリフ調整と伏線整合性完了（最終確定）
+          </div>
+
+          <div style="margin-top: 1.5rem; padding: 0.75rem; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); font-size: 0.75rem; font-family: var(--font-mono); color: var(--accent-gold-light);">
+            SHA-256 Digest: 7e2f5b8c9d4e...a91d4e60<br>
+            検証ステータス: 完全な自律推敲プロセスを確認済み
+          </div>
+        </div>
       </div>
     </section>
 
     <!-- Beta Join Section -->
-    <section class="cta-section" id="beta-join">
-      <div class="cta-card">
-        <h2 class="cta-title">物語を紡ぐ、最高の執筆環境へ。</h2>
-        <p class="cta-subtitle">
-          現在、限定先行クローズドβテストを実施中。登録いただいた方に、最新ビルドと限定コミュニティへの招待をお送りします。
-        </p>
-        <button class="btn btn-primary js-open-beta-modal" style="font-size: 1.1rem; padding: 0.9rem 2.2rem;">
-          先行クローズドβに申し込む（無料）
-        </button>
+    <section class="beta-section" id="beta-join">
+      <div class="section-tag">Limited Closed Beta</div>
+      <h2 class="section-title" style="margin-bottom: 1.25rem;">先行クローズドβテスト参加作家を募集中</h2>
+      <p style="color: var(--text-secondary); margin-bottom: 2.5rem;">
+        商業作家様、Web小説連載中の作家様、世界観クリエイターの皆様を優先してご招待いたします。
+      </p>
+
+      <div class="beta-form-card">
+        <form id="betaSignupForm">
+          <div class="form-group">
+            <label class="form-label" for="writerName">ペンネーム（作家名）</label>
+            <input type="text" id="writerName" class="form-input" placeholder="例：星野 織人" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="writerEmail">メールアドレス（ご案内送付用）</label>
+            <input type="email" id="writerEmail" class="form-input" placeholder="writer@example.com" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="writerGenre">主な執筆ジャンル</label>
+            <select id="writerGenre" class="form-select">
+              <option value="fantasy">ハイファンタジー・異世界・SF</option>
+              <option value="modern">現代ドラマ・ミステリー・文芸</option>
+              <option value="lightnovel">ライトノベル・キャラクター小説</option>
+              <option value="game">ゲームシナリオ・TRPG世界設定</option>
+              <option value="other">その他</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="writerMessage">最も期待する機能・現在の執筆における課題（任意）</label>
+            <textarea id="writerMessage" class="form-textarea" rows="3" placeholder="例：人物の口調や設定の矛盾が増えて困っている、縦書きでの推敲をスムーズにしたい等"></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 0.5rem;">
+            クローズドβテストに申し込む（無料）
+          </button>
+        </form>
+
+        <div id="betaFormSuccess" style="display: none; text-align: center; padding: 2rem 1rem;">
+          <div style="font-size: 2.5rem; margin-bottom: 1rem;">✨</div>
+          <h3 style="font-family: var(--font-serif); font-size: 1.3rem; margin-bottom: 0.5rem;">お申し込みありがとうございます</h3>
+          <p style="color: var(--text-secondary); font-size: 0.95rem;">
+            先行テスト版のご案内準備が整い次第、ご登録のメールアドレス宛に招待キーとダウンロードURLをお送りいたします。
+          </p>
+        </div>
       </div>
     </section>
   </main>
@@ -358,7 +424,7 @@
             <li><a href="#features">主要特長</a></li>
             <li><a href="#mockup">執筆画面モック</a></li>
             <li><a href="#pop-proof">創作プロセス証明（PoP）</a></li>
-            <li><a href="#beta-join" class="js-open-beta-modal">クローズドβ参加</a></li>
+            <li><a href="#beta-join">クローズドβ参加</a></li>
           </ul>
         </div>
 
@@ -374,7 +440,7 @@
 
         <!-- Discreet Developer / Researcher Lab -->
         <div class="footer-col">
-          <h5>技術検証（裏メニュー）</h5>
+          <h5>技術検証</h5>
           <ul>
             <li><a href="javascript:void(0)" id="btnOpenNanoLab">⚙️ Narrative-Nano (5.8M) 実験室</a></li>
           </ul>
@@ -387,7 +453,7 @@
     </div>
   </footer>
 
-  <!-- Discreet Narrative-Nano Developer Lab Drawer (裏メニュー) -->
+  <!-- Discreet Narrative-Nano Developer Lab Drawer -->
   <div class="nano-drawer-backdrop" id="nanoBackdrop"></div>
   <aside class="nano-lab-drawer" id="nanoDrawer" aria-label="Narrative-Nano 技術検証実験室">
     <div class="drawer-header">

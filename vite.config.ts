@@ -8,6 +8,10 @@ export default defineConfig({
     host: '0.0.0.0',
     strictPort: true,
     allowedHosts: true,
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
   },
   resolve: {
     alias: {
