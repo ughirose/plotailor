@@ -42,17 +42,19 @@ export class AozoraParser {
     const matches: ParsedMatch[] = [];
 
     // Syntaxes:
-    // 1. Double bracket bouten: 《《傍点文字》》
+    // 1. Bouten: <<<<傍点文字>>>>, 《《傍点文字》》, ＜＜＜＜傍点文字＞＞＞＞
+    const boutenFourAngleRegex = /(?:<{4,}|＜{4,})([^\n<>《》＜＞]+?)(?:>{4,}|＞{4,})/g;
     const boutenDoubleBracketRegex = /《《([^》\n]+?)》》/g;
 
     // 2. Aozora tag bouten: ［＃傍点］...［＃傍点終わり］ or [#傍点]...[#傍点終わり]
     const boutenTagRegex = /[［\[]＃傍点[］\]]([^\n［］\[\]]+?)[［\[]＃傍点終わり[］\]]/g;
 
-    // 3. Explicit ruby: ｜親文字《るび》 or |親文字《るび》
-    const explicitRubyRegex = /[｜|]([^\n｜|《》]+?)《([^\n《》]+?)》/g;
+    // 3. Explicit ruby: ｜親文字《るび》, |親文字<<るび>>, |親文字＜＜るび＞＞
+    const explicitRubyRegex = /[｜|]([^\n｜|《》<>＜＞]+?)(?:《|<<|＜＜)([^\n《》<>＜＞]+?)(?:》|>>|＞＞)/g;
 
-    // 4. Implicit Kanji ruby: 漢字《かんじ》
-    const implicitKanjiRubyRegex = /([\u4e00-\u9faf\u3400-\u4dbf\uf900-\ufaff]+)《([^\n《》]+?)》/g;
+    // 4. Implicit ruby: 漢字/語句《るび》, 語句<<るび>>, 語句＜＜るび＞＞
+    // Supports Kanji, Katakana, Alpha-numeric words (e.g. 二重満月, 総督, 第一衛星)
+    const implicitRubyRegex = /([一-龠々〆ヵヶ\u3400-\u4dbf\uf900-\ufaff\u30a0-\u30ffA-Za-z0-9]+?)(?:《|<<|＜＜)([^\n《》<>＜＞]+?)(?:》|>>|＞＞)/g;
 
     const occupiedRanges: [number, number][] = [];
 
@@ -69,7 +71,17 @@ export class AozoraParser {
 
     let m: RegExpExecArray | null;
 
-    // Scan for double bracket bouten first
+    // Scan for 4-angle bouten first (e.g. <<<<星辰の盟約>>>>)
+    while ((m = boutenFourAngleRegex.exec(text)) !== null) {
+      addMatch({
+        type: 'bouten',
+        rawFrom: m.index,
+        rawTo: m.index + m[0].length,
+        text: m[1],
+      });
+    }
+
+    // Scan for double bracket bouten second
     while ((m = boutenDoubleBracketRegex.exec(text)) !== null) {
       addMatch({
         type: 'bouten',
@@ -79,7 +91,7 @@ export class AozoraParser {
       });
     }
 
-    // Scan for tag bouten second
+    // Scan for tag bouten third
     while ((m = boutenTagRegex.exec(text)) !== null) {
       addMatch({
         type: 'bouten',
@@ -89,7 +101,7 @@ export class AozoraParser {
       });
     }
 
-    // Scan for explicit ruby third
+    // Scan for explicit ruby fourth
     while ((m = explicitRubyRegex.exec(text)) !== null) {
       addMatch({
         type: 'ruby',
@@ -100,8 +112,8 @@ export class AozoraParser {
       });
     }
 
-    // Scan for implicit kanji ruby fourth
-    while ((m = implicitKanjiRubyRegex.exec(text)) !== null) {
+    // Scan for implicit ruby fifth (e.g. 二重満月<<コンジャンクション>>, 総督<<ヴァレリウス>>)
+    while ((m = implicitRubyRegex.exec(text)) !== null) {
       addMatch({
         type: 'ruby',
         rawFrom: m.index,
@@ -165,13 +177,21 @@ export class RubyWidget extends WidgetType {
     const rubyEl = document.createElement('ruby');
     rubyEl.className = 'cm-ruby';
 
-    const baseNode = document.createTextNode(this.baseText);
+    const rbEl = document.createElement('rb');
+    rbEl.className = 'cm-ruby-base';
+    rbEl.textContent = this.baseText;
+
     const rtEl = document.createElement('rt');
+    rtEl.className = 'cm-ruby-text';
     rtEl.textContent = this.rubyText;
 
-    rubyEl.appendChild(baseNode);
+    rubyEl.appendChild(rbEl);
     rubyEl.appendChild(rtEl);
     return rubyEl;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
   }
 
   eq(other: RubyWidget): boolean {
@@ -193,6 +213,10 @@ export class BoutenWidget extends WidgetType {
     spanEl.className = 'cm-bouten';
     spanEl.textContent = this.text;
     return spanEl;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
   }
 
   eq(other: BoutenWidget): boolean {
@@ -270,12 +294,30 @@ export function parseAndBuildDecorations(state: EditorState): {
 
 export const rubyTheme = EditorView.theme({
   '.cm-ruby': {
-    rubyPosition: 'over',
-    WebkitRubyPosition: 'over',
+    display: 'inline-flex',
+    position: 'relative',
+    verticalAlign: 'baseline',
+    textAlign: 'center',
+    lineHeight: 'inherit',
+    whiteSpace: 'nowrap',
   },
-  '.cm-ruby rt': {
-    fontSize: '0.5em',
+  '.cm-ruby .cm-ruby-base, .cm-ruby rb': {
+    display: 'inline',
+    lineHeight: 'inherit',
+    whiteSpace: 'nowrap',
+  },
+  '.cm-ruby .cm-ruby-text, .cm-ruby rt': {
+    position: 'absolute',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    top: '-0.95em',
+    fontSize: '0.52em',
     lineHeight: '1',
+    userSelect: 'none',
+    textAlign: 'center',
+    color: 'var(--color-gold, #cfa85c)',
+    whiteSpace: 'nowrap',
+    pointerEvents: 'none',
   },
   '.cm-bouten': {
     textEmphasis: 'sesame',
@@ -283,9 +325,33 @@ export const rubyTheme = EditorView.theme({
     textEmphasisPosition: 'over right',
     WebkitTextEmphasisPosition: 'over right',
   },
-  '&.cm-vertical-rl .cm-content': {
+  '&.cm-vertical-rl .cm-content, .vertical-rl & .cm-content, .pane-center.vertical-rl .cm-content': {
     writingMode: 'vertical-rl',
     WebkitWritingMode: 'vertical-rl',
+  },
+  '&.cm-vertical-rl .cm-ruby, .vertical-rl & .cm-ruby, .pane-center.vertical-rl .cm-ruby': {
+    display: 'inline-flex',
+    position: 'relative',
+    writingMode: 'vertical-rl',
+    WebkitWritingMode: 'vertical-rl',
+    textAlign: 'center',
+    verticalAlign: 'baseline',
+    whiteSpace: 'nowrap',
+  },
+  '&.cm-vertical-rl .cm-ruby .cm-ruby-text, .vertical-rl & .cm-ruby .cm-ruby-text, .pane-center.vertical-rl .cm-ruby .cm-ruby-text, &.cm-vertical-rl .cm-ruby rt, .vertical-rl & .cm-ruby rt, .pane-center.vertical-rl .cm-ruby rt': {
+    position: 'absolute',
+    top: '50%',
+    left: 'auto',
+    right: '-0.65em',
+    transform: 'translateY(-50%)',
+    writingMode: 'vertical-rl',
+    WebkitWritingMode: 'vertical-rl',
+    fontSize: '0.52em',
+    lineHeight: '1',
+    userSelect: 'none',
+    textAlign: 'center',
+    whiteSpace: 'nowrap',
+    pointerEvents: 'none',
   },
 });
 
@@ -302,6 +368,10 @@ export class RubyDecorationPlugin {
   }
 
   update(update: ViewUpdate) {
+    if (update.view.composing) {
+      // Do NOT replace/rebuild decorations while user is composing with Japanese IME
+      return;
+    }
     if (update.docChanged || update.selectionSet) {
       const result = parseAndBuildDecorations(update.state);
       this.decorations = result.decorations;

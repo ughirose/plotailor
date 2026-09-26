@@ -24,7 +24,7 @@
         </a>
         <div class="work-title-badge">
           <span>作品:</span>
-          <strong>星辰の境界線</strong>
+          <strong id="workTitleText" contenteditable="true" spellcheck="false" title="クリックして作品名を編集" style="cursor: text; border-bottom: 1px dashed var(--color-gold); padding: 0 4px; outline: none;">星辰の境界線</strong>
           <span style="color: var(--color-border);">|</span>
           <select class="chapter-select" id="chapterSelect" aria-label="章選択">
             <option value="ch1" selected>第一章 双月の巡る夜に</option>
@@ -47,9 +47,13 @@
       </div>
 
       <div class="ide-header-right">
+        <button class="ide-btn" id="btnHeaderUndo" title="元に戻す (Ctrl+Z)">↩ 戻す</button>
+        <button class="ide-btn" id="btnHeaderRedo" title="やり直す (Ctrl+Y)">↪ 進む</button>
         <button class="ide-btn" id="btnToggleLeftPane" title="左ペインの開閉">◨ 目次</button>
         <button class="ide-btn" id="btnToggleOrientation" title="縦書き／横書きの切り替え">縦書き</button>
-        <button class="ide-btn" id="btnToggleTheme" title="和紙色／夜間色の切り替え">和紙色</button>
+        <button class="ide-btn" id="btnToggleWrap" title="文字折り返しの切り替え">折り返し: ON</button>
+        <button class="ide-btn" id="btnToggleRuby" title="ルビ・傍点ビジュアル表示とテキスト直接編集の切り替え">ルビ: ON</button>
+        <button class="ide-btn" id="btnToggleTheme" title="和紙色／夜間色の切り替え">🌙 夜間色</button>
         <button class="ide-btn" id="btnFullscreen" title="集中執筆全画面モード">⛶ 全画面</button>
         <button class="ide-btn btn-primary" id="btnExportAozora" title="青空文庫形式をクリップボードにコピー">青空形式出力</button>
         <button class="ide-btn" id="btnToggleRightPane" title="右ペイン（伏線・因果インスペクタ）の開閉">◧ 伏線</button>
@@ -78,7 +82,10 @@
             <span style="color: var(--color-text-dim);">—</span>
             <span style="font-size: 11px; color: var(--color-text-dim);">ルビ打鍵: 《るび》, &lt;&lt;るび&gt;&gt; | 傍点: &lt;&lt;&lt;&lt;傍点&gt;&gt;&gt;&gt;</span>
           </div>
-          <div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="ide-btn" id="btnToolbarUndo" title="元に戻す (Ctrl+Z)" style="padding: 2px 8px; font-size: 12px; height: 24px; min-width: auto;">↩ 戻す</button>
+            <button class="ide-btn" id="btnToolbarRedo" title="やり直す (Ctrl+Y / Ctrl+Shift+Z)" style="padding: 2px 8px; font-size: 12px; height: 24px; min-width: auto;">↪ やり直す</button>
+            <span id="historyDepthBadge" style="font-size: 11px; color: var(--color-gold); margin-right: 6px; user-select: none;" title="保持可能履歴数: 500回（現在利用可能なUndo/Redo件数）">履歴: 0 / 500</span>
             <span id="saveStatusIndicator" style="font-size: 11px; color: var(--color-text-muted);">自動保存: 0.4秒前</span>
           </div>
         </div>

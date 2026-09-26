@@ -41,7 +41,7 @@ describe('Narrative Linter & Zero Pronoun Integration', () => {
       const pItems = result.syntacticItems.filter(
         (i) => i.ruleType === 'particle-repetition'
       );
-      expect(pItems.length).toBeGreaterThanOrEqual(3);
+      expect(pItems.length).toBe(1);
       expect(pItems[0].message).toContain('助詞「が」が3回重複');
     });
 

@@ -101,10 +101,11 @@ export class SourceToDisplayMap {
 
 export class AozoraParser {
   // Regex patterns
-  private static readonly EXPLICIT_RUBY_RE = /｜([^《\r\n]+)《([^》\r\n]+)》/g;
-  private static readonly IMPLICIT_KANJI_RUBY_RE = /([\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF]+)《([^》\r\n]+)》/g;
+  private static readonly EXPLICIT_RUBY_RE = /[｜|]([^\n｜|《》<>＜＞]+?)(?:《|<<|＜＜)([^\n《》<>＜＞]+?)(?:》|>>|＞＞)/g;
+  private static readonly IMPLICIT_KANJI_RUBY_RE = /([一-龠々〆ヵヶ\u3400-\u4dbf\uf900-\ufaff\u30a0-\u30ffA-Za-z0-9]+?)(?:《|<<|＜＜)([^\n《》<>＜＞]+?)(?:》|>>|＞＞)/g;
+  private static readonly BOUTEN_FOUR_ANGLE_RE = /(?:<{4,}|＜{4,})([^\n<>《》＜＞]+?)(?:>{4,}|＞{4,})/g;
   private static readonly BOUTEN_RE = /《《([^》\r\n]+)》》/g;
-  private static readonly BOUTEN_ALT_RE = /［＃「([^」\r\n]+)」に傍点］/g;
+  private static readonly BOUTEN_ALT_RE = /(?:［＃「([^」\r\n]+)」に傍点］|[［\[]＃傍点[］\]]([^\n［］\[\]]+?)[［\[]＃傍点終わり[］\]])/g;
   private static readonly RUBY_SAGARI_RE = /〔([^〕\r\n]+)〕/g;
 
   /**
@@ -119,8 +120,19 @@ export class AozoraParser {
       ruby?: string;
     }[] = [];
 
-    // 1. Bouten 《《...》》
+    // 0. Bouten <<<<...>>>> or ＜＜＜＜...＞＞＞＞
     let match: RegExpExecArray | null;
+    const boutenFourRe = new RegExp(this.BOUTEN_FOUR_ANGLE_RE);
+    while ((match = boutenFourRe.exec(rawText)) !== null) {
+      rawMatches.push({
+        type: 'bouten',
+        rawFrom: match.index,
+        rawTo: match.index + match[0].length,
+        text: match[1],
+      });
+    }
+
+    // 1. Bouten 《《...》》
     const boutenRe = new RegExp(this.BOUTEN_RE);
     while ((match = boutenRe.exec(rawText)) !== null) {
       rawMatches.push({
@@ -131,14 +143,14 @@ export class AozoraParser {
       });
     }
 
-    // 2. Bouten ［＃「...」に傍点］
+    // 2. Bouten ［＃「...」に傍点］ or ［＃傍点］...［＃傍点終わり］
     const boutenAltRe = new RegExp(this.BOUTEN_ALT_RE);
     while ((match = boutenAltRe.exec(rawText)) !== null) {
       rawMatches.push({
         type: 'bouten',
         rawFrom: match.index,
         rawTo: match.index + match[0].length,
-        text: match[1],
+        text: match[1] || match[2],
       });
     }
 

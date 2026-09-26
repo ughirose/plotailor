@@ -35,6 +35,110 @@
   --footer-height: 28px;
 }
 
+/* Washi (Light Paper) Theme for Entire IDE */
+body.theme-washi,
+.app-container.theme-washi {
+  --color-bg-dark: #f0ebe1;
+  --color-bg-sidebar: #e8e1d3;
+  --color-bg-panel: #ede6d8;
+  --color-border: #d3c9b5;
+  --color-border-subtle: #ded5c2;
+  --color-gold: #9d7124;
+  --color-gold-hover: #b8862f;
+  --color-gold-subtle: rgba(157, 113, 36, 0.15);
+  --color-text-main: #241e17;
+  --color-text-muted: #5e5446;
+  --color-text-dim: #7d7160;
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-main);
+}
+
+body.theme-washi .ide-header {
+  background-color: #e5ded0;
+  border-bottom-color: #d0c6b1;
+}
+
+body.theme-washi .pane-left {
+  background-color: #ebe4d6;
+  border-right-color: #d0c6b1;
+}
+
+body.theme-washi .pane-right {
+  background-color: #ece5d7;
+  border-left-color: #d0c6b1;
+}
+
+body.theme-washi .ide-footer {
+  background-color: #e5ded0;
+  border-top-color: #d0c6b1;
+}
+
+body.theme-washi .dock-card {
+  background-color: #f5efe2;
+  border-color: #d8ceb9;
+}
+
+body.theme-washi .dock-score-card {
+  background: linear-gradient(135deg, rgba(235, 228, 214, 0.95) 0%, rgba(245, 239, 226, 0.95) 100%) !important;
+  border-color: #d0c6b1 !important;
+}
+
+body.theme-washi .stat-chip {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-color: #d0c6b1;
+  color: #3e3427;
+}
+
+body.theme-washi .work-title-badge {
+  background-color: rgba(0, 0, 0, 0.04);
+  border-color: #d0c6b1;
+  color: #241e17;
+}
+
+body.theme-washi .work-title-badge .chapter-select option {
+  background-color: #ebe4d6;
+  color: #241e17;
+}
+
+body.theme-washi .dock-filter-bar {
+  background: #ded5c2;
+  border-color: #c9bea8;
+}
+
+body.theme-washi .filter-btn {
+  color: #5e5446;
+}
+
+body.theme-washi .filter-btn.active {
+  background: #f7f2e7;
+  color: #9d7124;
+}
+
+body.theme-washi .editor-toolbar {
+  background-color: rgba(0, 0, 0, 0.02);
+  border-bottom-color: var(--canvas-border-washi);
+  color: var(--canvas-text-washi);
+}
+
+body.theme-washi .linter-issue-card {
+  background-color: #f8f3e9;
+  border-color: #dcd2be;
+}
+
+body.theme-washi .zp-candidates-box {
+  background-color: rgba(220, 210, 190, 0.4);
+  border-color: #d0c6b1;
+}
+
+body.theme-washi .pane-tabs {
+  background-color: rgba(0, 0, 0, 0.04);
+  border-bottom-color: #d0c6b1;
+}
+
+body.theme-washi .chapter-item:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -338,7 +442,7 @@ html, body {
   outline: none;
   font-family: var(--font-serif);
   font-size: 17px;
-  line-height: 2.1;
+  line-height: 1.8;
   letter-spacing: 0.03em;
   white-space: pre-wrap;
   word-break: break-word;
@@ -347,7 +451,7 @@ html, body {
 /* Vertical Writing Mode */
 .pane-center.vertical-rl .canvas-wrapper {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
   display: flex;
   justify-content: flex-end;
 }
@@ -360,25 +464,111 @@ html, body {
   min-width: fit-content;
   max-width: none;
   padding: 36px 48px;
-  line-height: 2.3;
+  line-height: 1.85;
   margin-left: auto;
+  overflow: visible;
+}
+
+.pane-center.vertical-rl .cm-editor,
+.pane-center.vertical-rl .cm-scroller,
+.pane-center.vertical-rl .cm-content,
+.pane-center.vertical-rl .cm-line {
+  writing-mode: vertical-rl !important;
+  -webkit-writing-mode: vertical-rl !important;
+}
+
+.pane-center.vertical-rl .cm-editor {
+  height: 100% !important;
+  width: auto !important;
+  min-width: fit-content !important;
+}
+
+.pane-center.vertical-rl .cm-scroller {
+  overflow: visible !important;
+  height: 100% !important;
+}
+
+/* Horizontal wrap & no-wrap handling */
+.editor-body.no-wrap {
+  max-width: none !important;
+  width: auto !important;
+  min-width: 100% !important;
+}
+
+.editor-body.no-wrap .cm-line {
+  white-space: pre !important;
+}
+
+.editor-body.wrap-active .cm-line {
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
 }
 
 /* Ruby and Bouten Typography */
-ruby {
-  ruby-position: over;
-  -webkit-ruby-position: over;
-  ruby-align: center;
+ruby, .cm-ruby {
+  display: inline-flex !important;
+  position: relative !important;
+  vertical-align: baseline !important;
+  text-align: center !important;
+  line-height: inherit !important;
+  white-space: nowrap !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-rt {
-  font-size: 0.55em;
-  color: var(--color-gold);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  line-height: 1;
-  text-align: center;
-  user-select: none;
+rb, .cm-ruby rb, .cm-ruby-base {
+  display: inline !important;
+  line-height: inherit !important;
+  white-space: nowrap !important;
+}
+
+rt, .cm-ruby rt, .cm-ruby-text {
+  position: absolute !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  top: -0.95em !important;
+  font-size: 0.52em !important;
+  color: var(--color-gold) !important;
+  font-weight: 500 !important;
+  letter-spacing: 0.02em !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  user-select: none !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+}
+
+.pane-center.vertical-rl ruby,
+.pane-center.vertical-rl .cm-ruby,
+.cm-vertical-rl ruby,
+.cm-vertical-rl .cm-ruby {
+  display: inline-flex !important;
+  position: relative !important;
+  writing-mode: vertical-rl !important;
+  -webkit-writing-mode: vertical-rl !important;
+  text-align: center !important;
+  vertical-align: baseline !important;
+  white-space: nowrap !important;
+}
+
+.pane-center.vertical-rl rt,
+.pane-center.vertical-rl .cm-ruby rt,
+.pane-center.vertical-rl .cm-ruby-text,
+.cm-vertical-rl rt,
+.cm-vertical-rl .cm-ruby rt,
+.cm-vertical-rl .cm-ruby-text {
+  position: absolute !important;
+  top: 50% !important;
+  left: auto !important;
+  right: -0.65em !important;
+  transform: translateY(-50%) !important;
+  writing-mode: vertical-rl !important;
+  -webkit-writing-mode: vertical-rl !important;
+  font-size: 0.52em !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
 }
 
 .bouten {
@@ -669,6 +859,21 @@ body.fullscreen-active .fullscreen-exit-btn {
 
 .cm-pronoun-missing:hover {
   background-color: rgba(207, 168, 92, 0.3);
+}
+
+.cm-lint-multiple {
+  text-decoration: underline wavy var(--color-danger, #f85149) !important;
+  text-decoration-thickness: 2.2px !important;
+  text-decoration-skip-ink: none !important;
+  background-color: rgba(248, 81, 73, 0.18) !important;
+  border-bottom: 2px dashed var(--color-warning, #d29922) !important;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cm-lint-multiple:hover {
+  background-color: rgba(248, 81, 73, 0.3) !important;
 }
 
 /* Narrative Inspector Dock (Right Pane) */

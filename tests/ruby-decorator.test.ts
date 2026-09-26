@@ -85,6 +85,29 @@ describe('AozoraParser', () => {
     expect(matches[2].type).toBe('bouten');
     expect(matches[3].type).toBe('bouten');
   });
+
+  it('should correctly parse <<ruby>> and <<<<bouten>>>> from Chapter 1 sample', () => {
+    const text1 = '第一衛星《セレネ》が蒼き冷光を投げかけ、第二衛星《フォボス》の琥珀色が地平の端を染める。';
+    const m1 = AozoraParser.parse(text1);
+    expect(m1).toHaveLength(2);
+    expect(m1[0]).toMatchObject({ type: 'ruby', baseText: '第一衛星', rubyText: 'セレネ' });
+    expect(m1[1]).toMatchObject({ type: 'ruby', baseText: '第二衛星', rubyText: 'フォボス' });
+
+    const text2 = '二重満月<<コンジャンクション>>の夜、北方の砦に集う兵たちの息は白く凍りついていた。';
+    const m2 = AozoraParser.parse(text2);
+    expect(m2).toHaveLength(1);
+    expect(m2[0]).toMatchObject({ type: 'ruby', baseText: '二重満月', rubyText: 'コンジャンクション' });
+
+    const text3 = '「総督<<ヴァレリウス>>閣下、帝国軍の先遣隊が峡谷を越えたとの急報です」';
+    const m3 = AozoraParser.parse(text3);
+    expect(m3).toHaveLength(1);
+    expect(m3[0]).toMatchObject({ type: 'ruby', baseText: '総督', rubyText: 'ヴァレリウス' });
+
+    const text4 = '千年の古より受け継がれし<<<<星辰の盟約>>>>を巡る、運命の分岐点であった。';
+    const m4 = AozoraParser.parse(text4);
+    expect(m4).toHaveLength(1);
+    expect(m4[0]).toMatchObject({ type: 'bouten', text: '星辰の盟約' });
+  });
 });
 
 describe('SourceToDisplayMap', () => {

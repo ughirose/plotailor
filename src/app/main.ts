@@ -3,10 +3,13 @@
  * 3-Pane Literary IDE with Realtime Ruby, CodeMirror 6, Narrative Linter & Zero Pronoun Resolver
  */
 
-import { EditorView } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
+import { EditorState, Compartment } from '@codemirror/state';
+import { history, defaultKeymap, historyKeymap, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
 import { rubyDecorationExtension } from '../core/editor/RubyDecorationExtension.js';
 import { cm6ImeGuard } from '../core/editor/cm6ImeGuard.js';
+import { verticalWritingExtension } from '../core/editor/VerticalWritingExtension.js';
+import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
 import { narrativeLinterExtension } from '../core/editor/CodeMirrorNarrativeExtension.js';
 import { NarrativeInspectorDock } from '../ui/NarrativeInspectorDock.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
@@ -18,11 +21,11 @@ interface ChapterData {
   content: string;
 }
 
-const CHAPTERS: ChapterData[] = [
+const DEFAULT_CHAPTERS: ChapterData[] = [
   {
     id: 'ch1',
     title: '第一章 双月の巡る夜に',
-    charCount: 3420,
+    charCount: 0,
     content: `　深藍の夜空を二つの月が照らし出していた。
 　第一衛星《セレネ》が蒼き冷光を投げかけ、第二衛星《フォボス》の琥珀色が地平の端を染める。
 　二重満月<<コンジャンクション>>の夜、北方の砦に集う兵たちの息は白く凍りついていた。
@@ -37,14 +40,14 @@ const CHAPTERS: ChapterData[] = [
   {
     id: 'ch2',
     title: '第二章 帝都の影と密書',
-    charCount: 4180,
+    charCount: 0,
     content: `　帝都ルミナスの夜は、地上に降りた星屑のように喧噪を極めていた。
 　だが、元老院の奥深く、石造りの回廊に届くのは靴音の反響のみである。`
   },
   {
     id: 'ch3',
     title: '第三章 忘却の砦',
-    charCount: 2950,
+    charCount: 0,
     content: `　極北の風が氷壁を削る音が、夜を徹して響き渡っていた。`
   }
 ];
@@ -53,8 +56,12 @@ export class PlotailorApp {
   private editorBody: HTMLDivElement;
   private cmEditor!: EditorView;
   private narrativeDock: NarrativeInspectorDock;
+  private chapters: ChapterData[] = [];
   private currentChapterId = 'ch1';
+  private workTitle = '星辰の境界線';
   private isVertical = false;
+  private isLineWrapping = true;
+  private isRubyDecorated = true;
   private isNightTheme = false;
   private isFullscreen = false;
   private leftPaneOpen = true;
@@ -64,6 +71,10 @@ export class PlotailorApp {
   private keystrokeCount = 0;
   private typingStartTime = Date.now();
   private latestNarrativeResult: NarrativeAnalysisResult | null = null;
+  private wrapCompartment = new Compartment();
+  private rubyCompartment = new Compartment();
+  private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private scrollNormalizer = new ScrollNormalizer();
 
   constructor() {
     this.editorBody = document.getElementById('editorBody') as HTMLDivElement;
@@ -81,6 +92,8 @@ export class PlotailorApp {
   }
 
   private init() {
+    this.loadStateFromStorage();
+
     if (window.innerWidth <= 768) {
       const paneL = document.getElementById('paneLeft');
       const paneR = document.getElementById('paneRight');
@@ -88,20 +101,110 @@ export class PlotailorApp {
       if (paneR) paneR.style.display = 'none';
     }
 
+    this.applyTheme();
     this.initCodeMirror();
     this.bindEvents();
+    const btnRuby = document.getElementById('btnToggleRuby');
+    if (btnRuby) {
+      btnRuby.textContent = `ルビ: ${this.isRubyDecorated ? 'ON' : 'OFF'}`;
+    }
+
+    this.renderChapterSelect();
     this.renderLeftPane();
     this.renderRightPane();
     this.updateStats();
   }
 
+  private loadStateFromStorage() {
+    // 1. Work title
+    try {
+      const savedTitle = localStorage.getItem('plotailor_work_title');
+      if (savedTitle && savedTitle.trim()) {
+        this.workTitle = savedTitle.trim();
+      }
+      const titleEl = document.getElementById('workTitleText');
+      if (titleEl) titleEl.textContent = this.workTitle;
+    } catch {}
+
+    // 2. Chapters data
+    try {
+      const savedChapters = localStorage.getItem('plotailor_chapters');
+      if (savedChapters) {
+        const parsed = JSON.parse(savedChapters);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          this.chapters = parsed;
+        }
+      }
+    } catch {}
+
+    if (this.chapters.length === 0) {
+      this.chapters = JSON.parse(JSON.stringify(DEFAULT_CHAPTERS));
+    }
+
+    // Accurately compute initial character count for all chapters
+    for (const ch of this.chapters) {
+      ch.charCount = ch.content.replace(/\s+/g, '').length;
+    }
+
+    // 3. Active chapter
+    try {
+      const savedActive = localStorage.getItem('plotailor_active_chapter_id');
+      if (savedActive && this.chapters.some((c) => c.id === savedActive)) {
+        this.currentChapterId = savedActive;
+      } else {
+        this.currentChapterId = this.chapters[0].id;
+      }
+    } catch {
+      this.currentChapterId = this.chapters[0].id;
+    }
+
+    // 4. Line wrapping preference
+    try {
+      const savedWrap = localStorage.getItem('plotailor_line_wrapping');
+      if (savedWrap !== null) {
+        this.isLineWrapping = savedWrap === 'true';
+      }
+    } catch {}
+
+    // 5. Ruby decoration preference
+    try {
+      const savedRuby = localStorage.getItem('plotailor_ruby_decorated');
+      if (savedRuby !== null) {
+        this.isRubyDecorated = savedRuby === 'true';
+      }
+    } catch {}
+
+    // 6. Theme preference
+    try {
+      const savedTheme = localStorage.getItem('plotailor_theme');
+      if (savedTheme !== null) {
+        this.isNightTheme = savedTheme === 'night';
+      }
+    } catch {}
+  }
+
+  private saveToStorage() {
+    try {
+      localStorage.setItem('plotailor_chapters', JSON.stringify(this.chapters));
+      localStorage.setItem('plotailor_active_chapter_id', this.currentChapterId);
+      localStorage.setItem('plotailor_work_title', this.workTitle);
+      localStorage.setItem('plotailor_line_wrapping', this.isLineWrapping.toString());
+      localStorage.setItem('plotailor_ruby_decorated', this.isRubyDecorated.toString());
+      localStorage.setItem('plotailor_theme', this.isNightTheme ? 'night' : 'washi');
+    } catch {}
+  }
+
   private initCodeMirror() {
-    const ch = CHAPTERS.find((c) => c.id === this.currentChapterId) || CHAPTERS[0];
+    const ch = this.chapters.find((c) => c.id === this.currentChapterId) || this.chapters[0];
 
     const state = EditorState.create({
       doc: ch.content,
       extensions: [
-        rubyDecorationExtension(),
+        this.wrapCompartment.of(this.isLineWrapping ? EditorView.lineWrapping : []),
+        this.rubyCompartment.of(this.isRubyDecorated ? rubyDecorationExtension() : []),
+        history({ minDepth: 500, newGroupDelay: 500 }),
+        keymap.of([...defaultKeymap, ...historyKeymap]),
+        verticalWritingExtension(),
         cm6ImeGuard(),
         narrativeLinterExtension({
           debounceMs: 80,
@@ -119,22 +222,111 @@ export class PlotailorApp {
           }
           if (update.selectionSet || update.docChanged) {
             this.updateCursorStats();
+            this.updateHistoryUI();
           }
         }),
       ],
     });
 
     this.editorBody.innerHTML = '';
+    this.editorBody.classList.toggle('wrap-active', this.isLineWrapping);
+    this.editorBody.classList.toggle('no-wrap', !this.isLineWrapping);
+
     this.cmEditor = new EditorView({
       state,
       parent: this.editorBody,
     });
+
+    // Update active chapter header title
+    const titleEl = document.getElementById('activeChapterTitle');
+    if (titleEl) titleEl.textContent = ch.title;
+    this.updateHistoryUI();
+  }
+
+  private updateHistoryUI() {
+    if (!this.cmEditor) return;
+    const state = this.cmEditor.state;
+    const uDepth = undoDepth(state);
+    const rDepth = redoDepth(state);
+    const canUndo = uDepth > 0;
+    const canRedo = rDepth > 0;
+
+    const btnToolbarUndo = document.getElementById('btnToolbarUndo') as HTMLButtonElement | null;
+    const btnToolbarRedo = document.getElementById('btnToolbarRedo') as HTMLButtonElement | null;
+    const btnHeaderUndo = document.getElementById('btnHeaderUndo') as HTMLButtonElement | null;
+    const btnHeaderRedo = document.getElementById('btnHeaderRedo') as HTMLButtonElement | null;
+    const badge = document.getElementById('historyDepthBadge');
+
+    if (btnToolbarUndo) {
+      btnToolbarUndo.disabled = !canUndo;
+      btnToolbarUndo.style.opacity = canUndo ? '1' : '0.4';
+      btnToolbarUndo.style.cursor = canUndo ? 'pointer' : 'default';
+    }
+    if (btnToolbarRedo) {
+      btnToolbarRedo.disabled = !canRedo;
+      btnToolbarRedo.style.opacity = canRedo ? '1' : '0.4';
+      btnToolbarRedo.style.cursor = canRedo ? 'pointer' : 'default';
+    }
+    if (btnHeaderUndo) {
+      btnHeaderUndo.disabled = !canUndo;
+      btnHeaderUndo.style.opacity = canUndo ? '1' : '0.4';
+      btnHeaderUndo.style.cursor = canUndo ? 'pointer' : 'default';
+    }
+    if (btnHeaderRedo) {
+      btnHeaderRedo.disabled = !canRedo;
+      btnHeaderRedo.style.opacity = canRedo ? '1' : '0.4';
+      btnHeaderRedo.style.cursor = canRedo ? 'pointer' : 'default';
+    }
+    if (badge) {
+      badge.textContent = `履歴: ${uDepth} / 500`;
+      badge.title = `保持可能履歴数: 最大500回 (現在: 元に戻す ${uDepth}件 / やり直す ${rDepth}件)`;
+    }
   }
 
   private bindEvents() {
+    // Undo & Redo Handlers
+    const handleUndo = () => {
+      if (this.cmEditor) {
+        undo(this.cmEditor);
+        this.updateHistoryUI();
+        this.cmEditor.focus();
+      }
+    };
+    const handleRedo = () => {
+      if (this.cmEditor) {
+        redo(this.cmEditor);
+        this.updateHistoryUI();
+        this.cmEditor.focus();
+      }
+    };
+    document.getElementById('btnToolbarUndo')?.addEventListener('click', handleUndo);
+    document.getElementById('btnToolbarRedo')?.addEventListener('click', handleRedo);
+    document.getElementById('btnHeaderUndo')?.addEventListener('click', handleUndo);
+    document.getElementById('btnHeaderRedo')?.addEventListener('click', handleRedo);
+
+    // Wheel Scroll Normalization for Vertical Writing
+    const canvasWrapper = document.getElementById('canvasWrapper');
+    if (canvasWrapper) {
+      canvasWrapper.addEventListener(
+        'wheel',
+        (e: WheelEvent) => {
+          if (this.isVertical) {
+            this.scrollNormalizer.handleWheel(e, canvasWrapper);
+          }
+        },
+        { passive: false }
+      );
+    }
+
     // Header Controls
     const btnOrientation = document.getElementById('btnToggleOrientation');
     btnOrientation?.addEventListener('click', () => this.toggleOrientation());
+
+    const btnWrap = document.getElementById('btnToggleWrap');
+    btnWrap?.addEventListener('click', () => this.toggleWrap());
+
+    const btnRuby = document.getElementById('btnToggleRuby');
+    btnRuby?.addEventListener('click', () => this.toggleRuby());
 
     const btnTheme = document.getElementById('btnToggleTheme');
     btnTheme?.addEventListener('click', () => this.toggleTheme());
@@ -144,6 +336,23 @@ export class PlotailorApp {
 
     const btnExitFs = document.getElementById('btnExitFullscreen');
     btnExitFs?.addEventListener('click', () => this.toggleFullscreen(false));
+
+    // Work title editing
+    const workTitleEl = document.getElementById('workTitleText');
+    if (workTitleEl) {
+      workTitleEl.addEventListener('blur', () => {
+        const text = workTitleEl.textContent?.trim() || '無題の物語';
+        this.workTitle = text;
+        this.saveToStorage();
+        this.showToast(`📝 作品名を「${text}」に更新しました`);
+      });
+      workTitleEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          workTitleEl.blur();
+        }
+      });
+    }
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.isFullscreen) {
@@ -192,15 +401,29 @@ export class PlotailorApp {
   }
 
   private handleEditorChange() {
+    const rawText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
+    const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
+    if (activeCh) {
+      activeCh.content = rawText;
+      activeCh.charCount = rawText.replace(/\s+/g, '').length;
+    }
+
     this.updateStats();
+
     const saveIndicator = document.getElementById('saveStatusIndicator');
     if (saveIndicator) {
       saveIndicator.textContent = '自動保存: 編集中...';
-      clearTimeout((this as any)._saveTimer);
-      (this as any)._saveTimer = setTimeout(() => {
-        if (saveIndicator) saveIndicator.textContent = '自動保存: 0.1秒前 (OPFS AES-GCM)';
-      }, 500);
     }
+
+    if (this.saveDebounceTimer !== null) {
+      clearTimeout(this.saveDebounceTimer);
+    }
+    this.saveDebounceTimer = setTimeout(() => {
+      this.saveToStorage();
+      if (saveIndicator) {
+        saveIndicator.textContent = '自動保存: 0.1秒前 (OPFS AES-GCM)';
+      }
+    }, 400);
   }
 
   public jumpToEditor(from: number, to: number) {
@@ -231,8 +454,16 @@ export class PlotailorApp {
     this.showToast(`✨ 主語「${candidateText}」を補完挿入しました`);
   }
 
+  private renderChapterSelect() {
+    const selectEl = document.getElementById('chapterSelect') as HTMLSelectElement;
+    if (!selectEl) return;
+    selectEl.innerHTML = this.chapters.map((ch) => `
+      <option value="${ch.id}" ${ch.id === this.currentChapterId ? 'selected' : ''}>${ch.title}</option>
+    `).join('');
+  }
+
   private loadChapter(chapterId: string) {
-    const ch = CHAPTERS.find((c) => c.id === chapterId);
+    const ch = this.chapters.find((c) => c.id === chapterId);
     if (!ch) return;
     this.currentChapterId = chapterId;
 
@@ -248,8 +479,31 @@ export class PlotailorApp {
     const selectEl = document.getElementById('chapterSelect') as HTMLSelectElement;
     if (selectEl) selectEl.value = chapterId;
 
+    this.saveToStorage();
     this.renderLeftPane();
     this.updateStats();
+  }
+
+  private addNewChapter() {
+    const newIdx = this.chapters.length + 1;
+    const kanjiNums = ['零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
+    const numStr = kanjiNums[newIdx] || newIdx.toString();
+    const newId = `ch_${Date.now()}`;
+    const newTitle = `第${numStr}章 新たな兆し`;
+    const newContent = '　新たな章の幕が上がる。';
+
+    const newChapter: ChapterData = {
+      id: newId,
+      title: newTitle,
+      charCount: newContent.replace(/\s+/g, '').length,
+      content: newContent,
+    };
+
+    this.chapters.push(newChapter);
+    this.saveToStorage();
+    this.renderChapterSelect();
+    this.loadChapter(newId);
+    this.showToast(`✨ 新規の章「${newTitle}」を追加しました`);
   }
 
   private updateStats() {
@@ -262,7 +516,7 @@ export class PlotailorApp {
       headerChar.textContent = `${charCount.toLocaleString()} 文字（原稿用紙 ${genkoSheets} 枚）`;
     }
 
-    const activeCh = CHAPTERS.find((c) => c.id === this.currentChapterId);
+    const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
     if (activeCh) {
       activeCh.charCount = charCount;
       const countEl = document.querySelector(`.chapter-item[data-id="${this.currentChapterId}"] .chapter-char-count`);
@@ -304,6 +558,10 @@ export class PlotailorApp {
       center?.classList.add('vertical-rl');
       this.editorBody.classList.add('vertical-rl');
       if (btn) btn.textContent = '横書き';
+      if (this.cmEditor) {
+        this.cmEditor.dom.classList.add('cm-vertical-rl');
+        this.cmEditor.requestMeasure();
+      }
       if (wrapper) {
         requestAnimationFrame(() => {
           wrapper.scrollLeft = wrapper.scrollWidth;
@@ -313,6 +571,10 @@ export class PlotailorApp {
       center?.classList.remove('vertical-rl');
       this.editorBody.classList.remove('vertical-rl');
       if (btn) btn.textContent = '縦書き';
+      if (this.cmEditor) {
+        this.cmEditor.dom.classList.remove('cm-vertical-rl');
+        this.cmEditor.requestMeasure();
+      }
       if (wrapper) {
         requestAnimationFrame(() => {
           wrapper.scrollLeft = 0;
@@ -321,16 +583,73 @@ export class PlotailorApp {
     }
   }
 
+  private toggleWrap() {
+    this.isLineWrapping = !this.isLineWrapping;
+    if (this.cmEditor) {
+      this.cmEditor.dispatch({
+        effects: this.wrapCompartment.reconfigure(this.isLineWrapping ? EditorView.lineWrapping : []),
+      });
+    }
+
+    this.editorBody.classList.toggle('wrap-active', this.isLineWrapping);
+    this.editorBody.classList.toggle('no-wrap', !this.isLineWrapping);
+
+    const btn = document.getElementById('btnToggleWrap');
+    if (btn) {
+      btn.textContent = `折り返し: ${this.isLineWrapping ? 'ON' : 'OFF'}`;
+    }
+
+    this.saveToStorage();
+    this.showToast(`📐 文字折り返しを「${this.isLineWrapping ? 'ON' : 'OFF'}」に設定しました`);
+  }
+
+  private toggleRuby() {
+    this.isRubyDecorated = !this.isRubyDecorated;
+    if (this.cmEditor) {
+      this.cmEditor.dispatch({
+        effects: this.rubyCompartment.reconfigure(this.isRubyDecorated ? rubyDecorationExtension() : []),
+      });
+    }
+
+    const btn = document.getElementById('btnToggleRuby');
+    if (btn) {
+      btn.textContent = `ルビ: ${this.isRubyDecorated ? 'ON' : 'OFF'}`;
+    }
+
+    this.saveToStorage();
+    this.showToast(`📖 ルビ表示を「${this.isRubyDecorated ? 'ON (装飾)' : 'OFF (記法直接入力)'}」に設定しました`);
+  }
+
   private toggleTheme() {
     this.isNightTheme = !this.isNightTheme;
+    this.applyTheme();
+    this.saveToStorage();
+  }
+
+  private applyTheme() {
     const center = document.getElementById('paneCenter');
     const btn = document.getElementById('btnToggleTheme');
+    const container = document.querySelector('.app-container');
+
     if (this.isNightTheme) {
+      document.body.classList.remove('theme-washi');
+      document.body.classList.add('theme-night');
+      container?.classList.remove('theme-washi');
+      container?.classList.add('theme-night');
       center?.classList.add('theme-night');
-      if (btn) btn.textContent = '夜間色';
+      if (btn) btn.textContent = '📜 和紙色';
     } else {
+      document.body.classList.remove('theme-night');
+      document.body.classList.add('theme-washi');
+      container?.classList.remove('theme-night');
+      container?.classList.add('theme-washi');
       center?.classList.remove('theme-night');
-      if (btn) btn.textContent = '和紙色';
+      if (btn) btn.textContent = '🌙 夜間色';
+    }
+
+    const btnWrap = document.getElementById('btnToggleWrap');
+    if (btnWrap) {
+      btnWrap.textContent = `折り返し: ${this.isLineWrapping ? 'ON' : 'OFF'}`;
     }
   }
 
@@ -422,7 +741,7 @@ export class PlotailorApp {
     if (this.activeLeftTab === 'toc') {
       container.innerHTML = `
         <div class="nav-section-title">章一覧・構成</div>
-        ${CHAPTERS.map((ch) => `
+        ${this.chapters.map((ch) => `
           <div class="chapter-item ${ch.id === this.currentChapterId ? 'active' : ''}" data-id="${ch.id}">
             <span>${ch.title}</span>
             <span class="chapter-char-count">${ch.charCount.toLocaleString()} 字</span>
@@ -438,6 +757,9 @@ export class PlotailorApp {
           if (id) this.loadChapter(id);
         });
       });
+      // Attach click listener for new chapter button
+      const btnNew = container.querySelector('#btnNewChapter');
+      btnNew?.addEventListener('click', () => this.addNewChapter());
     } else if (this.activeLeftTab === 'lore') {
       container.innerHTML = `
         <div class="nav-section-title">登場人物（アクティブ）</div>

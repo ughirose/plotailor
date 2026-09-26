@@ -154,6 +154,7 @@ export * from './core/editor/NarrativeLinterEngine.js';
 export * from './core/editor/NarrativeWorkerBridge.js';
 export * from './core/editor/CodeMirrorNarrativeExtension.js';
 export * from './ui/NarrativeInspectorDock.js';
+export * from './core/editor/VerticalWritingExtension.js';
 export { PlotailorApp } from './app/main.js';
 
 

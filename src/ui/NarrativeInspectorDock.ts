@@ -110,11 +110,16 @@ export class NarrativeInspectorDock {
         for (const item of res.syntacticItems) {
           const ruleLabel = this.getRuleLabel(item.ruleType);
           const ruleBadgeClass = this.getRuleBadgeClass(item.ruleType);
+          const sameLineCount = res.syntacticItems.filter((o) => o.line === item.line).length +
+            res.zeroPronounItems.filter((o) => o.line === item.line).length;
 
           html += `
             <div class="linter-issue-card cursor-pointer" data-action="jump" data-from="${item.from}" data-to="${item.to}" title="クリックしてエディタの該当箇所へジャンプ">
               <div class="issue-header">
-                <span class="issue-tag ${ruleBadgeClass}">${ruleLabel}</span>
+                <div style="display: flex; gap: 4px; align-items: center;">
+                  <span class="issue-tag ${ruleBadgeClass}">${ruleLabel}</span>
+                  ${sameLineCount > 1 ? `<span class="issue-tag" style="background: rgba(248, 81, 73, 0.15); color: var(--color-danger); border: 1px solid rgba(248, 81, 73, 0.3);">⚠️ 同行${sameLineCount}件</span>` : ''}
+                </div>
                 <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
               </div>
               <div class="issue-message">${this.escapeHtml(item.message)}</div>
@@ -135,10 +140,16 @@ export class NarrativeInspectorDock {
         `;
 
         for (const item of res.zeroPronounItems) {
+          const sameLineCount = res.syntacticItems.filter((o) => o.line === item.line).length +
+            res.zeroPronounItems.filter((o) => o.line === item.line).length;
+
           html += `
             <div class="linter-issue-card zp-card" data-action="jump" data-from="${item.from}" data-to="${item.to}">
               <div class="issue-header">
-                <span class="issue-tag zp-tag">主語抜け（ガ格）</span>
+                <div style="display: flex; gap: 4px; align-items: center;">
+                  <span class="issue-tag zp-tag">主語抜け（ガ格）</span>
+                  ${sameLineCount > 1 ? `<span class="issue-tag" style="background: rgba(248, 81, 73, 0.15); color: var(--color-danger); border: 1px solid rgba(248, 81, 73, 0.3);">⚠️ 同行${sameLineCount}件</span>` : ''}
+                </div>
                 <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
               </div>
               <div class="issue-message">述語: <strong>「${this.escapeHtml(item.predicateText)}」</strong></div>

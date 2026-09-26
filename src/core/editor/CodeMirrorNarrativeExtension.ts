@@ -45,6 +45,11 @@ export const pronounMissingMark = Decoration.mark({
   attributes: { title: '主語抜け（ゼロ代名詞）検知' },
 });
 
+export const lintMultipleMark = Decoration.mark({
+  class: 'cm-lint-multiple',
+  attributes: { title: '複数の推敲指摘が重複しています' },
+});
+
 const EMPTY_RESULT: NarrativeAnalysisResult = {
   syntacticItems: [],
   zeroPronounItems: [],
@@ -139,25 +144,36 @@ class NarrativeViewPlugin {
 
     if (!result) return;
 
-    // Build DecorationSet with cm-lint-warning and cm-pronoun-missing
+    // Build DecorationSet with cm-lint-warning, cm-pronoun-missing, and cm-lint-multiple
     const docLength = this.view.state.doc.length;
-    const ranges: Range<Decoration>[] = [];
 
-    // 1. Syntactic warnings
+    // Collect all raw diagnostic spans
+    const allSpans: Array<{ from: number; to: number; type: 'syntactic' | 'zp' }> = [];
     for (const item of result.syntacticItems) {
       const from = Math.max(0, Math.min(item.from, docLength));
       const to = Math.max(from, Math.min(item.to, docLength));
-      if (from < to) {
-        ranges.push(lintWarningMark.range(from, to));
-      }
+      if (from < to) allSpans.push({ from, to, type: 'syntactic' });
     }
-
-    // 2. Zero pronoun missing subject markers
     for (const item of result.zeroPronounItems) {
       const from = Math.max(0, Math.min(item.from, docLength));
       const to = Math.max(from, Math.min(item.to, docLength));
-      if (from < to) {
-        ranges.push(pronounMissingMark.range(from, to));
+      if (from < to) allSpans.push({ from, to, type: 'zp' });
+    }
+
+    const ranges: Range<Decoration>[] = [];
+    for (let i = 0; i < allSpans.length; i++) {
+      const span = allSpans[i];
+      // Check if this span overlaps with any other span
+      const hasOverlap = allSpans.some(
+        (other, idx) => idx !== i && Math.max(span.from, other.from) < Math.min(span.to, other.to)
+      );
+
+      if (hasOverlap) {
+        ranges.push(lintMultipleMark.range(span.from, span.to));
+      } else if (span.type === 'syntactic') {
+        ranges.push(lintWarningMark.range(span.from, span.to));
+      } else {
+        ranges.push(pronounMissingMark.range(span.from, span.to));
       }
     }
 
