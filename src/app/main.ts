@@ -75,6 +75,9 @@ export class PlotailorApp {
   private rubyCompartment = new Compartment();
   private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private scrollNormalizer = new ScrollNormalizer();
+  private chapterStates: Map<string, EditorState> = new Map();
+  private chapterSnapshots: Map<string, Array<{ time: number; text: string; length: number }>> = new Map();
+  private lastSnapshotTime = 0;
 
   constructor() {
     this.editorBody = document.getElementById('editorBody') as HTMLDivElement;
@@ -200,17 +203,15 @@ export class PlotailorApp {
     } catch {}
   }
 
-  private initCodeMirror() {
-    const ch = this.chapters.find((c) => c.id === this.currentChapterId) || this.chapters[0];
-
-    const state = EditorState.create({
-      doc: ch.content,
+  private createChapterState(content: string): EditorState {
+    return EditorState.create({
+      doc: content,
       extensions: [
         this.wrapCompartment.of(this.isLineWrapping ? EditorView.lineWrapping : []),
         this.rubyCompartment.of(
           this.rubyMode === 'raw'
             ? []
-            : rubyDecorationExtension({ mode: this.rubyMode })
+            : rubyDecorationExtension({ mode: this.rubyMode, expandOnCursor: true })
         ),
         history({ minDepth: 500, newGroupDelay: 500 }),
         keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -237,6 +238,34 @@ export class PlotailorApp {
         }),
       ],
     });
+  }
+
+  private recordSnapshot(chapterId: string, text: string) {
+    let list = this.chapterSnapshots.get(chapterId);
+    if (!list) {
+      list = [];
+      this.chapterSnapshots.set(chapterId, list);
+    }
+    const len = text.replace(/\s+/g, '').length;
+    // Do not record if text is identical to last recorded snapshot
+    if (list.length > 0 && list[list.length - 1].text === text) return;
+    list.push({ time: Date.now(), text, length: len });
+    if (list.length > 500) list.shift();
+  }
+
+  private recordSnapshotDebounced(chapterId: string, text: string) {
+    const now = Date.now();
+    if (now - this.lastSnapshotTime > 4000) {
+      this.lastSnapshotTime = now;
+      this.recordSnapshot(chapterId, text);
+    }
+  }
+
+  private initCodeMirror() {
+    const ch = this.chapters.find((c) => c.id === this.currentChapterId) || this.chapters[0];
+    const state = this.createChapterState(ch.content);
+    this.chapterStates.set(ch.id, state);
+    this.recordSnapshot(ch.id, ch.content);
 
     this.editorBody.innerHTML = '';
     this.editorBody.classList.toggle('wrap-active', this.isLineWrapping);
@@ -313,6 +342,15 @@ export class PlotailorApp {
     document.getElementById('btnToolbarRedo')?.addEventListener('click', handleRedo);
     document.getElementById('btnHeaderUndo')?.addEventListener('click', handleUndo);
     document.getElementById('btnHeaderRedo')?.addEventListener('click', handleRedo);
+
+    // History Modal Open/Close Handlers
+    document.getElementById('historyDepthBadge')?.addEventListener('click', () => this.openHistoryModal());
+    document.getElementById('btnCloseHistoryModal')?.addEventListener('click', () => this.closeHistoryModal());
+    document.getElementById('historyModal')?.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).id === 'historyModal') {
+        this.closeHistoryModal();
+      }
+    });
 
     // Wheel Scroll Normalization for Vertical Writing
     const canvasWrapper = document.getElementById('canvasWrapper');
@@ -420,9 +458,13 @@ export class PlotailorApp {
 
     this.updateStats();
 
+    // Record snapshot debounced
+    this.recordSnapshotDebounced(this.currentChapterId, rawText);
+
     const saveIndicator = document.getElementById('saveStatusIndicator');
     if (saveIndicator) {
       saveIndicator.textContent = '自動保存: 編集中...';
+      saveIndicator.style.color = 'var(--color-gold)';
     }
 
     if (this.saveDebounceTimer !== null) {
@@ -432,6 +474,7 @@ export class PlotailorApp {
       this.saveToStorage();
       if (saveIndicator) {
         saveIndicator.textContent = '自動保存: 0.1秒前 (OPFS AES-GCM)';
+        saveIndicator.style.color = 'var(--color-text-dim)';
       }
     }, 400);
   }
@@ -475,12 +518,22 @@ export class PlotailorApp {
   private loadChapter(chapterId: string) {
     const ch = this.chapters.find((c) => c.id === chapterId);
     if (!ch) return;
-    this.currentChapterId = chapterId;
 
     if (this.cmEditor) {
-      this.cmEditor.dispatch({
-        changes: { from: 0, to: this.cmEditor.state.doc.length, insert: ch.content },
-      });
+      // 1. Save current chapter state to map before switching
+      this.chapterStates.set(this.currentChapterId, this.cmEditor.state);
+
+      this.currentChapterId = chapterId;
+
+      // 2. Load or create target chapter state (completely isolated undo/redo history)
+      let targetState = this.chapterStates.get(chapterId);
+      if (!targetState) {
+        targetState = this.createChapterState(ch.content);
+        this.chapterStates.set(chapterId, targetState);
+      }
+      this.cmEditor.setState(targetState);
+    } else {
+      this.currentChapterId = chapterId;
     }
 
     const titleEl = document.getElementById('activeChapterTitle');
@@ -491,6 +544,63 @@ export class PlotailorApp {
 
     this.saveToStorage();
     this.renderLeftPane();
+    this.updateStats();
+    this.updateHistoryUI();
+  }
+
+  public openHistoryModal() {
+    const modal = document.getElementById('historyModal');
+    const container = document.getElementById('historyListContainer');
+    if (!modal || !container) return;
+
+    const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
+    if (snapshots.length === 0) {
+      container.innerHTML = '<div style="font-size: 13px; color: var(--color-text-dim); text-align: center; padding: 24px;">まだ履歴スナップショットはありません。本文を入力すると自動的に記録されます。</div>';
+    } else {
+      container.innerHTML = snapshots.slice(-40).reverse().map((snap, idx) => {
+        const dateStr = new Date(snap.time).toLocaleTimeString();
+        const preview = snap.text.slice(0, 60).replace(/\n/g, ' ') || '（空文書）';
+        return `
+          <div class="history-item" data-snap-index="${snapshots.length - 1 - idx}">
+            <div class="history-item-info">
+              <div class="history-item-time">${dateStr} (${snap.length} 文字)</div>
+              <div class="history-item-preview">${preview}</div>
+            </div>
+            <button class="history-item-btn">この時点に復元</button>
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.history-item').forEach((item) => {
+        item.addEventListener('click', (e) => {
+          const idxStr = (e.currentTarget as HTMLElement).dataset.snapIndex;
+          if (idxStr !== undefined) {
+            const idx = parseInt(idxStr, 10);
+            this.rollbackToSnapshot(idx);
+            this.closeHistoryModal();
+          }
+        });
+      });
+    }
+
+    modal.style.display = 'flex';
+  }
+
+  public closeHistoryModal() {
+    const modal = document.getElementById('historyModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  private rollbackToSnapshot(index: number) {
+    const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
+    const snap = snapshots[index];
+    if (!snap || !this.cmEditor) return;
+
+    this.cmEditor.dispatch({
+      changes: { from: 0, to: this.cmEditor.state.doc.length, insert: snap.text },
+      userEvent: 'undo.rollback',
+    });
+    this.showToast(`🕒 ${new Date(snap.time).toLocaleTimeString()} の履歴へ復元しました`);
     this.updateStats();
   }
 
@@ -524,6 +634,11 @@ export class PlotailorApp {
     const headerChar = document.getElementById('charCountHeader');
     if (headerChar) {
       headerChar.textContent = `${charCount.toLocaleString()} 文字（原稿用紙 ${genkoSheets} 枚）`;
+    }
+
+    const footerChar = document.getElementById('charCountFooter');
+    if (footerChar) {
+      footerChar.innerHTML = `<strong>${charCount.toLocaleString()}</strong> 文字（原稿用紙 <strong>${genkoSheets}</strong> 枚）`;
     }
 
     const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
@@ -639,7 +754,7 @@ export class PlotailorApp {
           this.rubyCompartment.reconfigure(
             this.rubyMode === 'raw'
               ? []
-              : rubyDecorationExtension({ mode: this.rubyMode })
+              : rubyDecorationExtension({ mode: this.rubyMode, expandOnCursor: true })
           ),
           setRubyDisplayMode.of(this.rubyMode),
         ],

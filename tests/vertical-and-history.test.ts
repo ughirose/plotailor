@@ -55,6 +55,49 @@ describe('Undo / Redo History Extension', () => {
 
     view.destroy();
   });
+
+  it('isolates undo/redo history across different chapters using setState', () => {
+    // Chapter 1 setup
+    const stateCh1 = EditorState.create({
+      doc: '第1章本文',
+      extensions: [history({ minDepth: 500, newGroupDelay: 0 })],
+    });
+    const view = new EditorView({ state: stateCh1 });
+
+    // Edit Chapter 1
+    view.dispatch({ changes: { from: 5, insert: 'の追記' } });
+    expect(view.state.doc.toString()).toBe('第1章本文の追記');
+    expect(undoDepth(view.state)).toBe(1);
+
+    const savedStateCh1 = view.state;
+
+    // Switch to Chapter 2 (new fresh state)
+    const stateCh2 = EditorState.create({
+      doc: '第2章本文',
+      extensions: [history({ minDepth: 500, newGroupDelay: 0 })],
+    });
+    view.setState(stateCh2);
+
+    expect(view.state.doc.toString()).toBe('第2章本文');
+    expect(undoDepth(view.state)).toBe(0);
+
+    // Edit Chapter 2
+    view.dispatch({ changes: { from: 5, insert: 'の独自修正' } });
+    expect(view.state.doc.toString()).toBe('第2章本文の独自修正');
+    expect(undoDepth(view.state)).toBe(1);
+
+    // Switch back to Chapter 1
+    view.setState(savedStateCh1);
+    expect(view.state.doc.toString()).toBe('第1章本文の追記');
+    expect(undoDepth(view.state)).toBe(1);
+
+    // Undo in Chapter 1 restores original Chapter 1 text without touching Chapter 2
+    undo(view);
+    expect(view.state.doc.toString()).toBe('第1章本文');
+    expect(undoDepth(view.state)).toBe(0);
+
+    view.destroy();
+  });
 });
 
 describe('RubyWidget DOM Structure', () => {

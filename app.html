@@ -35,20 +35,12 @@
       </div>
 
       <div class="ide-header-center">
-        <span class="stat-chip secure" title="ブラウザ内ローカル暗号化ストレージ（OPFS AES-GCM-256）稼働中">
-          🔒 暗号化ローカル保存済
-        </span>
-        <span class="stat-chip pop-score" id="popHeaderScore" title="Human-Centric Authoring Score（打鍵・推敲エントロピー解析）">
-          PoP: HCIS 1.18 ✦
-        </span>
-        <span class="stat-chip" id="charCountHeader">
-          3,420 文字（原稿用紙 8.6 枚）
-        </span>
+        <!-- Title & Status is cleanly moved to bottom status bar -->
       </div>
 
       <div class="ide-header-right">
-        <button class="ide-btn" id="btnHeaderUndo" title="元に戻す (Ctrl+Z)">↩ 戻す</button>
-        <button class="ide-btn" id="btnHeaderRedo" title="やり直す (Ctrl+Y)">↪ 進む</button>
+        <button class="ide-btn" id="btnHeaderUndo" title="元に戻す (Ctrl+Z)">↩ 戻す (Ctrl+Z)</button>
+        <button class="ide-btn" id="btnHeaderRedo" title="やり直す (Ctrl+Y)">↪ 進む (Ctrl+Y)</button>
         <button class="ide-btn" id="btnToggleLeftPane" title="左ペインの開閉">◨ 目次</button>
         <button class="ide-btn" id="btnToggleOrientation" title="縦書き／横書きの切り替え">縦書き</button>
         <button class="ide-btn" id="btnToggleWrap" title="文字折り返しの切り替え">折り返し: ON</button>
@@ -83,10 +75,9 @@
             <span style="font-size: 11px; color: var(--color-text-dim);">ルビ打鍵: 《るび》, &lt;&lt;るび&gt;&gt; | 傍点: &lt;&lt;&lt;&lt;傍点&gt;&gt;&gt;&gt;</span>
           </div>
           <div style="display: flex; gap: 8px; align-items: center;">
-            <button class="ide-btn" id="btnToolbarUndo" title="元に戻す (Ctrl+Z)" style="padding: 2px 8px; font-size: 12px; height: 24px; min-width: auto;">↩ 戻す</button>
-            <button class="ide-btn" id="btnToolbarRedo" title="やり直す (Ctrl+Y / Ctrl+Shift+Z)" style="padding: 2px 8px; font-size: 12px; height: 24px; min-width: auto;">↪ やり直す</button>
-            <span id="historyDepthBadge" style="font-size: 11px; color: var(--color-gold); margin-right: 6px; user-select: none;" title="保持可能履歴数: 500回（現在利用可能なUndo/Redo件数）">履歴: 0 / 500</span>
-            <span id="saveStatusIndicator" style="font-size: 11px; color: var(--color-text-muted);">自動保存: 0.4秒前</span>
+            <button class="ide-btn" id="btnToolbarUndo" title="元に戻す (Ctrl+Z)" style="padding: 2px 10px; font-size: 12px; height: 24px; min-width: auto;">↩ 戻す (Ctrl+Z)</button>
+            <button class="ide-btn" id="btnToolbarRedo" title="やり直す (Ctrl+Y / Ctrl+Shift+Z)" style="padding: 2px 10px; font-size: 12px; height: 24px; min-width: auto;">↪ やり直す (Ctrl+Y)</button>
+            <button class="ide-btn history-badge-btn" id="historyDepthBadge" style="font-size: 11px; color: var(--color-gold); padding: 2px 8px; height: 24px; cursor: pointer;" title="クリックで直近の編集履歴一覧（ロールバック）を開く">履歴: 0 / 500 ▾</button>
           </div>
         </div>
 
@@ -114,18 +105,40 @@
       <div class="ide-footer-left">
         <span>行: <strong id="cursorLine">1</strong>, 列: <strong id="cursorCol">1</strong></span>
         <span>|</span>
-        <span>選択文字数: <strong id="selectionLength">0</strong></span>
+        <span>選択: <strong id="selectionLength">0</strong></span>
         <span>|</span>
-        <span>入力速度: <strong id="typingSpeed">340</strong> 字/分</span>
+        <span id="charCountFooter"><strong>0</strong> 文字（原稿用紙 <strong>0.0</strong> 枚）</span>
+        <span>|</span>
+        <span>速度: <strong id="typingSpeed">0</strong> 字/分</span>
       </div>
       <div class="ide-footer-right">
-        <span>⚙️ Narrative-Nano Wasm SIMD: <strong style="color: var(--color-success);">Ready (0.6μs)</strong></span>
+        <span id="saveStatusIndicator" style="color: var(--color-text-dim); transition: color 0.2s ease;">自動保存: 待機</span>
         <span>|</span>
-        <span>ゼロ代名詞補完: <strong style="color: var(--color-gold);">10格Biaffine有効</strong></span>
+        <span style="color: var(--color-gold); font-size: 11px;" title="OPFS (Origin Private File System) AES-GCM-256 暗号化">🔒 暗号化ローカル保存</span>
         <span>|</span>
-        <span>Zero-Telemetry: <strong style="color: var(--color-success);">Protected</strong></span>
+        <span id="popFooterScore" style="color: var(--color-gold); font-size: 11px;" title="創作プロセス証明（打鍵・推敲エントロピー解析）">PoP: HCIS 1.18 ✦</span>
+        <span>|</span>
+        <span>Nano-Wasm: <strong style="color: var(--color-success);">Ready</strong></span>
       </div>
     </footer>
+  </div>
+
+  <!-- History Snapshots Rollback Modal -->
+  <div class="history-modal-backdrop" id="historyModal" style="display: none;">
+    <div class="history-modal-dialog">
+      <div class="history-modal-header">
+        <h3><span>🕒</span> 編集履歴・ロールバック (最大500件)</h3>
+        <button class="history-modal-close" id="btnCloseHistoryModal">&times;</button>
+      </div>
+      <div class="history-modal-body">
+        <p style="font-size: 12px; color: var(--color-text-dim); margin-bottom: 12px;">
+          執筆セッション中の変更履歴です。過去の編集ポイントをクリックすると、その時点の本文へ安全にロールバックできます。
+        </p>
+        <div class="history-list" id="historyListContainer">
+          <!-- Generated dynamically -->
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Fullscreen Exit Floating Button -->

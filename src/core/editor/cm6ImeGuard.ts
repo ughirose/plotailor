@@ -77,7 +77,8 @@ export const compositionStateField = StateField.define<CompositionStateValue>({
 /**
  * Helper to check if editor state is currently in IME composition.
  */
-export function isComposing(state: EditorState): boolean {
+export function isComposing(state: EditorState, view?: EditorView): boolean {
+  if (view && view.composing) return true;
   const comp = state.field(compositionStateField, false);
   return comp ? comp.isComposing : false;
 }
@@ -248,23 +249,29 @@ export function cm6ImeGuard(options: ImeGuardOptions = {}): Extension {
   const domHandlers = EditorView.domEventHandlers({
     compositionstart(event, view) {
       const sel = view.state.selection.main;
-      view.dispatch({
-        effects: setCompositionStatus.of({
-          status: 'COMPOSING',
-          text: event.data || '',
-          range: { from: sel.from, to: sel.to },
-        }),
-      });
+      // In real browser IME sessions (isTrusted), do NOT dispatch synchronously during compositionstart/update
+      // as it forces CodeMirror DOM mutation, resetting the IME composition node and leaving raw Latin letters.
+      if (!event.isTrusted) {
+        view.dispatch({
+          effects: setCompositionStatus.of({
+            status: 'COMPOSING',
+            text: event.data || '',
+            range: { from: sel.from, to: sel.to },
+          }),
+        });
+      }
     },
     compositionupdate(event, view) {
       const sel = view.state.selection.main;
-      view.dispatch({
-        effects: setCompositionStatus.of({
-          status: 'COMPOSING',
-          text: event.data || '',
-          range: { from: sel.from, to: sel.to },
-        }),
-      });
+      if (!event.isTrusted) {
+        view.dispatch({
+          effects: setCompositionStatus.of({
+            status: 'COMPOSING',
+            text: event.data || '',
+            range: { from: sel.from, to: sel.to },
+          }),
+        });
+      }
     },
     compositionend(event, view) {
       const sel = view.state.selection.main;

@@ -190,28 +190,6 @@ export class SourceToDisplayMap {
   }
 }
 
-/**
- * Direct inline ruby editing dialog/prompt helper
- */
-export function promptDirectRubyEdit(
-  view: EditorView,
-  rawFrom: number,
-  rawTo: number,
-  currentBase: string,
-  currentRuby: string
-) {
-  const newRuby = window.prompt(`【ルビ直接編集】「${currentBase}」のルビを入力してください:`, currentRuby);
-  if (newRuby !== null) {
-    const trimmed = newRuby.trim();
-    const newText = trimmed ? `｜${currentBase}《${trimmed}》` : currentBase;
-    view.dispatch({
-      changes: { from: rawFrom, to: rawTo, insert: newText },
-      userEvent: 'input.ruby',
-    });
-    view.focus();
-  }
-}
-
 export class RubyWidget extends WidgetType {
   constructor(
     public readonly baseText: string,
@@ -225,7 +203,7 @@ export class RubyWidget extends WidgetType {
   toDOM(view?: EditorView): HTMLElement {
     const rubyEl = document.createElement('ruby');
     rubyEl.className = 'cm-ruby';
-    rubyEl.title = `ルビ: ${this.rubyText}（クリックで直接編集）`;
+    rubyEl.title = `ルビ: ${this.rubyText}（カーソルを合わせると直接編集可能）`;
 
     const rbEl = document.createElement('rb');
     rbEl.className = 'cm-ruby-base';
@@ -238,11 +216,14 @@ export class RubyWidget extends WidgetType {
     rubyEl.appendChild(rbEl);
     rubyEl.appendChild(rtEl);
 
-    // Click on ruby widget allows editing ruby directly in-place without expanding whole line
+    // Clicking ruby places cursor at the ruby range, expanding it in-place for direct editing
     rubyEl.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (view && typeof window !== 'undefined') {
-        promptDirectRubyEdit(view, this.rawFrom, this.rawTo, this.baseText, this.rubyText);
+      if (view) {
+        view.dispatch({
+          selection: { anchor: this.rawFrom, head: this.rawTo },
+        });
+        view.focus();
       }
     });
 
