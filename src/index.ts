@@ -161,6 +161,8 @@ export * from './core/editor/NarrativeWorkerBridge.js';
 export * from './core/editor/CodeMirrorNarrativeExtension.js';
 export * from './ui/NarrativeInspectorDock.js';
 export * from './core/editor/VerticalWritingExtension.js';
+export * from './core/fs/index.js';
+export * from './core/project/index.js';
 export { PlotailorApp } from './app/main.js';
 
 
