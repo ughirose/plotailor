@@ -137,12 +137,16 @@ export * from './core/editor/cm6ImeGuard.js';
 export { PoPCertificateExporter } from './core/audit/PoPCertificateExporter.js';
 export {
   RubyWidget,
+  RubyOffWidget,
   BoutenWidget,
   RubyDecorationPlugin,
   rubyDecorationPlugin,
   rubyTheme,
   rubyDecorationExtension,
   parseAndBuildDecorations,
+  rubyConfigFacet,
+  type RubyDisplayMode,
+  type RubyDecorationConfig,
   type RubyMatch,
   type BoutenMatch,
   type ParsedMatch,

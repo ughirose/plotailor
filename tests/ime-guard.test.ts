@@ -11,6 +11,10 @@ import {
   heavyTaskAnnotation,
   ImeStateDelta,
 } from '../src/core/editor/cm6ImeGuard.js';
+import {
+  rubyDecorationExtension,
+  rubyDecorationPlugin,
+} from '../src/core/editor/RubyDecorationExtension.js';
 
 describe('cm6ImeGuard (Japanese IME Exclusive Control Guard)', () => {
   beforeEach(() => {
@@ -237,4 +241,46 @@ describe('cm6ImeGuard (Japanese IME Exclusive Control Guard)', () => {
 
     view.destroy();
   });
+
+  it('strictly locks ruby decoration rebuilds during active IME composition', () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+
+    const doc = '｜魔法《マゴウ》の詠唱。';
+    const state = EditorState.create({
+      doc,
+      selection: { anchor: 12 },
+      extensions: [
+        cm6ImeGuard(),
+        rubyDecorationExtension({ bypassActiveLine: false }),
+      ],
+    });
+
+    const view = new EditorView({ state, parent });
+    const plugin = view.plugin(rubyDecorationPlugin);
+    expect(plugin).not.toBeNull();
+    const initialDecorations = plugin!.decorations;
+    expect(initialDecorations.size).toBe(1);
+
+    // Start IME composition
+    dispatchCompositionEvent(view, 'compositionstart', 'k');
+    expect(isComposing(view.state)).toBe(true);
+
+    // Document change during composition
+    view.dispatch({
+      changes: { from: 12, insert: '新' },
+    });
+
+    // Plugin decorations should be strictly unchanged during composition
+    const midPlugin = view.plugin(rubyDecorationPlugin);
+    expect(midPlugin!.decorations).toBe(initialDecorations);
+
+    // End composition
+    dispatchCompositionEvent(view, 'compositionend', '新');
+    expect(isComposing(view.state)).toBe(false);
+
+    view.destroy();
+    parent.remove();
+  });
 });
+

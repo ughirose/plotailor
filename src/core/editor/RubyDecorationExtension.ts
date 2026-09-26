@@ -6,7 +6,30 @@ import {
   ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
-import { EditorState, Extension, Range } from '@codemirror/state';
+import { EditorState, Extension, Range, Facet } from '@codemirror/state';
+import { isComposing } from './cm6ImeGuard.js';
+
+export type RubyDisplayMode = 'normal' | 'raw' | 'off';
+
+export interface RubyDecorationConfig {
+  mode?: RubyDisplayMode;
+  bypassActiveLine?: boolean;
+}
+
+export const rubyConfigFacet = Facet.define<RubyDecorationConfig, Required<RubyDecorationConfig>>({
+  combine: (values) => {
+    return values.reduce<Required<RubyDecorationConfig>>(
+      (acc, cur) => ({
+        mode: cur.mode ?? acc.mode,
+        bypassActiveLine: cur.bypassActiveLine ?? acc.bypassActiveLine,
+      }),
+      {
+        mode: 'normal',
+        bypassActiveLine: false,
+      }
+    );
+  },
+});
 
 export interface RubyMatch {
   type: 'ruby';
@@ -203,6 +226,27 @@ export class RubyWidget extends WidgetType {
   }
 }
 
+export class RubyOffWidget extends WidgetType {
+  constructor(public readonly baseText: string) {
+    super();
+  }
+
+  toDOM(): HTMLElement {
+    const spanEl = document.createElement('span');
+    spanEl.className = 'cm-ruby-off';
+    spanEl.textContent = this.baseText;
+    return spanEl;
+  }
+
+  ignoreEvent(): boolean {
+    return true;
+  }
+
+  eq(other: RubyOffWidget): boolean {
+    return other instanceof RubyOffWidget && other.baseText === this.baseText;
+  }
+}
+
 export class BoutenWidget extends WidgetType {
   constructor(public readonly text: string) {
     super();
@@ -224,23 +268,54 @@ export class BoutenWidget extends WidgetType {
   }
 }
 
-export function parseAndBuildDecorations(state: EditorState): {
+export function parseAndBuildDecorations(
+  state: EditorState,
+  config: RubyDecorationConfig = {}
+): {
   decorations: DecorationSet;
   map: SourceToDisplayMap;
   matches: ParsedMatch[];
 } {
+  const mode = config.mode ?? 'normal';
+  if (mode === 'raw') {
+    return {
+      decorations: Decoration.none,
+      map: new SourceToDisplayMap([]),
+      matches: [],
+    };
+  }
+
   const docText = state.doc.toString();
   const matches = AozoraParser.parse(docText);
   const selectionRanges = state.selection.ranges;
+
+  // Active lines collection when bypassActiveLine is active
+  const activeLineNumbers = new Set<number>();
+  if (config.bypassActiveLine) {
+    for (const r of selectionRanges) {
+      const startLine = state.doc.lineAt(r.from).number;
+      const endLine = state.doc.lineAt(r.to).number;
+      for (let l = startLine; l <= endLine; l++) {
+        activeLineNumbers.add(l);
+      }
+    }
+  }
 
   const spans: MappingSpan[] = [];
   const widgets: Range<Decoration>[] = [];
   let accumulatedDelta = 0;
 
   for (const match of matches) {
-    const isSelected = selectionRanges.some(
+    let isSelected = selectionRanges.some(
       (r) => r.from <= match.rawTo && r.to >= match.rawFrom
     );
+
+    if (!isSelected && config.bypassActiveLine) {
+      const matchLine = state.doc.lineAt(match.rawFrom).number;
+      if (activeLineNumbers.has(matchLine)) {
+        isSelected = true; // Bypass decoration completely on active editing line
+      }
+    }
 
     const displayFrom = match.rawFrom + accumulatedDelta;
 
@@ -259,7 +334,10 @@ export function parseAndBuildDecorations(state: EditorState): {
 
       if (!isSelected) {
         const widget = Decoration.replace({
-          widget: new RubyWidget(match.baseText, match.rubyText),
+          widget:
+            mode === 'off'
+              ? new RubyOffWidget(match.baseText)
+              : new RubyWidget(match.baseText, match.rubyText),
         });
         widgets.push(widget.range(match.rawFrom, match.rawTo));
       }
@@ -277,10 +355,18 @@ export function parseAndBuildDecorations(state: EditorState): {
       });
 
       if (!isSelected) {
-        const widget = Decoration.replace({
-          widget: new BoutenWidget(match.text),
-        });
-        widgets.push(widget.range(match.rawFrom, match.rawTo));
+        if (mode !== 'off') {
+          const widget = Decoration.replace({
+            widget: new BoutenWidget(match.text),
+          });
+          widgets.push(widget.range(match.rawFrom, match.rawTo));
+        } else {
+          // Off mode for bouten: strip markup, keep pure text
+          const widget = Decoration.replace({
+            widget: new RubyOffWidget(match.text),
+          });
+          widgets.push(widget.range(match.rawFrom, match.rawTo));
+        }
       }
     }
   }
@@ -318,6 +404,10 @@ export const rubyTheme = EditorView.theme({
     color: 'var(--color-gold, #cfa85c)',
     whiteSpace: 'nowrap',
     pointerEvents: 'none',
+  },
+  '.cm-ruby-off': {
+    display: 'inline',
+    lineHeight: 'inherit',
   },
   '.cm-bouten': {
     textEmphasis: 'sesame',
@@ -361,19 +451,21 @@ export class RubyDecorationPlugin {
   matches: ParsedMatch[];
 
   constructor(view: EditorView) {
-    const result = parseAndBuildDecorations(view.state);
+    const config = view.state.facet(rubyConfigFacet);
+    const result = parseAndBuildDecorations(view.state, config);
     this.decorations = result.decorations;
     this.map = result.map;
     this.matches = result.matches;
   }
 
   update(update: ViewUpdate) {
-    if (update.view.composing) {
+    if (update.view.composing || isComposing(update.state)) {
       // Do NOT replace/rebuild decorations while user is composing with Japanese IME
       return;
     }
+    const config = update.state.facet(rubyConfigFacet);
     if (update.docChanged || update.selectionSet) {
-      const result = parseAndBuildDecorations(update.state);
+      const result = parseAndBuildDecorations(update.state, config);
       this.decorations = result.decorations;
       this.map = result.map;
       this.matches = result.matches;
@@ -385,6 +477,10 @@ export const rubyDecorationPlugin = ViewPlugin.fromClass(RubyDecorationPlugin, {
   decorations: (v) => v.decorations,
 });
 
-export function rubyDecorationExtension(): Extension {
-  return [rubyDecorationPlugin, rubyTheme];
+export function rubyDecorationExtension(options?: RubyDecorationConfig): Extension {
+  return [
+    options ? rubyConfigFacet.of(options) : [],
+    rubyDecorationPlugin,
+    rubyTheme,
+  ];
 }

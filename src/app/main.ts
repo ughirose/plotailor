@@ -6,7 +6,7 @@
 import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { history, defaultKeymap, historyKeymap, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
-import { rubyDecorationExtension } from '../core/editor/RubyDecorationExtension.js';
+import { rubyDecorationExtension, type RubyDisplayMode } from '../core/editor/RubyDecorationExtension.js';
 import { cm6ImeGuard } from '../core/editor/cm6ImeGuard.js';
 import { verticalWritingExtension } from '../core/editor/VerticalWritingExtension.js';
 import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
@@ -61,7 +61,7 @@ export class PlotailorApp {
   private workTitle = '星辰の境界線';
   private isVertical = false;
   private isLineWrapping = true;
-  private isRubyDecorated = true;
+  private rubyMode: RubyDisplayMode = 'normal';
   private isNightTheme = false;
   private isFullscreen = false;
   private leftPaneOpen = true;
@@ -106,7 +106,7 @@ export class PlotailorApp {
     this.bindEvents();
     const btnRuby = document.getElementById('btnToggleRuby');
     if (btnRuby) {
-      btnRuby.textContent = `ルビ: ${this.isRubyDecorated ? 'ON' : 'OFF'}`;
+      btnRuby.textContent = this.getRubyButtonLabel();
     }
 
     this.renderChapterSelect();
@@ -168,9 +168,14 @@ export class PlotailorApp {
 
     // 5. Ruby decoration preference
     try {
-      const savedRuby = localStorage.getItem('plotailor_ruby_decorated');
-      if (savedRuby !== null) {
-        this.isRubyDecorated = savedRuby === 'true';
+      const savedMode = localStorage.getItem('plotailor_ruby_mode');
+      if (savedMode === 'normal' || savedMode === 'raw' || savedMode === 'off') {
+        this.rubyMode = savedMode as RubyDisplayMode;
+      } else {
+        const savedRuby = localStorage.getItem('plotailor_ruby_decorated');
+        if (savedRuby !== null) {
+          this.rubyMode = savedRuby === 'true' ? 'normal' : 'raw';
+        }
       }
     } catch {}
 
@@ -189,7 +194,8 @@ export class PlotailorApp {
       localStorage.setItem('plotailor_active_chapter_id', this.currentChapterId);
       localStorage.setItem('plotailor_work_title', this.workTitle);
       localStorage.setItem('plotailor_line_wrapping', this.isLineWrapping.toString());
-      localStorage.setItem('plotailor_ruby_decorated', this.isRubyDecorated.toString());
+      localStorage.setItem('plotailor_ruby_mode', this.rubyMode);
+      localStorage.setItem('plotailor_ruby_decorated', (this.rubyMode === 'normal').toString());
       localStorage.setItem('plotailor_theme', this.isNightTheme ? 'night' : 'washi');
     } catch {}
   }
@@ -201,7 +207,14 @@ export class PlotailorApp {
       doc: ch.content,
       extensions: [
         this.wrapCompartment.of(this.isLineWrapping ? EditorView.lineWrapping : []),
-        this.rubyCompartment.of(this.isRubyDecorated ? rubyDecorationExtension() : []),
+        this.rubyCompartment.of(
+          this.rubyMode === 'raw'
+            ? []
+            : rubyDecorationExtension({
+                mode: this.rubyMode,
+                bypassActiveLine: true,
+              })
+        ),
         history({ minDepth: 500, newGroupDelay: 500 }),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         verticalWritingExtension(),
@@ -603,21 +616,53 @@ export class PlotailorApp {
     this.showToast(`📐 文字折り返しを「${this.isLineWrapping ? 'ON' : 'OFF'}」に設定しました`);
   }
 
+  private getRubyButtonLabel(): string {
+    switch (this.rubyMode) {
+      case 'normal':
+        return 'ルビ: 通常';
+      case 'raw':
+        return 'ルビ: 記法直接';
+      case 'off':
+        return 'ルビ: OFF';
+    }
+  }
+
   private toggleRuby() {
-    this.isRubyDecorated = !this.isRubyDecorated;
+    if (this.rubyMode === 'normal') {
+      this.rubyMode = 'raw';
+    } else if (this.rubyMode === 'raw') {
+      this.rubyMode = 'off';
+    } else {
+      this.rubyMode = 'normal';
+    }
+
     if (this.cmEditor) {
       this.cmEditor.dispatch({
-        effects: this.rubyCompartment.reconfigure(this.isRubyDecorated ? rubyDecorationExtension() : []),
+        effects: this.rubyCompartment.reconfigure(
+          this.rubyMode === 'raw'
+            ? []
+            : rubyDecorationExtension({
+                mode: this.rubyMode,
+                bypassActiveLine: true,
+              })
+        ),
       });
     }
 
     const btn = document.getElementById('btnToggleRuby');
     if (btn) {
-      btn.textContent = `ルビ: ${this.isRubyDecorated ? 'ON' : 'OFF'}`;
+      btn.textContent = this.getRubyButtonLabel();
     }
 
     this.saveToStorage();
-    this.showToast(`📖 ルビ表示を「${this.isRubyDecorated ? 'ON (装飾)' : 'OFF (記法直接入力)'}」に設定しました`);
+
+    const desc =
+      this.rubyMode === 'normal'
+        ? '通常ルビ (リッチ表示)'
+        : this.rubyMode === 'raw'
+        ? '青空文庫ルビ表記 (直接入力)'
+        : 'ルビOFF (隠蔽モード・親文字のみ)';
+    this.showToast(`📖 ルビ表示を「${desc}」に設定しました`);
   }
 
   private toggleTheme() {

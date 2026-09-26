@@ -6,6 +6,7 @@ import {
   AozoraParser,
   SourceToDisplayMap,
   RubyWidget,
+  RubyOffWidget,
   BoutenWidget,
   parseAndBuildDecorations,
   rubyDecorationExtension,
@@ -215,3 +216,77 @@ describe('RubyDecorationExtension Bidirectional Cursor Editing', () => {
     expect(rubyTheme).toBeDefined();
   });
 });
+
+describe('RubyDisplayMode (Normal, Raw, Off/Hidden)', () => {
+  const doc = 'これは｜魔法《マゴウ》と《《強調》》の力。';
+
+  it('normal mode should generate RubyWidget and BoutenWidget', () => {
+    const state = EditorState.create({
+      doc,
+      extensions: [rubyDecorationExtension({ mode: 'normal' })],
+    });
+    const { decorations } = parseAndBuildDecorations(state, { mode: 'normal' });
+    expect(decorations.size).toBe(2);
+  });
+
+  it('raw mode should generate 0 decorations, keeping raw Aozora markup', () => {
+    const state = EditorState.create({
+      doc,
+      extensions: [rubyDecorationExtension({ mode: 'raw' })],
+    });
+    const { decorations } = parseAndBuildDecorations(state, { mode: 'raw' });
+    expect(decorations.size).toBe(0);
+  });
+
+  it('off mode should generate RubyOffWidget hiding ruby text and showing only base text', () => {
+    const state = EditorState.create({
+      doc,
+      extensions: [rubyDecorationExtension({ mode: 'off' })],
+    });
+    const { decorations } = parseAndBuildDecorations(state, { mode: 'off' });
+    expect(decorations.size).toBe(2);
+
+    const offWidgets: string[] = [];
+    decorations.between(0, doc.length, (from, to, value) => {
+      const widget = (value.spec as any).widget;
+      if (widget instanceof RubyOffWidget) {
+        offWidgets.push(widget.baseText);
+      }
+    });
+    expect(offWidgets).toContain('魔法');
+    expect(offWidgets).toContain('強調');
+
+    const offWidget = new RubyOffWidget('魔法');
+    const dom = offWidget.toDOM();
+    expect(dom.className).toBe('cm-ruby-off');
+    expect(dom.textContent).toBe('魔法');
+    expect(dom.querySelector('rt')).toBeNull();
+  });
+});
+
+describe('RubyDecorationExtension Active Line Bypass (IME Conflict Prevention)', () => {
+  it('should completely bypass decorations on the active editing line when bypassActiveLine is true', () => {
+    const doc = '一行目｜魔法《マゴウ》。\n二行目｜神話《シンワ》。';
+    // Cursor at line 1, pos 2 (inside line 1, but outside ruby)
+    const state = EditorState.create({
+      doc,
+      selection: { anchor: 2 },
+    });
+
+    // Without bypass: line 1 ruby is decorated because cursor is outside the ruby token
+    const withoutBypass = parseAndBuildDecorations(state, { bypassActiveLine: false });
+    expect(withoutBypass.decorations.size).toBe(2);
+
+    // With bypassActiveLine: true: line 1 ruby is bypassed (raw text) while line 2 remains decorated
+    const withBypass = parseAndBuildDecorations(state, { bypassActiveLine: true });
+    expect(withBypass.decorations.size).toBe(1);
+
+    // Line 2 ruby (offset > 12) should still be decorated
+    let hasLine2Widget = false;
+    withBypass.decorations.between(0, doc.length, (from, to) => {
+      if (from > 10) hasLine2Widget = true;
+    });
+    expect(hasLine2Widget).toBe(true);
+  });
+});
+

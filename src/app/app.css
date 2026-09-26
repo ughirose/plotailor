@@ -472,9 +472,27 @@ html, body {
 .pane-center.vertical-rl .cm-editor,
 .pane-center.vertical-rl .cm-scroller,
 .pane-center.vertical-rl .cm-content,
-.pane-center.vertical-rl .cm-line {
+.pane-center.vertical-rl .cm-line,
+.cm-vertical-rl .cm-editor,
+.cm-vertical-rl .cm-scroller,
+.cm-vertical-rl .cm-content,
+.cm-vertical-rl .cm-line {
   writing-mode: vertical-rl !important;
   -webkit-writing-mode: vertical-rl !important;
+}
+
+.pane-center.vertical-rl .cm-content,
+.cm-vertical-rl .cm-content {
+  cursor: vertical-text !important;
+  caret-color: var(--color-gold, #cfa85c);
+}
+
+.pane-center.vertical-rl .cm-line,
+.cm-vertical-rl .cm-line {
+  line-height: 2.2 !important;
+  letter-spacing: 0.05em;
+  font-feature-settings: "pkna" 1, "vpal" 1;
+  text-orientation: mixed;
 }
 
 .pane-center.vertical-rl .cm-editor {
@@ -520,6 +538,11 @@ rb, .cm-ruby rb, .cm-ruby-base {
   display: inline !important;
   line-height: inherit !important;
   white-space: nowrap !important;
+}
+
+.cm-ruby-off {
+  display: inline !important;
+  line-height: inherit !important;
 }
 
 rt, .cm-ruby rt, .cm-ruby-text {
