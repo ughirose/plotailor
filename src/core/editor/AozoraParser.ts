@@ -66,15 +66,16 @@ export class SourceToDisplayMap {
   toDisplayOffset(rawOffset: number): number {
     if (this.mappings.length === 0) return rawOffset;
 
+    let currentDelta = 0;
     for (const m of this.mappings) {
       if (rawOffset < m.rawFrom) {
-        return rawOffset;
+        return rawOffset + currentDelta;
       }
       if (rawOffset >= m.rawFrom && rawOffset <= m.rawTo) {
-        // Clamped within display span
         const progress = (rawOffset - m.rawFrom) / Math.max(1, m.rawTo - m.rawFrom);
         return Math.round(m.displayFrom + progress * (m.displayTo - m.displayFrom));
       }
+      currentDelta = m.delta;
     }
 
     const last = this.mappings[this.mappings.length - 1];
@@ -84,14 +85,16 @@ export class SourceToDisplayMap {
   toRawOffset(displayOffset: number): number {
     if (this.mappings.length === 0) return displayOffset;
 
+    let currentDelta = 0;
     for (const m of this.mappings) {
       if (displayOffset < m.displayFrom) {
-        return displayOffset;
+        return displayOffset - currentDelta;
       }
       if (displayOffset >= m.displayFrom && displayOffset <= m.displayTo) {
         const progress = (displayOffset - m.displayFrom) / Math.max(1, m.displayTo - m.displayFrom);
         return Math.round(m.rawFrom + progress * (m.rawTo - m.rawFrom));
       }
+      currentDelta = m.delta;
     }
 
     const last = this.mappings[this.mappings.length - 1];

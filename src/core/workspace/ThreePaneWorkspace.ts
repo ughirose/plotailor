@@ -18,6 +18,7 @@ import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
 import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
 import { OPFSStorage } from '../storage/OPFSStorage.js';
 import { WorkerHotSwapManager, type WorkerInstance } from '../runtime/WorkerHotSwapManager.js';
+import { RubyBatchConverter, type RubyFormat, type ConversionResult } from '../editor/RubyBatchConverter.js';
 
 export interface WorkspaceState {
   currentDocumentId: string;
@@ -140,6 +141,40 @@ export class ThreePaneWorkspace {
 
   public setRightTab(tab: WorkspaceState['activeRightTab']): void {
     this.state.activeRightTab = tab;
+  }
+
+  /**
+   * Batch normalizes ruby and bouten markup in current rawText.
+   */
+  public batchNormalizeRuby(): ConversionResult {
+    const res = RubyBatchConverter.normalizeText(this.state.rawText);
+    this.onTextChange(res.convertedText, false);
+    return res;
+  }
+
+  /**
+   * Converts current rawText to requested target ruby format.
+   */
+  public convertRubyFormat(targetFormat: RubyFormat): ConversionResult {
+    const res = RubyBatchConverter.convertFormat(this.state.rawText, { targetFormat });
+    this.onTextChange(res.convertedText, false);
+    return res;
+  }
+
+  /**
+   * Import text into workspace with format detection and normalization.
+   */
+  public importText(text: string, defaultFormat?: RubyFormat): ConversionResult {
+    const res = RubyBatchConverter.importText(text, { defaultFormat });
+    this.onTextChange(res.convertedText, false);
+    return res;
+  }
+
+  /**
+   * Export workspace rawText into requested target format.
+   */
+  public exportText(targetFormat: RubyFormat, convertBoutenToNarouDots?: boolean): ConversionResult {
+    return RubyBatchConverter.exportText(this.state.rawText, targetFormat, { convertBoutenToNarouDots });
   }
 
   /**
