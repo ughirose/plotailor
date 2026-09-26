@@ -21,7 +21,9 @@
 | 10 | `ff9b4c7` | `fix(editor): fix vertical mouse coordinate offset, bypass decorations on active editing line for IME, and add 3-state ruby mode` | 縦書きマウス座標補正（Caret API + 幾何フォールバック）、編集行バイパス |
 | 11 | `45711e8` | `fix(editor): align ruby layout with landing mockup, enable direct in-place ruby editing, fix instant ruby toggle, and protect IME against background dispatches` | ネイティブルビCSS適用（前行寄り解消）、ボタン即時反映、Linter保留ガード |
 | 12 | `79fc8e0` | `fix(editor): resolve IME input corruption, restore in-place direct ruby editing, isolate chapter undo history, and refactor statusbar layout` | IME入力破壊の根絶、ルビ直接編集の旧来UX回帰、章ごとのUndo履歴分離、ステータスバー新設 |
-| 13 | *最新* | `fix(history): implement versioned rollback with future history truncation and clean state reset` | バージョン管理型ロールバック（未来の履歴切り捨て、State再生成） |
+| 13 | `183bc9c` | `docs(report): update comprehensive daily work report and implement Git-style history rollback` | バージョン管理型ロールバック（未来の履歴切り捨て、State再生成）および日報初期化 |
+| 14 | `cdb64a8` | `feat(fs): implement VirtualFileSystem and ProjectManager for multi-project literary workspace` | 仮想ファイル・フォルダ体系（VFS）、ProjectManager、旧ストレージ移行、単体テスト |
+| 15 | *最新* | `feat(project): integrate ProjectManager VFS and multi-project switcher modal into IDE` | 作品一覧・切替・新規作成モーダル（`#projectModal`）のIDE統合と自動VFS同期 |
 
 ---
 
@@ -79,13 +81,12 @@
 
 | 区分 | 対象タスク | 担当・進め方 |
 | :--- | :--- | :--- |
-| **現行セッション（完了済み）** | ① 日本語IME入力保護の根本解決<br>② ルビ直接インライン編集の復元<br>③ 縦書き座標補正<br>④ 章切り替え時の履歴完全分離<br>⑤ 下部ステータスバー新設・ボタン揺れ防止<br>⑥ バージョン管理型履歴ロールバック<br>⑦ 総合日報レポートの作成 | 全改修・132件テストPASS・ビルド完了 |
+| **現行セッション（完了済み）** | ① 日本語IME入力保護の根本解決<br>② ルビ直接インライン編集の復元<br>③ 縦書き座標補正<br>④ 章切り替え時の履歴完全分離<br>⑤ 下部ステータスバー新設・ボタン揺れ防止<br>⑥ バージョン管理型履歴ロールバック<br>⑦ 仮想ファイル・フォルダ体系（VFS）およびProjectManager基盤構築<br>⑧ 複数作品一覧・切替・新規作成モーダルのIDE統合 | 全改修・140件テストPASS・ビルド完了 |
 | **リモートブランチの取り込み判断** | `origin/feat/*` / `origin/feature/*`（TASK-325, 329等） | **現時点では取り込まない（現状維持）**。<br>コア機能は既にmainに統合済みであり、外部ブランチのマージはエディタコアの安定性にコンフリクトをもたらすリスクが高いため。 |
-| **Jules（非同期ワーカー）に振るべき課題** | ① 章の自由な追加・削除・ドラッグ＆ドロップ並び替えUI<br>② 登場人物・世界観設定の完全なCRUDモーダル & 関連図DAGビュー<br>③ OPFSロールバック機能のバックグラウンドWAL同期最適化 | UIコンポーネントの肉付けとバックグラウンド処理の定型実装のため、独立したJulesタスクとして並行委譲するのが最適。 |
-| **別チャットに切り出すべき課題** | 仮想ファイル・フォルダ体系（複数作品・プロジェクト管理アーキテクチャの刷新） | プロジェクト全体のデータモデル・ストレージ永続化設計の変更を伴いコンテキスト消費が大きいため、本エディタ安定化後に独立セッションで実施。 |
+| **Jules（非同期ワーカー）に振るべき課題** | ① 章の自由な追加・削除・ドラッグ＆ドロップ並び替えUI<br>② 登場人物・世界観設定の完全なCRUDモーダル & 関連図DAGビュー<br>③ OPFSロールバック機能のバックグラウンドWAL同期最適化 | UIコンポーネントの肉付けとバックグラウンド処理の定型実装のため、独立したJulesタスクとして並行委譲するのが最適。プロンプト作成済み。 |
 
 ---
 
 ## 5. 検証結果
-- **テストスイート**: 全16テストファイル、132件中132件 PASS
-- **本番ビルド**: `pnpm --filter @worldcraft/editor build` 正常終了（410ms）
+- **テストスイート**: 全17テストファイル、**140件中140件 PASS**
+- **本番ビルド**: `pnpm --filter @worldcraft/editor build` 正常終了（412ms）
