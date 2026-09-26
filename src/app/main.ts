@@ -19,6 +19,7 @@ import {
   type LoreCategory,
 } from '../core/lore/LoreEntityManager.js';
 import { CausalDagEngine } from '../core/causality/CausalDagEngine.js';
+import { OpfsWalWorkerBridge } from '../core/storage/OpfsWalWorkerBridge.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
 import { ProjectManager, type ProjectMeta } from '../core/project/index.js';
 import { TypingCadenceMachine, type CadenceStatus } from '../core/editor/TypingCadenceMachine.js';
@@ -106,6 +107,7 @@ export class PlotailorApp {
   private lastSnapshotTime = 0;
   private loreManager: LoreEntityManager;
   private dagEngine: CausalDagEngine = new CausalDagEngine();
+  private walWorkerBridge: OpfsWalWorkerBridge = new OpfsWalWorkerBridge();
   private loreDock!: LoreInspectorDock;
   private activeLoreFilter: LoreCategory | 'all' | 'shelved' = 'all';
   private cadenceMachine: TypingCadenceMachine;
@@ -587,6 +589,9 @@ export class PlotailorApp {
       saveIndicator.style.color = 'var(--color-gold)';
     }
 
+    // Async OPFS WAL Worker write (0ms main thread blocking)
+    this.walWorkerBridge.writeAsync(0, new TextEncoder().encode(rawText)).catch(() => {});
+
     if (this.saveDebounceTimer !== null) {
       clearTimeout(this.saveDebounceTimer);
     }
@@ -594,7 +599,7 @@ export class PlotailorApp {
       this.saveToStorage();
       this.reconcileShelvedLore(true);
       if (saveIndicator) {
-        saveIndicator.textContent = '自動保存: 0.1秒前 (OPFS AES-GCM)';
+        saveIndicator.textContent = '自動保存: 0.1秒前 (OPFS WAL Worker & AES-GCM)';
         saveIndicator.style.color = 'var(--color-text-dim)';
       }
     }, 400);
@@ -1887,12 +1892,16 @@ export class PlotailorApp {
       const cycleReport = this.dagEngine.detectCycles();
       const nodes = this.dagEngine.getNodes();
       const edges = this.dagEngine.getEdges();
-      const svgHtml = this.dagEngine.renderSvgGraph(340, 280);
+      const isVirtualized = nodes.length >= 8;
+      const initialViewport = { scrollTop: 0, scrollLeft: 0, viewportWidth: 340, viewportHeight: 280, overscan: 80 };
+      const svgHtml = isVirtualized
+        ? this.dagEngine.renderVirtualizedSvgGraph(initialViewport)
+        : this.dagEngine.renderSvgGraph(340, 280);
 
       container.innerHTML = `
         <div class="dock-card">
           <div class="dock-card-header">
-            <span class="dock-card-title">🕸 因果DAG・ループ検出</span>
+            <span class="dock-card-title">🕸 因果DAG・仮想スクロール</span>
             <span style="font-size: 11px; color: ${cycleReport.isAcyclic ? 'var(--color-success)' : 'var(--color-danger)'};">
               ${cycleReport.isAcyclic ? '✓ 循環なし (Valid DAG)' : `⚠️ 循環検出 (${cycleReport.cycleCount})`}
             </span>
@@ -1901,9 +1910,9 @@ export class PlotailorApp {
             <div style="font-size: 11px; color: var(--color-text-dim); display: flex; justify-content: space-between; margin-bottom: 8px;">
               <span>登録ノード: <strong>${nodes.length}</strong></span>
               <span>有向エッジ: <strong>${edges.length}</strong></span>
-              <span>Tarjan SCC: <strong>0 循環</strong></span>
+              <span style="color: var(--color-gold);"><strong>${isVirtualized ? '⚡ 仮想カリングON' : '通常レンダリング'}</strong></span>
             </div>
-            <div class="dag-wrapper" id="dagSvgContainer">
+            <div class="dag-wrapper" id="dagSvgContainer" style="max-height: 320px; overflow: auto; position: relative;">
               ${svgHtml}
             </div>
             <div style="margin-top: 8px; font-size: 10.5px; color: var(--color-text-dim); line-height: 1.5;">
@@ -1917,17 +1926,41 @@ export class PlotailorApp {
         </div>
       `;
 
-      container.querySelectorAll('.dag-node').forEach((nodeEl) => {
-        nodeEl.addEventListener('click', (e) => {
-          const id = (e.currentTarget as HTMLElement).dataset.nodeId;
-          if (id) {
-            const ent = this.loreManager.getEntity(id);
-            if (ent) {
-              this.showToast(`📌 [${ent.name}] ${ent.role || ent.category}: ${ent.description.slice(0, 30)}...`);
+      const attachNodeListeners = (wrapper: HTMLElement) => {
+        wrapper.querySelectorAll('.dag-node').forEach((nodeEl) => {
+          nodeEl.addEventListener('click', (e) => {
+            const id = (e.currentTarget as HTMLElement).dataset.nodeId;
+            if (id) {
+              const ent = this.loreManager.getEntity(id);
+              if (ent) {
+                this.showToast(`📌 [${ent.name}] ${ent.role || ent.category}: ${ent.description.slice(0, 30)}...`);
+              }
             }
-          }
+          });
         });
-      });
+      };
+
+      const dagWrapper = container.querySelector('#dagSvgContainer') as HTMLElement | null;
+      if (dagWrapper) {
+        attachNodeListeners(dagWrapper);
+        if (isVirtualized) {
+          let scrollDebounce: any = null;
+          dagWrapper.addEventListener('scroll', () => {
+            if (scrollDebounce) cancelAnimationFrame(scrollDebounce);
+            scrollDebounce = requestAnimationFrame(() => {
+              const vp = {
+                scrollTop: dagWrapper.scrollTop,
+                scrollLeft: dagWrapper.scrollLeft,
+                viewportWidth: dagWrapper.clientWidth || 340,
+                viewportHeight: dagWrapper.clientHeight || 280,
+                overscan: 100,
+              };
+              dagWrapper.innerHTML = this.dagEngine.renderVirtualizedSvgGraph(vp);
+              attachNodeListeners(dagWrapper);
+            });
+          });
+        }
+      }
     } else if (this.activeRightTab === 'pop') {
       container.innerHTML = `
         <div class="dock-card">

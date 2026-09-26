@@ -1,4 +1,5 @@
 import type { LoreEntity } from '../lore/LoreEntityManager.js';
+import { DagVirtualViewportEngine, ViewportRect, VirtualLayoutMetrics } from './DagVirtualViewportEngine.js';
 
 export interface DagNode {
   id: string;
@@ -305,5 +306,21 @@ export class CausalDagEngine {
         ${nodesSvg}
       </svg>
     `;
+  }
+
+  public getVirtualViewportEngine(): DagVirtualViewportEngine {
+    const engine = new DagVirtualViewportEngine();
+    engine.setGraph(this.getNodes(), this.getEdges());
+    return engine;
+  }
+
+  public renderVirtualizedSvgGraph(viewport: ViewportRect): string {
+    const engine = this.getVirtualViewportEngine();
+    return engine.renderVirtualizedSvg(viewport);
+  }
+
+  public getVirtualLayoutMetrics(viewport: ViewportRect): VirtualLayoutMetrics {
+    const engine = this.getVirtualViewportEngine();
+    return engine.getVisibleMetrics(viewport);
   }
 }
