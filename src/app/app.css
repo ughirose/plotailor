@@ -610,3 +610,322 @@ body.fullscreen-active .fullscreen-exit-btn {
   }
 }
 
+/* ==========================================================================
+   CodeMirror 6 Real-time Proofreading Wavy Underlines & Narrative Inspector
+   ========================================================================== */
+
+/* CodeMirror 6 Mount & Typography */
+.editor-body .cm-editor {
+  width: 100%;
+  height: 100%;
+  outline: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.editor-body .cm-scroller {
+  font-family: inherit;
+  line-height: inherit;
+  overflow: visible;
+}
+
+.editor-body .cm-content {
+  padding: 0;
+  caret-color: var(--color-gold);
+}
+
+.pane-center.vertical-rl .cm-editor,
+.pane-center.vertical-rl .cm-content {
+  writing-mode: vertical-rl;
+  -webkit-writing-mode: vertical-rl;
+}
+
+/* Real-time Wavy Highlight Markers adhering to Specification */
+.cm-lint-warning {
+  text-decoration: underline wavy var(--color-warning, #d29922) !important;
+  text-decoration-thickness: 1.5px !important;
+  text-decoration-skip-ink: none !important;
+  background-color: rgba(210, 153, 34, 0.12);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cm-lint-warning:hover {
+  background-color: rgba(210, 153, 34, 0.25);
+}
+
+.cm-pronoun-missing {
+  text-decoration: underline wavy var(--color-gold, #cfa85c) !important;
+  text-decoration-thickness: 1.8px !important;
+  text-decoration-skip-ink: none !important;
+  background-color: rgba(207, 168, 92, 0.15);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cm-pronoun-missing:hover {
+  background-color: rgba(207, 168, 92, 0.3);
+}
+
+/* Narrative Inspector Dock (Right Pane) */
+.narrative-inspector-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dock-score-card {
+  background: linear-gradient(135deg, rgba(22, 27, 34, 0.95) 0%, rgba(26, 32, 44, 0.95) 100%);
+  border: 1px solid var(--color-border);
+}
+
+.linter-metric-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--color-text-main);
+  margin-bottom: 8px;
+}
+
+.linter-engine-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.engine-chip {
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: rgba(207, 168, 92, 0.1);
+  border: 1px solid rgba(207, 168, 92, 0.25);
+  color: var(--color-gold);
+}
+
+.dock-filter-bar {
+  display: flex;
+  gap: 4px;
+  background: var(--color-bg-dark);
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.filter-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.filter-btn.active {
+  background: var(--color-bg-panel);
+  color: var(--color-gold);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dock-empty-state {
+  text-align: center;
+  padding: 28px 16px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 6px;
+  border: 1px dashed var(--color-border);
+}
+
+.dock-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: 0.04em;
+  padding: 2px 0;
+}
+
+.section-count {
+  font-size: 10px;
+  background: var(--color-bg-dark);
+  border: 1px solid var(--color-border);
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+/* Issue Cards */
+.linter-issue-card {
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-warning);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  transition: transform 0.12s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.linter-issue-card:hover {
+  border-color: var(--color-gold);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  transform: translateY(-1px);
+}
+
+.linter-issue-card.zp-card {
+  border-left-color: var(--color-gold);
+  background: linear-gradient(135deg, rgba(22, 27, 34, 0.9) 0%, rgba(207, 168, 92, 0.04) 100%);
+}
+
+.issue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.issue-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.tag-double-neg {
+  background: rgba(210, 153, 34, 0.15);
+  color: var(--color-warning);
+  border: 1px solid rgba(210, 153, 34, 0.3);
+}
+
+.tag-particle {
+  background: rgba(56, 139, 253, 0.15);
+  color: var(--color-accent);
+  border: 1px solid rgba(56, 139, 253, 0.3);
+}
+
+.tag-passive {
+  background: rgba(163, 113, 247, 0.15);
+  color: #a371f7;
+  border: 1px solid rgba(163, 113, 247, 0.3);
+}
+
+.tag-mismatch {
+  background: rgba(248, 81, 73, 0.15);
+  color: var(--color-danger);
+  border: 1px solid rgba(248, 81, 73, 0.3);
+}
+
+.zp-tag {
+  background: rgba(207, 168, 92, 0.15);
+  color: var(--color-gold);
+  border: 1px solid rgba(207, 168, 92, 0.35);
+}
+
+.issue-pos {
+  font-size: 10px;
+  color: var(--color-text-dim);
+  font-family: var(--font-mono);
+}
+
+.issue-message {
+  color: var(--color-text-main);
+  line-height: 1.45;
+}
+
+.issue-preview {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.issue-preview code {
+  background: var(--color-bg-dark);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: var(--color-gold);
+}
+
+.issue-jump-hint {
+  font-size: 10px;
+  color: var(--color-accent);
+  align-self: flex-end;
+  cursor: pointer;
+}
+
+.issue-jump-hint:hover {
+  text-decoration: underline;
+}
+
+/* Zero Pronoun Candidates Box */
+.zp-candidates-box {
+  background: rgba(14, 17, 23, 0.6);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 5px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.zp-candidates-title {
+  font-size: 11px;
+  color: var(--color-text-dim);
+}
+
+.zp-candidates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.zp-candidate-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cand-name {
+  font-weight: 500;
+  color: var(--color-gold);
+}
+
+.cand-badge {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 8px;
+  background: rgba(63, 185, 80, 0.15);
+  color: var(--color-success);
+  border: 1px solid rgba(63, 185, 80, 0.3);
+}
+
+.btn-insert-cand {
+  background: var(--color-gold);
+  color: var(--color-bg-dark);
+  border: none;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.btn-insert-cand:hover {
+  opacity: 0.85;
+}
+
+

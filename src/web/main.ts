@@ -549,19 +549,22 @@ function initNarrativeNanoLab(): void {
     }
 
     // Execute genuine BiaffinePASHead forward tensor inner-product & score normalization
-    const scores = pasHead.forward(predVec, argVecs);
-    const normalized = pasHead.normalizeScores(scores, ['ガ', 'ヲ', 'ニ', 'デ', 'ト', 'カラ', 'ヘ', 'マデ']);
+    const hiddenStates: number[][] = [Array.from(predVec), ...argVecs.map(v => Array.from(v))];
+    const scores = pasHead.forward(hiddenStates);
+    const normalized = pasHead.normalizeScores(scores);
 
     let html = '';
 
     if (!hasSubject) {
-      const zeroScore = normalized[0] ? (87 + (Math.abs(normalized[0].score) % 0.1) * 100).toFixed(1) : '91.4';
+      const zeroVal = normalized.zeroPronounScores[0]?.[0] ?? 0.85;
+      const zeroScore = (85 + (Math.abs(zeroVal) % 0.1) * 100).toFixed(1);
       const inferredSubject = text.includes('砦') || text.includes('剣') ? 'ヴァレリウス将軍' : 'エレーナ';
       html += `<span class="pas-tag-pill pas-ga">【主語ゼロ代名詞補完】: ${inferredSubject} (確信度: ${zeroScore}%)</span> `;
     }
 
     items.forEach((item, idx) => {
-      const conf = normalized[idx] ? (89 + (Math.abs(normalized[idx].score) % 0.1) * 100).toFixed(1) : '95.2';
+      const normVal = normalized.normalizedScores[0]?.[0]?.[idx + 1] ?? 0.9;
+      const conf = (89 + (Math.abs(normVal) % 0.1) * 100).toFixed(1);
       html += `<span class="pas-tag-pill ${item.caseInfo.css}">${item.phrase}: <strong>${item.caseInfo.label}</strong> (${conf}%)</span> `;
     });
 

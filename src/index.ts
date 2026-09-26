@@ -134,8 +134,26 @@ export * from './core/storage/MobileResilientStorage.js';
 export * from './core/runtime/WorkerHotSwapManager.js';
 export * from './core/workspace/ThreePaneWorkspace.js';
 export * from './core/editor/cm6ImeGuard.js';
-export * from './core/audit/PoPCertificateExporter.js';
-export * from './core/editor/RubyDecorationExtension.js';
+export { PoPCertificateExporter } from './core/audit/PoPCertificateExporter.js';
+export {
+  RubyWidget,
+  BoutenWidget,
+  RubyDecorationPlugin,
+  rubyDecorationPlugin,
+  rubyTheme,
+  rubyDecorationExtension,
+  parseAndBuildDecorations,
+  type RubyMatch,
+  type BoutenMatch,
+  type ParsedMatch,
+  type MappingSpan,
+} from './core/editor/RubyDecorationExtension.js';
 export * from './ui/LoreInspectorDock.js';
 export * from './core/storage/EncryptedOPFSStorage.js';
+export * from './core/editor/NarrativeLinterEngine.js';
+export * from './core/editor/NarrativeWorkerBridge.js';
+export * from './core/editor/CodeMirrorNarrativeExtension.js';
+export * from './ui/NarrativeInspectorDock.js';
+export { PlotailorApp } from './app/main.js';
+
 

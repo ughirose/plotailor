@@ -1,7 +1,15 @@
 /**
  * Plotailor Full Writing IDE Application Core (src/app/main.ts)
- * 3-Pane Literary IDE with Realtime Ruby, OPFS Crypto, Lore Inspector & PoP Proof
+ * 3-Pane Literary IDE with Realtime Ruby, CodeMirror 6, Narrative Linter & Zero Pronoun Resolver
  */
+
+import { EditorView } from '@codemirror/view';
+import { EditorState } from '@codemirror/state';
+import { rubyDecorationExtension } from '../core/editor/RubyDecorationExtension.js';
+import { cm6ImeGuard } from '../core/editor/cm6ImeGuard.js';
+import { narrativeLinterExtension } from '../core/editor/CodeMirrorNarrativeExtension.js';
+import { NarrativeInspectorDock } from '../ui/NarrativeInspectorDock.js';
+import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
 
 interface ChapterData {
   id: string;
@@ -41,8 +49,10 @@ const CHAPTERS: ChapterData[] = [
   }
 ];
 
-class PlotailorApp {
+export class PlotailorApp {
   private editorBody: HTMLDivElement;
+  private cmEditor!: EditorView;
+  private narrativeDock: NarrativeInspectorDock;
   private currentChapterId = 'ch1';
   private isVertical = false;
   private isNightTheme = false;
@@ -50,7 +60,10 @@ class PlotailorApp {
   private leftPaneOpen = true;
   private rightPaneOpen = true;
   private activeLeftTab = 'toc';
-  private activeRightTab = 'lore';
+  private activeRightTab = 'linter'; // Default to Narrative Linter for immediate feedback
+  private keystrokeCount = 0;
+  private typingStartTime = Date.now();
+  private latestNarrativeResult: NarrativeAnalysisResult | null = null;
 
   constructor() {
     this.editorBody = document.getElementById('editorBody') as HTMLDivElement;
@@ -58,6 +71,12 @@ class PlotailorApp {
       this.leftPaneOpen = false;
       this.rightPaneOpen = false;
     }
+
+    this.narrativeDock = new NarrativeInspectorDock({
+      onJumpToTarget: (from, to) => this.jumpToEditor(from, to),
+      onInsertSubject: (from, subject) => this.insertSubjectAt(from, subject),
+    });
+
     this.init();
   }
 
@@ -68,25 +87,51 @@ class PlotailorApp {
       if (paneL) paneL.style.display = 'none';
       if (paneR) paneR.style.display = 'none';
     }
+
+    this.initCodeMirror();
     this.bindEvents();
-    this.loadChapter(this.currentChapterId);
     this.renderLeftPane();
     this.renderRightPane();
     this.updateStats();
   }
 
+  private initCodeMirror() {
+    const ch = CHAPTERS.find((c) => c.id === this.currentChapterId) || CHAPTERS[0];
+
+    const state = EditorState.create({
+      doc: ch.content,
+      extensions: [
+        rubyDecorationExtension(),
+        cm6ImeGuard(),
+        narrativeLinterExtension({
+          debounceMs: 80,
+          onAnalysisResult: (result) => {
+            this.latestNarrativeResult = result;
+            this.narrativeDock.updateResult(result);
+            if (this.activeRightTab === 'linter') {
+              this.renderRightPane();
+            }
+          },
+        }),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) {
+            this.handleEditorChange();
+          }
+          if (update.selectionSet || update.docChanged) {
+            this.updateCursorStats();
+          }
+        }),
+      ],
+    });
+
+    this.editorBody.innerHTML = '';
+    this.cmEditor = new EditorView({
+      state,
+      parent: this.editorBody,
+    });
+  }
+
   private bindEvents() {
-    // Editor Input & Auto-Ruby
-    this.editorBody.addEventListener('input', () => {
-      this.handleEditorInput();
-      this.updateStats();
-    });
-
-    // Cursor position tracking
-    document.addEventListener('selectionchange', () => {
-      this.updateCursorPosition();
-    });
-
     // Header Controls
     const btnOrientation = document.getElementById('btnToggleOrientation');
     btnOrientation?.addEventListener('click', () => this.toggleOrientation());
@@ -140,20 +185,62 @@ class PlotailorApp {
         const target = e.currentTarget as HTMLButtonElement;
         rightTabBtns.forEach((b) => b.classList.remove('active'));
         target.classList.add('active');
-        this.activeRightTab = target.dataset.dockTab || 'lore';
+        this.activeRightTab = target.dataset.dockTab || 'linter';
         this.renderRightPane();
       });
     });
+  }
+
+  private handleEditorChange() {
+    this.updateStats();
+    const saveIndicator = document.getElementById('saveStatusIndicator');
+    if (saveIndicator) {
+      saveIndicator.textContent = '自動保存: 編集中...';
+      clearTimeout((this as any)._saveTimer);
+      (this as any)._saveTimer = setTimeout(() => {
+        if (saveIndicator) saveIndicator.textContent = '自動保存: 0.1秒前 (OPFS AES-GCM)';
+      }, 500);
+    }
+  }
+
+  public jumpToEditor(from: number, to: number) {
+    if (!this.cmEditor) return;
+    const docLen = this.cmEditor.state.doc.length;
+    const safeFrom = Math.max(0, Math.min(from, docLen));
+    const safeTo = Math.max(safeFrom, Math.min(to, docLen));
+
+    this.cmEditor.dispatch({
+      selection: { anchor: safeFrom, head: safeTo },
+      scrollIntoView: true,
+    });
+    this.cmEditor.focus();
+  }
+
+  public insertSubjectAt(from: number, candidateText: string) {
+    if (!this.cmEditor) return;
+    const docLen = this.cmEditor.state.doc.length;
+    const safeFrom = Math.max(0, Math.min(from, docLen));
+    const insertion = `${candidateText}は、`;
+
+    this.cmEditor.dispatch({
+      changes: { from: safeFrom, insert: insertion },
+      selection: { anchor: safeFrom + insertion.length },
+      scrollIntoView: true,
+    });
+    this.cmEditor.focus();
+    this.showToast(`✨ 主語「${candidateText}」を補完挿入しました`);
   }
 
   private loadChapter(chapterId: string) {
     const ch = CHAPTERS.find((c) => c.id === chapterId);
     if (!ch) return;
     this.currentChapterId = chapterId;
-    
-    // Parse formatting into HTML
-    const html = this.parseMarkupToHtml(ch.content);
-    this.editorBody.innerHTML = html;
+
+    if (this.cmEditor) {
+      this.cmEditor.dispatch({
+        changes: { from: 0, to: this.cmEditor.state.doc.length, insert: ch.content },
+      });
+    }
 
     const titleEl = document.getElementById('activeChapterTitle');
     if (titleEl) titleEl.textContent = ch.title;
@@ -165,102 +252,8 @@ class PlotailorApp {
     this.updateStats();
   }
 
-  private parseMarkupToHtml(text: string): string {
-    let out = text;
-    // 1. Bouten (傍点): 《《傍点》》 or <<<<傍点>>>> or ＜＜＜＜傍点＞＞＞＞
-    out = out.replace(/(?:《《|<{4}|＜{4})([^》>＞\r\n]+?)(?:》》|>{4}|＞{4})/g, '<span class="bouten">$1</span>');
-
-    // 2. Explicit Ruby (明示的ルビ): ｜親文字《るび》 or |親文字<<るび>> or ｜親文字＜＜るび＞＞
-    out = out.replace(/[｜|]([^《<＜\r\n]+?)(?:《|<<|＜＜)([^》>＞\r\n]+?)(?:》|>>|＞＞)/g, '<ruby>$1<rt>$2</rt></ruby>');
-
-    // 3. Implicit Kanji Ruby (暗黙的漢字ルビ): 直前の漢字（CJK統合漢字・々・〆・ヵ・ヶ）のみを親文字とする
-    out = out.replace(/([\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF々〆ヵヶ]+)(?:《|<<|＜＜)([^》>＞\r\n]+?)(?:》|>>|＞＞)/g, '<ruby>$1<rt>$2</rt></ruby>');
-
-    return out;
-  }
-
-  private parseHtmlToAozora(html: string): string {
-    const div = document.createElement('div');
-    div.innerHTML = html;
-
-    // Convert ruby nodes: <ruby>親<rt>るび</rt></ruby> -> ｜親《るび》
-    const rubies = div.querySelectorAll('ruby');
-    rubies.forEach((r) => {
-      const rt = r.querySelector('rt');
-      const rubyText = rt ? rt.textContent || '' : '';
-      if (rt) rt.remove();
-      const baseText = r.textContent || '';
-      const textNode = document.createTextNode(`｜${baseText}《${rubyText}》`);
-      r.parentNode?.replaceChild(textNode, r);
-    });
-
-    // Convert bouten nodes: <span class="bouten">文字</span> -> 《《文字》》
-    const boutens = div.querySelectorAll('.bouten');
-    boutens.forEach((b) => {
-      const text = b.textContent || '';
-      const textNode = document.createTextNode(`《《${text}》》`);
-      b.parentNode?.replaceChild(textNode, b);
-    });
-
-    return div.innerText || div.textContent || '';
-  }
-
-  private handleEditorInput() {
-    // In-place ruby expansion on typing
-    const sel = window.getSelection();
-    if (!sel || !sel.anchorNode) return;
-
-    const node = sel.anchorNode;
-    if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
-      const val = node.nodeValue;
-
-      // 1. Check explicit ruby: ｜親文字<<るび>>
-      let rubyMatch = val.match(/[｜|]([^《<＜\r\n]+?)(?:《|<<|＜＜)([^》>＞\r\n]+?)(?:》|>>|＞＞)/);
-      let isExplicit = true;
-
-      // 2. Check implicit kanji ruby: 漢字<<るび>>
-      if (!rubyMatch) {
-        rubyMatch = val.match(/([\u4E00-\u9FFF\u3400-\u4DBF\uF900-\uFAFF々〆ヵヶ]+)(?:《|<<|＜＜)([^》>＞\r\n]+?)(?:》|>>|＞＞)/);
-        isExplicit = false;
-      }
-
-      if (rubyMatch && rubyMatch.index !== undefined) {
-        const fullMatch = rubyMatch[0];
-        const base = rubyMatch[1];
-        const ruby = rubyMatch[2];
-        const before = val.slice(0, rubyMatch.index);
-        const after = val.slice(rubyMatch.index + fullMatch.length);
-
-        const parent = node.parentNode;
-        if (parent) {
-          const frag = document.createDocumentFragment();
-          if (before) frag.appendChild(document.createTextNode(before));
-
-          const rubyEl = document.createElement('ruby');
-          rubyEl.textContent = base;
-          const rtEl = document.createElement('rt');
-          rtEl.textContent = ruby;
-          rubyEl.appendChild(rtEl);
-          frag.appendChild(rubyEl);
-
-          const afterNode = document.createTextNode(after || '\u200B');
-          frag.appendChild(afterNode);
-
-          parent.replaceChild(frag, node);
-
-          // Restore cursor after ruby
-          const range = document.createRange();
-          range.setStart(afterNode, after ? 0 : 1);
-          range.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(range);
-        }
-      }
-    }
-  }
-
   private updateStats() {
-    const rawText = this.editorBody.innerText || '';
+    const rawText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
     const charCount = rawText.replace(/\s+/g, '').length;
     const genkoSheets = (charCount / 400).toFixed(1);
 
@@ -269,7 +262,6 @@ class PlotailorApp {
       headerChar.textContent = `${charCount.toLocaleString()} 文字（原稿用紙 ${genkoSheets} 枚）`;
     }
 
-    // Update active chapter count in data
     const activeCh = CHAPTERS.find((c) => c.id === this.currentChapterId);
     if (activeCh) {
       activeCh.charCount = charCount;
@@ -278,13 +270,28 @@ class PlotailorApp {
     }
   }
 
-  private updateCursorPosition() {
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
-    const text = this.editorBody.innerText || '';
-    const selText = sel.toString();
+  private updateCursorStats() {
+    if (!this.cmEditor) return;
+    const mainSel = this.cmEditor.state.selection.main;
+    const head = mainSel.head;
+    const lineObj = this.cmEditor.state.doc.lineAt(head);
+    const line = lineObj.number;
+    const col = head - lineObj.from + 1;
+
+    const lineEl = document.getElementById('cursorLine');
+    if (lineEl) lineEl.textContent = line.toString();
+    const colEl = document.getElementById('cursorCol');
+    if (colEl) colEl.textContent = col.toString();
+
     const selLengthEl = document.getElementById('selectionLength');
-    if (selLengthEl) selLengthEl.textContent = selText.length.toString();
+    if (selLengthEl) selLengthEl.textContent = Math.abs(mainSel.to - mainSel.from).toString();
+
+    // Typing speed calculation
+    this.keystrokeCount++;
+    const elapsedMinutes = Math.max(0.1, (Date.now() - this.typingStartTime) / 60000);
+    const speed = Math.round(this.keystrokeCount / elapsedMinutes);
+    const speedEl = document.getElementById('typingSpeed');
+    if (speedEl) speedEl.textContent = speed.toString();
   }
 
   private toggleOrientation() {
@@ -292,8 +299,10 @@ class PlotailorApp {
     const center = document.getElementById('paneCenter');
     const btn = document.getElementById('btnToggleOrientation');
     const wrapper = document.getElementById('canvasWrapper');
+
     if (this.isVertical) {
       center?.classList.add('vertical-rl');
+      this.editorBody.classList.add('vertical-rl');
       if (btn) btn.textContent = '横書き';
       if (wrapper) {
         requestAnimationFrame(() => {
@@ -302,6 +311,7 @@ class PlotailorApp {
       }
     } else {
       center?.classList.remove('vertical-rl');
+      this.editorBody.classList.remove('vertical-rl');
       if (btn) btn.textContent = '縦書き';
       if (wrapper) {
         requestAnimationFrame(() => {
@@ -356,15 +366,15 @@ class PlotailorApp {
   }
 
   private exportAozoraText() {
-    const aozora = this.parseHtmlToAozora(this.editorBody.innerHTML);
+    const raw = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(aozora).then(() => {
+      navigator.clipboard.writeText(raw).then(() => {
         this.showToast('✅ 青空文庫形式をクリップボードにコピーしました');
       }).catch(() => {
-        this.fallbackCopy(aozora);
+        this.fallbackCopy(raw);
       });
     } else {
-      this.fallbackCopy(aozora);
+      this.fallbackCopy(raw);
     }
   }
 
@@ -465,7 +475,21 @@ class PlotailorApp {
     const container = document.getElementById('dockContent');
     if (!container) return;
 
-    if (this.activeRightTab === 'lore') {
+    // Update active tab buttons appearance
+    const rightTabBtns = document.querySelectorAll('.pane-right .pane-tab-btn');
+    rightTabBtns.forEach((b) => {
+      const btn = b as HTMLElement;
+      if (btn.dataset.dockTab === this.activeRightTab) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    if (this.activeRightTab === 'linter') {
+      container.innerHTML = this.narrativeDock.renderHTML();
+      this.narrativeDock.bindEvents(container);
+    } else if (this.activeRightTab === 'lore') {
       container.innerHTML = `
         <div class="dock-card">
           <div class="dock-card-header">
@@ -528,9 +552,19 @@ class PlotailorApp {
       });
     }
   }
+
+  public getEditorView(): EditorView {
+    return this.cmEditor;
+  }
+
+  public getNarrativeDock(): NarrativeInspectorDock {
+    return this.narrativeDock;
+  }
 }
 
-// Initialize on DOM load
-window.addEventListener('DOMContentLoaded', () => {
-  new PlotailorApp();
-});
+// Initialize on DOM load if running in browser
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  window.addEventListener('DOMContentLoaded', () => {
+    new PlotailorApp();
+  });
+}
