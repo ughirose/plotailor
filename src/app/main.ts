@@ -596,12 +596,25 @@ export class PlotailorApp {
     const snap = snapshots[index];
     if (!snap || !this.cmEditor) return;
 
-    this.cmEditor.dispatch({
-      changes: { from: 0, to: this.cmEditor.state.doc.length, insert: snap.text },
-      userEvent: 'undo.rollback',
-    });
-    this.showToast(`🕒 ${new Date(snap.time).toLocaleTimeString()} の履歴へ復元しました`);
+    // 1. Truncate future snapshots beyond the selected rollback point (Git-style rollback)
+    snapshots.splice(index + 1);
+
+    // 2. Reset EditorState with the restored text so rollback itself does not pollute history
+    const newState = this.createChapterState(snap.text);
+    this.chapterStates.set(this.currentChapterId, newState);
+    this.cmEditor.setState(newState);
+
+    // 3. Update chapter model & storage
+    const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
+    if (activeCh) {
+      activeCh.content = snap.text;
+      activeCh.charCount = snap.length;
+    }
+    this.saveToStorage();
+
+    this.showToast(`🕒 ${new Date(snap.time).toLocaleTimeString()} の状態へロールバックしました（未来の履歴を切り捨て）`);
     this.updateStats();
+    this.updateHistoryUI();
   }
 
   private addNewChapter() {
