@@ -162,6 +162,66 @@
     </div>
   </div>
 
+  <!-- Lore / World Setting CRUD Modal -->
+  <div class="history-modal-backdrop" id="loreModal" style="display: none;">
+    <div class="history-modal-dialog" style="max-width: 540px;">
+      <div class="history-modal-header">
+        <h3 id="loreModalHeading"><span>👤</span> 設定の編集・新規作成</h3>
+        <button class="history-modal-close" id="btnCloseLoreModal">&times;</button>
+      </div>
+      <div class="history-modal-body">
+        <form id="loreEntityForm" style="display: flex; flex-direction: column; gap: 10px;">
+          <input type="hidden" id="loreEntityId" value="">
+          <div style="display: flex; gap: 10px;">
+            <div style="flex: 2;">
+              <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 4px;">名称 (必須)</label>
+              <input type="text" id="loreEntityName" required placeholder="例: ヴァレリウス将軍" class="ide-input" style="width: 100%;">
+            </div>
+            <div style="flex: 1;">
+              <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 4px;">種別</label>
+              <select id="loreEntityCategory" class="ide-input" style="width: 100%;">
+                <option value="character">登場人物</option>
+                <option value="term">重要用語</option>
+                <option value="item">重要アイテム</option>
+                <option value="foreshadowing">伏線</option>
+                <option value="location">拠点・地名</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <div style="flex: 2;">
+              <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 4px;">肩書・役割</label>
+              <input type="text" id="loreEntityRole" placeholder="例: 帝国北方軍総督" class="ide-input" style="width: 100%;">
+            </div>
+            <div style="flex: 1;">
+              <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 4px;">状態</label>
+              <select id="loreEntityStatus" class="ide-input" style="width: 100%;">
+                <option value="active">アクティブ/生存</option>
+                <option value="unresolved">未回収/潜伏</option>
+                <option value="resolved">回収済/退場</option>
+                <option value="deceased">死亡/消滅</option>
+                <option value="shelved">未配置棚</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 4px;">別名・表記ゆれ (カンマ区切り)</label>
+            <input type="text" id="loreEntityAliases" placeholder="例: ヴァレリウス, 総督" class="ide-input" style="width: 100%;">
+          </div>
+          <div>
+            <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 4px;">詳細設定・解説</label>
+            <textarea id="loreEntityDesc" rows="3" placeholder="設定内容、性格、目的、因果関係メモなどを記載" class="ide-input" style="width: 100%; resize: vertical;"></textarea>
+          </div>
+          <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px;">
+            <button type="button" class="ide-btn" id="btnDeleteLoreEntity" style="color: var(--color-danger); display: none;">削除</button>
+            <button type="button" class="ide-btn" id="btnCancelLoreModal">キャンセル</button>
+            <button type="submit" class="ide-btn btn-primary" id="btnSaveLoreEntity">設定を保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- Fullscreen Exit Floating Button -->
   <button class="fullscreen-exit-btn" id="btnExitFullscreen">
     <span>✕</span> 全画面執筆を終了 (Esc)

@@ -146,7 +146,6 @@ export {
   parseAndBuildDecorations,
   rubyConfigFacet,
   setRubyDisplayMode,
-  promptDirectRubyEdit,
   type RubyDisplayMode,
   type RubyDecorationConfig,
   type RubyMatch,
@@ -155,6 +154,8 @@ export {
   type MappingSpan,
 } from './core/editor/RubyDecorationExtension.js';
 export * from './ui/LoreInspectorDock.js';
+export * from './core/lore/LoreEntityManager.js';
+export * from './core/causality/CausalDagEngine.js';
 export * from './core/storage/EncryptedOPFSStorage.js';
 export * from './core/editor/NarrativeLinterEngine.js';
 export * from './core/editor/NarrativeWorkerBridge.js';

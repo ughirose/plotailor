@@ -12,6 +12,13 @@ import { verticalWritingExtension } from '../core/editor/VerticalWritingExtensio
 import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
 import { narrativeLinterExtension } from '../core/editor/CodeMirrorNarrativeExtension.js';
 import { NarrativeInspectorDock } from '../ui/NarrativeInspectorDock.js';
+import { LoreInspectorDock } from '../ui/LoreInspectorDock.js';
+import {
+  LoreEntityManager,
+  type LoreEntity,
+  type LoreCategory,
+} from '../core/lore/LoreEntityManager.js';
+import { CausalDagEngine } from '../core/causality/CausalDagEngine.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
 import { ProjectManager, type ProjectMeta } from '../core/project/index.js';
 
@@ -81,6 +88,10 @@ export class PlotailorApp {
   private chapterStates: Map<string, EditorState> = new Map();
   private chapterSnapshots: Map<string, Array<{ time: number; text: string; length: number }>> = new Map();
   private lastSnapshotTime = 0;
+  private loreManager: LoreEntityManager;
+  private dagEngine: CausalDagEngine = new CausalDagEngine();
+  private loreDock!: LoreInspectorDock;
+  private activeLoreFilter: LoreCategory | 'all' = 'all';
 
   constructor() {
     this.editorBody = document.getElementById('editorBody') as HTMLDivElement;
@@ -92,6 +103,25 @@ export class PlotailorApp {
     this.narrativeDock = new NarrativeInspectorDock({
       onJumpToTarget: (from, to) => this.jumpToEditor(from, to),
       onInsertSubject: (from, subject) => this.insertSubjectAt(from, subject),
+    });
+
+    this.loreManager = new LoreEntityManager(this.projectManager.getVFS());
+    this.loreDock = new LoreInspectorDock({
+      dictionary: this.loreManager.toLoreTermDefinitions(),
+      cursorProximityThreshold: 10,
+      onReplaceTerm: (event) => {
+        if (!this.cmEditor) return;
+        this.cmEditor.dispatch({
+          changes: { from: event.from, to: event.to, insert: event.replacement },
+        });
+        this.showToast(`✨「${event.originalText}」を「${event.replacement}」に置換しました`);
+      },
+      onShelveTerm: (event) => {
+        this.loreManager.updateEntity(event.termId, { status: event.newStatus });
+        this.saveLoreData();
+        this.renderRightPane();
+        this.renderLeftPane();
+      },
     });
 
     this.init();
@@ -461,6 +491,29 @@ export class PlotailorApp {
 
     const btnCreateProj = document.getElementById('btnCreateNewProject');
     btnCreateProj?.addEventListener('click', () => this.createNewProjectPrompt());
+
+    // Lore / World Setting Modal
+    const btnCloseLore = document.getElementById('btnCloseLoreModal');
+    btnCloseLore?.addEventListener('click', () => this.closeLoreModal());
+
+    const btnCancelLore = document.getElementById('btnCancelLoreModal');
+    btnCancelLore?.addEventListener('click', () => this.closeLoreModal());
+
+    const formLore = document.getElementById('loreEntityForm') as HTMLFormElement | null;
+    formLore?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.saveLoreFromForm();
+    });
+
+    const btnDelLore = document.getElementById('btnDeleteLoreEntity');
+    btnDelLore?.addEventListener('click', () => {
+      const idInput = document.getElementById('loreEntityId') as HTMLInputElement | null;
+      if (idInput && idInput.value) {
+        if (window.confirm('この設定項目を削除してもよろしいですか？')) {
+          this.deleteLore(idInput.value);
+        }
+      }
+    });
   }
 
   private handleEditorChange() {
@@ -638,6 +691,15 @@ export class PlotailorApp {
       const migrated = await this.projectManager.migrateFromLegacyStorage();
       if (migrated) {
         this.currentProjectId = migrated.id;
+      } else {
+        try {
+          await this.projectManager.getProject(this.currentProjectId);
+        } catch {
+          await this.projectManager.createProject({
+            id: this.currentProjectId,
+            title: this.workTitle,
+          });
+        }
       }
       await this.saveToVFS();
     } catch (err) {
@@ -802,6 +864,85 @@ export class PlotailorApp {
     this.renderChapterSelect();
     this.loadChapter(newId);
     this.showToast(`✨ 新規の章「${newTitle}」を追加しました`);
+  }
+
+  public async deleteChapter(chapterId: string) {
+    if (this.chapters.length <= 1) {
+      this.showToast('⚠️ 最後の1章は削除できません');
+      return;
+    }
+
+    const targetCh = this.chapters.find((c) => c.id === chapterId);
+    if (!targetCh) return;
+
+    if (!window.confirm(`章「${targetCh.title}」を削除してもよろしいですか？\n本文と履歴スナップショットは破棄されます。`)) {
+      return;
+    }
+
+    const delIdx = this.chapters.findIndex((c) => c.id === chapterId);
+    this.chapters = this.chapters.filter((c) => c.id !== chapterId);
+    this.chapterStates.delete(chapterId);
+    this.chapterSnapshots.delete(chapterId);
+
+    try {
+      await this.projectManager.deleteChapter(this.currentProjectId, chapterId);
+    } catch (err) {
+      console.warn('VFS deleteChapter error:', err);
+    }
+
+    if (this.currentChapterId === chapterId) {
+      const nextIdx = Math.min(delIdx, this.chapters.length - 1);
+      this.loadChapter(this.chapters[nextIdx].id);
+    } else {
+      this.saveToStorage();
+      this.renderChapterSelect();
+      this.renderLeftPane();
+      this.updateStats();
+    }
+
+    this.showToast(`🗑️ 章「${targetCh.title}」を削除しました`);
+  }
+
+  public renameChapter(chapterId: string, newTitle: string) {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+
+    const ch = this.chapters.find((c) => c.id === chapterId);
+    if (!ch) return;
+
+    ch.title = trimmed;
+    this.saveToStorage();
+    this.saveToVFS();
+    this.renderChapterSelect();
+
+    if (this.currentChapterId === chapterId) {
+      const activeTitleEl = document.getElementById('activeChapterTitle');
+      if (activeTitleEl) activeTitleEl.textContent = trimmed;
+    }
+
+    this.renderLeftPane();
+    this.showToast(`✏️ 章名を「${trimmed}」に変更しました`);
+  }
+
+  public async reorderChapters(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    if (fromIndex >= this.chapters.length || toIndex >= this.chapters.length) return;
+
+    const [moved] = this.chapters.splice(fromIndex, 1);
+    this.chapters.splice(toIndex, 0, moved);
+
+    this.saveToStorage();
+    this.renderChapterSelect();
+    this.renderLeftPane();
+
+    try {
+      await this.projectManager.reorderChapters(
+        this.currentProjectId,
+        this.chapters.map((c) => c.id)
+      );
+    } catch (err) {
+      console.warn('VFS reorder error:', err);
+    }
   }
 
   private updateStats() {
@@ -1076,43 +1217,273 @@ export class PlotailorApp {
 
     if (this.activeLeftTab === 'toc') {
       container.innerHTML = `
-        <div class="nav-section-title">章一覧・構成</div>
-        ${this.chapters.map((ch) => `
-          <div class="chapter-item ${ch.id === this.currentChapterId ? 'active' : ''}" data-id="${ch.id}">
-            <span>${ch.title}</span>
-            <span class="chapter-char-count">${ch.charCount.toLocaleString()} 字</span>
-          </div>
-        `).join('')}
+        <div class="nav-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>章一覧・構成</span>
+          <span style="font-size: 11px; color: var(--color-text-dim);">ドラッグで並び替え</span>
+        </div>
+        <div id="chapterListDndContainer">
+          ${this.chapters.map((ch, idx) => `
+            <div class="chapter-item ${ch.id === this.currentChapterId ? 'active' : ''}" data-id="${ch.id}" data-index="${idx}" draggable="true">
+              <span class="chapter-drag-handle" title="ドラッグして並び替え">⋮⋮</span>
+              <div class="chapter-title-wrapper" title="ダブルクリックして章名を変更">
+                <span class="chapter-title-text">${ch.title}</span>
+              </div>
+              <span class="chapter-char-count">${ch.charCount.toLocaleString()} 字</span>
+              <button class="chapter-rename-btn" data-id="${ch.id}" title="章名を変更" style="background: transparent; border: none; font-size: 11px; cursor: pointer; color: var(--color-text-dim); padding: 1px 3px;">✏️</button>
+              ${this.chapters.length > 1 ? `<button class="chapter-delete-btn" data-id="${ch.id}" title="章を削除">✕</button>` : ''}
+            </div>
+          `).join('')}
+        </div>
         <button class="ide-btn" style="width: 100%; margin-top: 12px; justify-content: center;" id="btnNewChapter">
           ＋ 新規章を追加
         </button>
       `;
-      container.querySelectorAll('.chapter-item').forEach((item) => {
-        item.addEventListener('click', (e) => {
-          const id = (e.currentTarget as HTMLElement).dataset.id;
+
+      let draggedIdx: number | null = null;
+      const items = container.querySelectorAll('.chapter-item');
+
+      items.forEach((item) => {
+        const el = item as HTMLElement;
+
+        // Selection / Load
+        el.addEventListener('click', (e) => {
+          if ((e.target as HTMLElement).closest('.chapter-delete-btn') || (e.target as HTMLElement).closest('.chapter-rename-btn') || (e.target as HTMLElement).tagName === 'INPUT') {
+            return;
+          }
+          const id = el.dataset.id;
           if (id) this.loadChapter(id);
         });
+
+        // Inline Rename function
+        const titleWrapper = el.querySelector('.chapter-title-wrapper');
+        const startRename = (e: Event) => {
+          e.stopPropagation();
+          const titleTextEl = titleWrapper?.querySelector('.chapter-title-text') as HTMLElement | null;
+          if (!titleTextEl || !titleWrapper) return;
+          const currentTitle = titleTextEl.textContent || '';
+
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'chapter-rename-input';
+          input.value = currentTitle;
+          input.style.cssText = 'width: 100%; font-size: 13px; background: rgba(0,0,0,0.5); border: 1px solid var(--color-gold); color: var(--color-text); padding: 1px 4px; border-radius: 3px; outline: none;';
+
+          titleWrapper.innerHTML = '';
+          titleWrapper.appendChild(input);
+          input.focus();
+          input.select();
+
+          const finishRename = () => {
+            const nextTitle = input.value.trim();
+            const id = el.dataset.id;
+            if (id && nextTitle && nextTitle !== currentTitle) {
+              this.renameChapter(id, nextTitle);
+            } else {
+              this.renderLeftPane();
+            }
+          };
+
+          input.addEventListener('keydown', (ke) => {
+            if (ke.key === 'Enter') {
+              ke.preventDefault();
+              finishRename();
+            } else if (ke.key === 'Escape') {
+              this.renderLeftPane();
+            }
+          });
+          input.addEventListener('blur', finishRename);
+        };
+
+        titleWrapper?.addEventListener('dblclick', startRename);
+        const btnRename = el.querySelector('.chapter-rename-btn');
+        btnRename?.addEventListener('click', startRename);
+
+        // Delete button
+        const btnDel = el.querySelector('.chapter-delete-btn');
+        btnDel?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = (e.currentTarget as HTMLElement).dataset.id;
+          if (id) this.deleteChapter(id);
+        });
+
+        // DnD Events
+        el.addEventListener('dragstart', (e) => {
+          draggedIdx = parseInt(el.dataset.index || '0', 10);
+          el.classList.add('dragging');
+          if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', el.dataset.id || '');
+          }
+        });
+
+        el.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+
+          const rect = el.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          if (e.clientY < midY) {
+            el.classList.add('drag-over-top');
+            el.classList.remove('drag-over-bottom');
+          } else {
+            el.classList.add('drag-over-bottom');
+            el.classList.remove('drag-over-top');
+          }
+        });
+
+        el.addEventListener('dragleave', () => {
+          el.classList.remove('drag-over-top');
+          el.classList.remove('drag-over-bottom');
+        });
+
+        el.addEventListener('drop', (e) => {
+          e.preventDefault();
+          el.classList.remove('drag-over-top');
+          el.classList.remove('drag-over-bottom');
+
+          if (draggedIdx === null) return;
+          const targetIdx = parseInt(el.dataset.index || '0', 10);
+          const rect = el.getBoundingClientRect();
+          const midY = rect.top + rect.height / 2;
+          const insertIdx = e.clientY < midY ? targetIdx : targetIdx;
+
+          if (draggedIdx !== insertIdx) {
+            this.reorderChapters(draggedIdx, insertIdx);
+          }
+        });
+
+        el.addEventListener('dragend', () => {
+          el.classList.remove('dragging');
+          items.forEach((it) => {
+            it.classList.remove('drag-over-top');
+            it.classList.remove('drag-over-bottom');
+          });
+          draggedIdx = null;
+        });
       });
+
       // Attach click listener for new chapter button
       const btnNew = container.querySelector('#btnNewChapter');
       btnNew?.addEventListener('click', () => this.addNewChapter());
     } else if (this.activeLeftTab === 'lore') {
+      const allEntities = this.loreManager.getEntities();
+      const filtered = this.activeLoreFilter === 'all'
+        ? allEntities
+        : this.loreManager.getEntities(this.activeLoreFilter);
+
+      const counts = {
+        all: allEntities.length,
+        character: allEntities.filter((e) => e.category === 'character').length,
+        term: allEntities.filter((e) => e.category === 'term').length,
+        item: allEntities.filter((e) => e.category === 'item').length,
+        foreshadowing: allEntities.filter((e) => e.category === 'foreshadowing').length,
+        location: allEntities.filter((e) => e.category === 'location').length,
+      };
+
+      const getCategoryLabel = (cat: string) => {
+        switch (cat) {
+          case 'character': return '登場人物';
+          case 'term': return '重要用語';
+          case 'item': return 'アイテム';
+          case 'foreshadowing': return '伏線';
+          case 'location': return '拠点・地名';
+          default: return cat;
+        }
+      };
+
       container.innerHTML = `
-        <div class="nav-section-title">登場人物（アクティブ）</div>
-        <div class="dock-card" style="margin-bottom: 8px; cursor: pointer;">
-          <div class="dock-card-title">👤 ヴァレリウス</div>
-          <div class="dock-card-body">帝国北方軍総督。星辰の盟約を守護する武将。</div>
+        <div class="nav-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>世界観・設定資料</span>
+          <button class="ide-btn btn-primary" id="btnOpenNewLoreModal" style="font-size: 11px; padding: 2px 7px;">＋ 追加</button>
         </div>
-        <div class="dock-card" style="margin-bottom: 8px; cursor: pointer;">
-          <div class="dock-card-title">👤 セレネ</div>
-          <div class="dock-card-body">第一衛星の巫女。冷徹な知性で暦法を司る。</div>
+
+        <div class="lore-filter-bar">
+          <button class="lore-filter-chip ${this.activeLoreFilter === 'all' ? 'active' : ''}" data-cat="all">全て (${counts.all})</button>
+          <button class="lore-filter-chip ${this.activeLoreFilter === 'character' ? 'active' : ''}" data-cat="character">人物 (${counts.character})</button>
+          <button class="lore-filter-chip ${this.activeLoreFilter === 'term' ? 'active' : ''}" data-cat="term">用語 (${counts.term})</button>
+          <button class="lore-filter-chip ${this.activeLoreFilter === 'item' ? 'active' : ''}" data-cat="item">武具 (${counts.item})</button>
+          <button class="lore-filter-chip ${this.activeLoreFilter === 'foreshadowing' ? 'active' : ''}" data-cat="foreshadowing">伏線 (${counts.foreshadowing})</button>
+          <button class="lore-filter-chip ${this.activeLoreFilter === 'location' ? 'active' : ''}" data-cat="location">拠点 (${counts.location})</button>
         </div>
-        <div class="nav-section-title" style="margin-top: 16px;">重要用語・アイテム</div>
-        <div class="dock-card" style="margin-bottom: 8px; cursor: pointer;">
-          <div class="dock-card-title">📜 星辰の盟約</div>
-          <div class="dock-card-body">双月が重なる夜にのみ更新される古代の不可侵協定。</div>
+
+        <div id="loreCardList">
+          ${filtered.length === 0 ? `<div style="font-size: 12px; color: var(--color-text-dim); text-align: center; padding: 20px;">該当する設定項目がありません</div>` : ''}
+          ${filtered.map((ent) => `
+            <div class="lore-card" data-id="${ent.id}">
+              <div class="lore-card-header">
+                <span class="lore-card-title">${ent.name}</span>
+                <span class="lore-badge cat-${ent.category}">${getCategoryLabel(ent.category)}</span>
+              </div>
+              ${ent.role ? `<div class="lore-card-role">${ent.role} ${ent.status ? `<span style="opacity: 0.7; font-size: 10px;">[${ent.status}]</span>` : ''}</div>` : ''}
+              <div class="lore-card-desc">${ent.description}</div>
+              <div class="lore-card-actions">
+                <button class="ide-btn btn-insert-lore" data-name="${ent.name}" style="font-size: 10px; padding: 2px 6px;">＋ 挿入</button>
+                <button class="ide-btn btn-edit-lore" data-id="${ent.id}" style="font-size: 10px; padding: 2px 6px;">✏️ 編集</button>
+                <button class="ide-btn btn-delete-lore" data-id="${ent.id}" style="font-size: 10px; padding: 2px 6px; color: var(--color-danger);">✕</button>
+              </div>
+            </div>
+          `).join('')}
         </div>
       `;
+
+      // Filter chips click
+      container.querySelectorAll('.lore-filter-chip').forEach((chip) => {
+        chip.addEventListener('click', (e) => {
+          const cat = (e.currentTarget as HTMLElement).dataset.cat as LoreCategory | 'all';
+          this.activeLoreFilter = cat || 'all';
+          this.renderLeftPane();
+        });
+      });
+
+      // Add new lore button
+      container.querySelector('#btnOpenNewLoreModal')?.addEventListener('click', () => {
+        this.openLoreModal();
+      });
+
+      // Edit buttons & card click
+      container.querySelectorAll('.btn-edit-lore').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = (e.currentTarget as HTMLElement).dataset.id;
+          if (id) this.openLoreModal(id);
+        });
+      });
+
+      // Insert into text
+      container.querySelectorAll('.btn-insert-lore').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const name = (e.currentTarget as HTMLElement).dataset.name;
+          if (name && this.cmEditor) {
+            const pos = this.cmEditor.state.selection.main.head;
+            this.cmEditor.dispatch({
+              changes: { from: pos, insert: name },
+              selection: { anchor: pos + name.length },
+            });
+            this.showToast(`📥 本文に「${name}」を挿入しました`);
+          }
+        });
+      });
+
+      // Delete buttons
+      container.querySelectorAll('.btn-delete-lore').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = (e.currentTarget as HTMLElement).dataset.id;
+          if (id && window.confirm('この設定項目を削除してもよろしいですか？')) {
+            this.deleteLore(id);
+          }
+        });
+      });
+
+      // Card click opens edit
+      container.querySelectorAll('.lore-card').forEach((card) => {
+        card.addEventListener('click', (e) => {
+          if ((e.target as HTMLElement).closest('button')) return;
+          const id = (card as HTMLElement).dataset.id;
+          if (id) this.openLoreModal(id);
+        });
+      });
     } else if (this.activeLeftTab === 'timeline') {
       container.innerHTML = `
         <div class="nav-section-title">架空暦法・連続時間軸</div>
@@ -1148,44 +1519,96 @@ export class PlotailorApp {
       container.innerHTML = this.narrativeDock.renderHTML();
       this.narrativeDock.bindEvents(container);
     } else if (this.activeRightTab === 'lore') {
-      container.innerHTML = `
-        <div class="dock-card">
-          <div class="dock-card-header">
-            <span class="dock-card-title">🔍 可視領域の設定検出</span>
-            <span style="font-size: 11px; color: var(--color-success);">2件 検出</span>
-          </div>
-          <div class="dock-card-body">
-            <p><strong>ヴァレリウス</strong>（登場人物・総督）<br>現在地: 北方砦 / 状態: 健在</p>
-            <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 6px 0;">
-            <p><strong>星辰の盟約</strong>（重要概念）<br>言及回数: 3回 / 伏線回収率: 40%</p>
-          </div>
-        </div>
+      // Real-time occurrences in current document
+      const docText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
+      const cursorPos = this.cmEditor ? this.cmEditor.state.selection.main.head : 0;
+      const occurrences = this.loreDock.extractOccurrences({
+        from: 0,
+        to: docText.length,
+        text: docText,
+        cursorPos,
+      });
 
-        <div class="dock-card">
-          <div class="dock-card-header">
-            <span class="dock-card-title">⚠️ 伏線・整合性チェック</span>
-          </div>
-          <div class="dock-card-body">
-            <p style="color: var(--color-success);">✓ 時空間矛盾なし（絶対日 2,450）</p>
-            <p style="color: var(--color-success);">✓ 登場人物生存ステータス整合</p>
-          </div>
-        </div>
-      `;
+      container.innerHTML = this.loreDock.renderInlinePanelHTML(occurrences);
+
+      // Bind events
+      container.querySelectorAll('.btn-quick-replace').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const termId = (e.currentTarget as HTMLElement).dataset.termId;
+          const occ = occurrences.find((o) => o.termId === termId);
+          if (occ) this.loreDock.handleQuickReplace(occ);
+        });
+      });
+
+      container.querySelectorAll('.btn-shelve').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const termId = (e.currentTarget as HTMLElement).dataset.termId;
+          if (termId) this.loreDock.handleShelveItem(termId);
+        });
+      });
+
+      container.querySelectorAll('.btn-unshelve').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          const termId = (e.currentTarget as HTMLElement).dataset.termId;
+          if (termId) this.loreDock.handleUnshelveItem(termId);
+        });
+      });
+
+      container.querySelectorAll('[data-action="toggle"]').forEach((header) => {
+        header.addEventListener('click', (e) => {
+          const target = (e.currentTarget as HTMLElement).dataset.target;
+          if (target) {
+            this.loreDock.togglePanel(target);
+            this.renderRightPane();
+          }
+        });
+      });
     } else if (this.activeRightTab === 'causality') {
+      this.dagEngine.populateFromLore(this.loreManager.getEntities());
+      const cycleReport = this.dagEngine.detectCycles();
+      const nodes = this.dagEngine.getNodes();
+      const edges = this.dagEngine.getEdges();
+      const svgHtml = this.dagEngine.renderSvgGraph(340, 280);
+
       container.innerHTML = `
         <div class="dock-card">
           <div class="dock-card-header">
             <span class="dock-card-title">🕸 因果DAG・ループ検出</span>
-            <span style="font-size: 11px; color: var(--color-success);">DAG Valid</span>
+            <span style="font-size: 11px; color: ${cycleReport.isAcyclic ? 'var(--color-success)' : 'var(--color-danger)'};">
+              ${cycleReport.isAcyclic ? '✓ 循環なし (Valid DAG)' : `⚠️ 循環検出 (${cycleReport.cycleCount})`}
+            </span>
           </div>
-          <div class="dock-card-body">
-            <p>Tarjan SCC ループ検査: <strong>0 循環</strong></p>
-            <p>Greedy FAS 最小カット: <strong>整合完了</strong></p>
-            <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 6px 0;">
-            <p style="font-size: 11px; color: var(--color-text-dim);">因果関係: [双月合] ➔ [儀式発動] ➔ [帝国侵攻]</p>
+          <div class="dock-card-body" style="padding-bottom: 4px;">
+            <div style="font-size: 11px; color: var(--color-text-dim); display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span>登録ノード: <strong>${nodes.length}</strong></span>
+              <span>有向エッジ: <strong>${edges.length}</strong></span>
+              <span>Tarjan SCC: <strong>0 循環</strong></span>
+            </div>
+            <div class="dag-wrapper" id="dagSvgContainer">
+              ${svgHtml}
+            </div>
+            <div style="margin-top: 8px; font-size: 10.5px; color: var(--color-text-dim); line-height: 1.5;">
+              <span style="color: #58a6ff;">■ 人物</span> &nbsp;
+              <span style="color: #e3b341;">■ 用語</span> &nbsp;
+              <span style="color: #bc8cff;">■ 伏線</span> &nbsp;
+              <span style="color: #56d364;">■ 拠点</span>
+              <div style="margin-top: 2px;">※ ノードをクリックすると詳細設定を開きます</div>
+            </div>
           </div>
         </div>
       `;
+
+      container.querySelectorAll('.dag-node').forEach((nodeEl) => {
+        nodeEl.addEventListener('click', (e) => {
+          const id = (e.currentTarget as HTMLElement).dataset.nodeId;
+          if (id) {
+            const ent = this.loreManager.getEntity(id);
+            if (ent) {
+              this.showToast(`📌 [${ent.name}] ${ent.role || ent.category}: ${ent.description.slice(0, 30)}...`);
+            }
+          }
+        });
+      });
     } else if (this.activeRightTab === 'pop') {
       container.innerHTML = `
         <div class="dock-card">
@@ -1209,6 +1632,128 @@ export class PlotailorApp {
         this.showToast('📜 PoP創作証明書（SHA-256 Merkle連鎖）を発行・保存しました');
       });
     }
+  }
+
+  public openLoreModal(entityId?: string) {
+    const modal = document.getElementById('loreModal');
+    if (!modal) return;
+
+    const idInput = document.getElementById('loreEntityId') as HTMLInputElement;
+    const nameInput = document.getElementById('loreEntityName') as HTMLInputElement;
+    const catInput = document.getElementById('loreEntityCategory') as HTMLSelectElement;
+    const roleInput = document.getElementById('loreEntityRole') as HTMLInputElement;
+    const statusInput = document.getElementById('loreEntityStatus') as HTMLSelectElement;
+    const aliasesInput = document.getElementById('loreEntityAliases') as HTMLInputElement;
+    const descInput = document.getElementById('loreEntityDesc') as HTMLTextAreaElement;
+    const heading = document.getElementById('loreModalHeading');
+    const btnDel = document.getElementById('btnDeleteLoreEntity');
+
+    if (entityId) {
+      const ent = this.loreManager.getEntity(entityId);
+      if (ent) {
+        if (idInput) idInput.value = ent.id;
+        if (nameInput) nameInput.value = ent.name;
+        if (catInput) catInput.value = ent.category;
+        if (roleInput) roleInput.value = ent.role || '';
+        if (statusInput) statusInput.value = ent.status || 'active';
+        if (aliasesInput) aliasesInput.value = (ent.aliases || []).join(', ');
+        if (descInput) descInput.value = ent.description;
+        if (heading) heading.innerHTML = `<span>✏️</span> 設定項目の編集: ${ent.name}`;
+        if (btnDel) btnDel.style.display = 'inline-block';
+      }
+    } else {
+      if (idInput) idInput.value = '';
+      if (nameInput) nameInput.value = '';
+      if (catInput) catInput.value = 'character';
+      if (roleInput) roleInput.value = '';
+      if (statusInput) statusInput.value = 'active';
+      if (aliasesInput) aliasesInput.value = '';
+      if (descInput) descInput.value = '';
+      if (heading) heading.innerHTML = `<span>＋</span> 新規設定項目の作成`;
+      if (btnDel) btnDel.style.display = 'none';
+    }
+
+    modal.style.display = 'flex';
+  }
+
+  public closeLoreModal() {
+    const modal = document.getElementById('loreModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  public async saveLoreFromForm() {
+    const idInput = document.getElementById('loreEntityId') as HTMLInputElement;
+    const nameInput = document.getElementById('loreEntityName') as HTMLInputElement;
+    const catInput = document.getElementById('loreEntityCategory') as HTMLSelectElement;
+    const roleInput = document.getElementById('loreEntityRole') as HTMLInputElement;
+    const statusInput = document.getElementById('loreEntityStatus') as HTMLSelectElement;
+    const aliasesInput = document.getElementById('loreEntityAliases') as HTMLInputElement;
+    const descInput = document.getElementById('loreEntityDesc') as HTMLTextAreaElement;
+
+    const name = nameInput.value.trim();
+    if (!name) return;
+
+    const id = idInput.value;
+    const category = (catInput.value || 'character') as LoreCategory;
+    const role = roleInput.value.trim() || undefined;
+    const status = statusInput.value || 'active';
+    const aliases = aliasesInput.value
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const description = descInput.value.trim();
+
+    if (id) {
+      this.loreManager.updateEntity(id, {
+        name,
+        category,
+        role,
+        status,
+        aliases,
+        description,
+      });
+      this.showToast(`✏️ 設定「${name}」を更新しました`);
+    } else {
+      this.loreManager.createEntity({
+        name,
+        category,
+        role,
+        status,
+        aliases,
+        description,
+      });
+      this.showToast(`✨ 新規設定「${name}」を追加しました`);
+    }
+
+    await this.saveLoreData();
+    this.closeLoreModal();
+    this.renderLeftPane();
+    this.renderRightPane();
+  }
+
+  public async deleteLore(id: string) {
+    const ent = this.loreManager.getEntity(id);
+    const name = ent?.name || id;
+    this.loreManager.deleteEntity(id);
+    await this.saveLoreData();
+    this.closeLoreModal();
+    this.renderLeftPane();
+    this.renderRightPane();
+    this.showToast(`🗑️ 設定「${name}」を削除しました`);
+  }
+
+  public async saveLoreData() {
+    try {
+      localStorage.setItem('plotailor_lore_data', JSON.stringify(this.loreManager.getEntities()));
+    } catch {}
+
+    try {
+      await this.loreManager.saveToVFS(this.currentProjectId);
+    } catch (err) {
+      console.warn('Failed to save lore to VFS:', err);
+    }
+
+    this.loreDock.updateDictionary(this.loreManager.toLoreTermDefinitions());
   }
 
   public getEditorView(): EditorView {
