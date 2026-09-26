@@ -252,7 +252,7 @@ describe('cm6ImeGuard (Japanese IME Exclusive Control Guard)', () => {
       selection: { anchor: 12 },
       extensions: [
         cm6ImeGuard(),
-        rubyDecorationExtension({ bypassActiveLine: false }),
+        rubyDecorationExtension(),
       ],
     });
 

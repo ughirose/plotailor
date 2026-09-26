@@ -145,6 +145,8 @@ export {
   rubyDecorationExtension,
   parseAndBuildDecorations,
   rubyConfigFacet,
+  setRubyDisplayMode,
+  promptDirectRubyEdit,
   type RubyDisplayMode,
   type RubyDecorationConfig,
   type RubyMatch,

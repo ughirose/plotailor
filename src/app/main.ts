@@ -6,7 +6,7 @@
 import { EditorView, keymap } from '@codemirror/view';
 import { EditorState, Compartment } from '@codemirror/state';
 import { history, defaultKeymap, historyKeymap, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
-import { rubyDecorationExtension, type RubyDisplayMode } from '../core/editor/RubyDecorationExtension.js';
+import { rubyDecorationExtension, setRubyDisplayMode, type RubyDisplayMode } from '../core/editor/RubyDecorationExtension.js';
 import { cm6ImeGuard } from '../core/editor/cm6ImeGuard.js';
 import { verticalWritingExtension } from '../core/editor/VerticalWritingExtension.js';
 import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
@@ -210,10 +210,7 @@ export class PlotailorApp {
         this.rubyCompartment.of(
           this.rubyMode === 'raw'
             ? []
-            : rubyDecorationExtension({
-                mode: this.rubyMode,
-                bypassActiveLine: true,
-              })
+            : rubyDecorationExtension({ mode: this.rubyMode })
         ),
         history({ minDepth: 500, newGroupDelay: 500 }),
         keymap.of([...defaultKeymap, ...historyKeymap]),
@@ -638,15 +635,16 @@ export class PlotailorApp {
 
     if (this.cmEditor) {
       this.cmEditor.dispatch({
-        effects: this.rubyCompartment.reconfigure(
-          this.rubyMode === 'raw'
-            ? []
-            : rubyDecorationExtension({
-                mode: this.rubyMode,
-                bypassActiveLine: true,
-              })
-        ),
+        effects: [
+          this.rubyCompartment.reconfigure(
+            this.rubyMode === 'raw'
+              ? []
+              : rubyDecorationExtension({ mode: this.rubyMode })
+          ),
+          setRubyDisplayMode.of(this.rubyMode),
+        ],
       });
+      this.cmEditor.requestMeasure();
     }
 
     const btn = document.getElementById('btnToggleRuby');

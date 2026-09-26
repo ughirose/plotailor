@@ -210,7 +210,7 @@ class VerticalWritingPlugin {
       const originalPosAtCoords = view.posAtCoords.bind(view);
       const originalCoordsAtPos = view.coordsAtPos.bind(view);
 
-      view.posAtCoords = function (coords: { x: number; y: number }, precise: any = true) {
+      (view as any).posAtCoords = function (coords: { x: number; y: number }, precise: any = true) {
         if (isVerticalMode(this)) {
           const vPos = getVerticalPosAtCoords(this, coords);
           if (vPos !== null) {
@@ -224,7 +224,7 @@ class VerticalWritingPlugin {
         }
       };
 
-      view.coordsAtPos = function (pos: number, side: any = 1) {
+      (view as any).coordsAtPos = function (pos: number, side: any = 1) {
         if (isVerticalMode(this)) {
           const vRect = getVerticalCoordsAtPos(this, pos, side);
           if (vRect) {

@@ -522,22 +522,20 @@ html, body {
   word-break: break-word !important;
 }
 
-/* Ruby and Bouten Typography */
+/* Ruby and Bouten Typography (Strictly matching landing page mockup) */
 ruby, .cm-ruby {
-  display: inline-flex !important;
-  position: relative !important;
-  vertical-align: baseline !important;
-  text-align: center !important;
-  line-height: inherit !important;
-  white-space: nowrap !important;
-  margin: 0 !important;
-  padding: 0 !important;
+  ruby-align: center;
+  ruby-position: over;
+  cursor: pointer;
+  line-height: inherit;
+  vertical-align: baseline;
+  margin: 0;
+  padding: 0;
 }
 
 rb, .cm-ruby rb, .cm-ruby-base {
-  display: inline !important;
-  line-height: inherit !important;
-  white-space: nowrap !important;
+  ruby-align: center;
+  line-height: inherit;
 }
 
 .cm-ruby-off {
@@ -546,32 +544,29 @@ rb, .cm-ruby rb, .cm-ruby-base {
 }
 
 rt, .cm-ruby rt, .cm-ruby-text {
-  position: absolute !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  top: -0.95em !important;
-  font-size: 0.52em !important;
+  font-size: 0.55em !important;
   color: var(--color-gold) !important;
-  font-weight: 500 !important;
-  letter-spacing: 0.02em !important;
+  letter-spacing: 0 !important;
+  user-select: none !important;
+  font-family: var(--font-serif) !important;
   line-height: 1 !important;
   text-align: center !important;
-  user-select: none !important;
-  pointer-events: none !important;
-  white-space: nowrap !important;
+}
+
+.pane-center.theme-night ruby rt,
+.pane-center.theme-night .cm-ruby rt,
+.pane-center.theme-night .cm-ruby-text {
+  color: var(--accent-gold-light) !important;
 }
 
 .pane-center.vertical-rl ruby,
 .pane-center.vertical-rl .cm-ruby,
 .cm-vertical-rl ruby,
 .cm-vertical-rl .cm-ruby {
-  display: inline-flex !important;
-  position: relative !important;
+  ruby-align: center;
+  ruby-position: over;
   writing-mode: vertical-rl !important;
   -webkit-writing-mode: vertical-rl !important;
-  text-align: center !important;
-  vertical-align: baseline !important;
-  white-space: nowrap !important;
 }
 
 .pane-center.vertical-rl rt,
@@ -580,18 +575,13 @@ rt, .cm-ruby rt, .cm-ruby-text {
 .cm-vertical-rl rt,
 .cm-vertical-rl .cm-ruby rt,
 .cm-vertical-rl .cm-ruby-text {
-  position: absolute !important;
-  top: 50% !important;
-  left: auto !important;
-  right: -0.65em !important;
-  transform: translateY(-50%) !important;
-  writing-mode: vertical-rl !important;
-  -webkit-writing-mode: vertical-rl !important;
-  font-size: 0.52em !important;
+  font-size: 0.55em !important;
+  color: var(--color-gold) !important;
+  letter-spacing: 0 !important;
+  user-select: none !important;
+  font-family: var(--font-serif) !important;
   line-height: 1 !important;
   text-align: center !important;
-  white-space: nowrap !important;
-  pointer-events: none !important;
 }
 
 .bouten {

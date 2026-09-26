@@ -268,19 +268,12 @@ export function cm6ImeGuard(options: ImeGuardOptions = {}): Extension {
     },
     compositionend(event, view) {
       const sel = view.state.selection.main;
-      view.dispatch({
-        effects: setCompositionStatus.of({
-          status: 'COMMITTING',
-          text: event.data || '',
-          range: { from: sel.from, to: sel.to },
-        }),
-      });
-      // Immediately transition back to IDLE in next tick or effect
+      // Single transition back to IDLE to avoid double-dispatch DOM shaking
       view.dispatch({
         effects: setCompositionStatus.of({
           status: 'IDLE',
-          text: null,
-          range: null,
+          text: event.data || '',
+          range: { from: sel.from, to: sel.to },
         }),
       });
     },

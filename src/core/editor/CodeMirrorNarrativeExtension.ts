@@ -106,6 +106,7 @@ export interface NarrativeExtensionOptions {
 class NarrativeViewPlugin {
   private workerBridge: NarrativeWorkerBridge;
   private onAnalysisResult?: (result: NarrativeAnalysisResult) => void;
+  private pendingResult: { decorationSet: DecorationSet; result: NarrativeAnalysisResult } | null = null;
 
   constructor(private view: EditorView, options?: NarrativeExtensionOptions) {
     this.workerBridge = options?.workerBridge ?? new NarrativeWorkerBridge({ debounceMs: options?.debounceMs ?? 80 });
@@ -118,6 +119,20 @@ class NarrativeViewPlugin {
   }
 
   update(update: ViewUpdate) {
+    if (this.pendingResult && !this.view.composing) {
+      const { decorationSet, result } = this.pendingResult;
+      this.pendingResult = null;
+      this.view.dispatch({
+        effects: [
+          setNarrativeDecorations.of(decorationSet),
+          setNarrativeAnalysisResult.of(result),
+        ],
+      });
+      if (this.onAnalysisResult) {
+        this.onAnalysisResult(result);
+      }
+    }
+
     if (update.docChanged) {
       // Check if user is currently composing with Japanese IME
       const isComposing = this.view.composing;
@@ -185,6 +200,13 @@ class NarrativeViewPlugin {
     // Dispatch update to CodeMirror state asynchronously to avoid in-progress update errors
     queueMicrotask(() => {
       if ((this.view as any).isDestroyed) return;
+
+      if (this.view.composing) {
+        // Do NOT dispatch transactions during IME composition; postpone to prevent IME resetting
+        this.pendingResult = { decorationSet, result };
+        return;
+      }
+      this.pendingResult = null;
 
       this.view.dispatch({
         effects: [

@@ -6,14 +6,16 @@ import {
   ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
-import { EditorState, Extension, Range, Facet } from '@codemirror/state';
+import { EditorState, Extension, Range, Facet, StateEffect } from '@codemirror/state';
 import { isComposing } from './cm6ImeGuard.js';
 
 export type RubyDisplayMode = 'normal' | 'raw' | 'off';
 
+export const setRubyDisplayMode = StateEffect.define<RubyDisplayMode>();
+
 export interface RubyDecorationConfig {
   mode?: RubyDisplayMode;
-  bypassActiveLine?: boolean;
+  expandOnCursor?: boolean;
 }
 
 export const rubyConfigFacet = Facet.define<RubyDecorationConfig, Required<RubyDecorationConfig>>({
@@ -21,11 +23,11 @@ export const rubyConfigFacet = Facet.define<RubyDecorationConfig, Required<RubyD
     return values.reduce<Required<RubyDecorationConfig>>(
       (acc, cur) => ({
         mode: cur.mode ?? acc.mode,
-        bypassActiveLine: cur.bypassActiveLine ?? acc.bypassActiveLine,
+        expandOnCursor: cur.expandOnCursor ?? acc.expandOnCursor,
       }),
       {
         mode: 'normal',
-        bypassActiveLine: false,
+        expandOnCursor: false,
       }
     );
   },
@@ -188,17 +190,42 @@ export class SourceToDisplayMap {
   }
 }
 
+/**
+ * Direct inline ruby editing dialog/prompt helper
+ */
+export function promptDirectRubyEdit(
+  view: EditorView,
+  rawFrom: number,
+  rawTo: number,
+  currentBase: string,
+  currentRuby: string
+) {
+  const newRuby = window.prompt(`【ルビ直接編集】「${currentBase}」のルビを入力してください:`, currentRuby);
+  if (newRuby !== null) {
+    const trimmed = newRuby.trim();
+    const newText = trimmed ? `｜${currentBase}《${trimmed}》` : currentBase;
+    view.dispatch({
+      changes: { from: rawFrom, to: rawTo, insert: newText },
+      userEvent: 'input.ruby',
+    });
+    view.focus();
+  }
+}
+
 export class RubyWidget extends WidgetType {
   constructor(
     public readonly baseText: string,
-    public readonly rubyText: string
+    public readonly rubyText: string,
+    public readonly rawFrom: number = 0,
+    public readonly rawTo: number = 0
   ) {
     super();
   }
 
-  toDOM(): HTMLElement {
+  toDOM(view?: EditorView): HTMLElement {
     const rubyEl = document.createElement('ruby');
     rubyEl.className = 'cm-ruby';
+    rubyEl.title = `ルビ: ${this.rubyText}（クリックで直接編集）`;
 
     const rbEl = document.createElement('rb');
     rbEl.className = 'cm-ruby-base';
@@ -210,11 +237,20 @@ export class RubyWidget extends WidgetType {
 
     rubyEl.appendChild(rbEl);
     rubyEl.appendChild(rtEl);
+
+    // Click on ruby widget allows editing ruby directly in-place without expanding whole line
+    rubyEl.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (view && typeof window !== 'undefined') {
+        promptDirectRubyEdit(view, this.rawFrom, this.rawTo, this.baseText, this.rubyText);
+      }
+    });
+
     return rubyEl;
   }
 
   ignoreEvent(): boolean {
-    return true;
+    return false;
   }
 
   eq(other: RubyWidget): boolean {
@@ -289,33 +325,14 @@ export function parseAndBuildDecorations(
   const matches = AozoraParser.parse(docText);
   const selectionRanges = state.selection.ranges;
 
-  // Active lines collection when bypassActiveLine is active
-  const activeLineNumbers = new Set<number>();
-  if (config.bypassActiveLine) {
-    for (const r of selectionRanges) {
-      const startLine = state.doc.lineAt(r.from).number;
-      const endLine = state.doc.lineAt(r.to).number;
-      for (let l = startLine; l <= endLine; l++) {
-        activeLineNumbers.add(l);
-      }
-    }
-  }
-
   const spans: MappingSpan[] = [];
   const widgets: Range<Decoration>[] = [];
   let accumulatedDelta = 0;
 
   for (const match of matches) {
-    let isSelected = selectionRanges.some(
-      (r) => r.from <= match.rawTo && r.to >= match.rawFrom
-    );
-
-    if (!isSelected && config.bypassActiveLine) {
-      const matchLine = state.doc.lineAt(match.rawFrom).number;
-      if (activeLineNumbers.has(matchLine)) {
-        isSelected = true; // Bypass decoration completely on active editing line
-      }
-    }
+    const isSelected =
+      Boolean(config.expandOnCursor) &&
+      selectionRanges.some((r) => r.from <= match.rawTo && r.to >= match.rawFrom);
 
     const displayFrom = match.rawFrom + accumulatedDelta;
 
@@ -337,7 +354,7 @@ export function parseAndBuildDecorations(
           widget:
             mode === 'off'
               ? new RubyOffWidget(match.baseText)
-              : new RubyWidget(match.baseText, match.rubyText),
+              : new RubyWidget(match.baseText, match.rubyText, match.rawFrom, match.rawTo),
         });
         widgets.push(widget.range(match.rawFrom, match.rawTo));
       }
@@ -378,38 +395,36 @@ export function parseAndBuildDecorations(
   };
 }
 
+/**
+ * Clean native ruby typography adhering to browser-standard ruby layout
+ * identical to the top landing page mockup.
+ */
 export const rubyTheme = EditorView.theme({
-  '.cm-ruby': {
-    display: 'inline-flex',
-    position: 'relative',
+  '.cm-ruby, ruby': {
+    rubyAlign: 'center',
+    rubyPosition: 'over',
+    cursor: 'pointer',
+    lineHeight: 'inherit',
     verticalAlign: 'baseline',
-    textAlign: 'center',
-    lineHeight: 'inherit',
-    whiteSpace: 'nowrap',
   },
-  '.cm-ruby .cm-ruby-base, .cm-ruby rb': {
-    display: 'inline',
+  '.cm-ruby .cm-ruby-base, .cm-ruby rb, rb': {
+    rubyAlign: 'center',
     lineHeight: 'inherit',
-    whiteSpace: 'nowrap',
   },
-  '.cm-ruby .cm-ruby-text, .cm-ruby rt': {
-    position: 'absolute',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    top: '-0.95em',
-    fontSize: '0.52em',
-    lineHeight: '1',
-    userSelect: 'none',
-    textAlign: 'center',
+  '.cm-ruby .cm-ruby-text, .cm-ruby rt, rt': {
+    fontSize: '0.55em',
     color: 'var(--color-gold, #cfa85c)',
-    whiteSpace: 'nowrap',
-    pointerEvents: 'none',
+    letterSpacing: '0',
+    userSelect: 'none',
+    fontFamily: 'var(--font-serif, inherit)',
+    lineHeight: '1',
+    textAlign: 'center',
   },
   '.cm-ruby-off': {
     display: 'inline',
     lineHeight: 'inherit',
   },
-  '.cm-bouten': {
+  '.cm-bouten, .bouten-dot': {
     textEmphasis: 'sesame',
     WebkitTextEmphasis: 'sesame',
     textEmphasisPosition: 'over right',
@@ -420,28 +435,19 @@ export const rubyTheme = EditorView.theme({
     WebkitWritingMode: 'vertical-rl',
   },
   '&.cm-vertical-rl .cm-ruby, .vertical-rl & .cm-ruby, .pane-center.vertical-rl .cm-ruby': {
-    display: 'inline-flex',
-    position: 'relative',
+    rubyAlign: 'center',
+    rubyPosition: 'over',
     writingMode: 'vertical-rl',
     WebkitWritingMode: 'vertical-rl',
-    textAlign: 'center',
-    verticalAlign: 'baseline',
-    whiteSpace: 'nowrap',
   },
-  '&.cm-vertical-rl .cm-ruby .cm-ruby-text, .vertical-rl & .cm-ruby .cm-ruby-text, .pane-center.vertical-rl .cm-ruby .cm-ruby-text, &.cm-vertical-rl .cm-ruby rt, .vertical-rl & .cm-ruby rt, .pane-center.vertical-rl .cm-ruby rt': {
-    position: 'absolute',
-    top: '50%',
-    left: 'auto',
-    right: '-0.65em',
-    transform: 'translateY(-50%)',
-    writingMode: 'vertical-rl',
-    WebkitWritingMode: 'vertical-rl',
-    fontSize: '0.52em',
-    lineHeight: '1',
+  '&.cm-vertical-rl .cm-ruby .cm-ruby-text, .vertical-rl & .cm-ruby .cm-ruby-text, .pane-center.vertical-rl .cm-ruby .cm-ruby-text': {
+    fontSize: '0.55em',
+    color: 'var(--color-gold, #cfa85c)',
+    letterSpacing: '0',
     userSelect: 'none',
+    fontFamily: 'var(--font-serif, inherit)',
+    lineHeight: '1',
     textAlign: 'center',
-    whiteSpace: 'nowrap',
-    pointerEvents: 'none',
   },
 });
 
@@ -449,9 +455,11 @@ export class RubyDecorationPlugin {
   decorations: DecorationSet;
   map: SourceToDisplayMap;
   matches: ParsedMatch[];
+  private currentMode: RubyDisplayMode;
 
   constructor(view: EditorView) {
     const config = view.state.facet(rubyConfigFacet);
+    this.currentMode = config.mode;
     const result = parseAndBuildDecorations(view.state, config);
     this.decorations = result.decorations;
     this.map = result.map;
@@ -463,9 +471,21 @@ export class RubyDecorationPlugin {
       // Do NOT replace/rebuild decorations while user is composing with Japanese IME
       return;
     }
-    const config = update.state.facet(rubyConfigFacet);
-    if (update.docChanged || update.selectionSet) {
-      const result = parseAndBuildDecorations(update.state, config);
+    let modeChanged = false;
+    for (const tr of update.transactions) {
+      for (const e of tr.effects) {
+        if (e.is(setRubyDisplayMode)) {
+          this.currentMode = e.value;
+          modeChanged = true;
+        }
+      }
+    }
+    if (update.docChanged || update.selectionSet || modeChanged) {
+      const config = update.state.facet(rubyConfigFacet);
+      const result = parseAndBuildDecorations(update.state, {
+        ...config,
+        mode: this.currentMode,
+      });
       this.decorations = result.decorations;
       this.map = result.map;
       this.matches = result.matches;

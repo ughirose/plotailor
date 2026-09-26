@@ -10,6 +10,7 @@ import {
   BoutenWidget,
   parseAndBuildDecorations,
   rubyDecorationExtension,
+  setRubyDisplayMode,
   rubyTheme,
   rubyDecorationPlugin,
 } from '../src/core/editor/RubyDecorationExtension.js';
@@ -185,7 +186,7 @@ describe('RubyDecorationExtension Bidirectional Cursor Editing', () => {
     let state = EditorState.create({
       doc,
       selection: { anchor: 0 }, // Cursor at start (pos 0)
-      extensions: [rubyDecorationExtension()],
+      extensions: [rubyDecorationExtension({ expandOnCursor: true })],
     });
 
     let view = new EditorView({ state, parent });
@@ -199,7 +200,7 @@ describe('RubyDecorationExtension Bidirectional Cursor Editing', () => {
     view.dispatch({ selection: { anchor: 5 } });
 
     plugin = view.plugin(rubyDecorationPlugin);
-    // Since cursor is inside ruby area (3..11), replace widget is suppressed so raw text is expanded for editing
+    // When expandOnCursor is true, replace widget is suppressed so raw text is expanded for editing
     expect(plugin!.decorations.size).toBe(0);
 
     // Move cursor out of ruby area (e.g. pos 12)
@@ -209,6 +210,21 @@ describe('RubyDecorationExtension Bidirectional Cursor Editing', () => {
     // Widget decoration is restored when cursor exits
     expect(plugin!.decorations.size).toBe(1);
 
+    view.destroy();
+  });
+
+  it('should keep ruby decorated in default normal mode without expanding into Aozora syntax', () => {
+    const doc = 'これは｜魔法《マゴウ》の力。';
+    // Default normal mode without expandOnCursor keeps ruby widget intact even when cursor enters
+    let state = EditorState.create({
+      doc,
+      selection: { anchor: 5 }, // Cursor inside ruby
+      extensions: [rubyDecorationExtension()],
+    });
+
+    let view = new EditorView({ state, parent });
+    let plugin = view.plugin(rubyDecorationPlugin);
+    expect(plugin!.decorations.size).toBe(1);
     view.destroy();
   });
 
@@ -264,29 +280,47 @@ describe('RubyDisplayMode (Normal, Raw, Off/Hidden)', () => {
   });
 });
 
-describe('RubyDecorationExtension Active Line Bypass (IME Conflict Prevention)', () => {
-  it('should completely bypass decorations on the active editing line when bypassActiveLine is true', () => {
-    const doc = '一行目｜魔法《マゴウ》。\n二行目｜神話《シンワ》。';
-    // Cursor at line 1, pos 2 (inside line 1, but outside ruby)
+describe('Instant Mode Switching with setRubyDisplayMode StateEffect', () => {
+  let parent: HTMLDivElement;
+
+  beforeEach(() => {
+    parent = document.createElement('div');
+    document.body.appendChild(parent);
+    return () => {
+      parent.remove();
+    };
+  });
+
+  it('immediately updates decorations when setRubyDisplayMode is dispatched without needing focus or selection change', () => {
+    const doc = 'これは｜魔法《マゴウ》の力。';
     const state = EditorState.create({
       doc,
-      selection: { anchor: 2 },
+      extensions: [rubyDecorationExtension({ mode: 'normal' })],
     });
 
-    // Without bypass: line 1 ruby is decorated because cursor is outside the ruby token
-    const withoutBypass = parseAndBuildDecorations(state, { bypassActiveLine: false });
-    expect(withoutBypass.decorations.size).toBe(2);
+    const view = new EditorView({ state, parent });
+    let plugin = view.plugin(rubyDecorationPlugin);
+    expect(plugin!.decorations.size).toBe(1);
 
-    // With bypassActiveLine: true: line 1 ruby is bypassed (raw text) while line 2 remains decorated
-    const withBypass = parseAndBuildDecorations(state, { bypassActiveLine: true });
-    expect(withBypass.decorations.size).toBe(1);
-
-    // Line 2 ruby (offset > 12) should still be decorated
-    let hasLine2Widget = false;
-    withBypass.decorations.between(0, doc.length, (from, to) => {
-      if (from > 10) hasLine2Widget = true;
+    // Switch to raw mode via effect
+    view.dispatch({
+      effects: setRubyDisplayMode.of('raw'),
     });
-    expect(hasLine2Widget).toBe(true);
+
+    plugin = view.plugin(rubyDecorationPlugin);
+    // Immediately reflected without focus
+    expect(plugin!.decorations.size).toBe(0);
+
+    // Switch back to normal mode
+    view.dispatch({
+      effects: setRubyDisplayMode.of('normal'),
+    });
+
+    plugin = view.plugin(rubyDecorationPlugin);
+    // Immediately restored to 1 without needing editor focus
+    expect(plugin!.decorations.size).toBe(1);
+
+    view.destroy();
   });
 });
 
