@@ -13,6 +13,7 @@ import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
 import { narrativeLinterExtension } from '../core/editor/CodeMirrorNarrativeExtension.js';
 import { NarrativeInspectorDock } from '../ui/NarrativeInspectorDock.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
+import { ProjectManager, type ProjectMeta } from '../core/project/index.js';
 
 interface ChapterData {
   id: string;
@@ -56,6 +57,8 @@ export class PlotailorApp {
   private editorBody: HTMLDivElement;
   private cmEditor!: EditorView;
   private narrativeDock: NarrativeInspectorDock;
+  private projectManager = new ProjectManager();
+  private currentProjectId = 'default_work';
   private chapters: ChapterData[] = [];
   private currentChapterId = 'ch1';
   private workTitle = '星辰の境界線';
@@ -116,6 +119,7 @@ export class PlotailorApp {
     this.renderLeftPane();
     this.renderRightPane();
     this.updateStats();
+    this.initProjectVFS();
   }
 
   private loadStateFromStorage() {
@@ -201,6 +205,7 @@ export class PlotailorApp {
       localStorage.setItem('plotailor_ruby_decorated', (this.rubyMode === 'normal').toString());
       localStorage.setItem('plotailor_theme', this.isNightTheme ? 'night' : 'washi');
     } catch {}
+    this.saveToVFS();
   }
 
   private createChapterState(content: string): EditorState {
@@ -446,6 +451,16 @@ export class PlotailorApp {
         this.renderRightPane();
       });
     });
+
+    // Project Management Modal
+    const btnOpenProj = document.getElementById('btnOpenProjectModal');
+    btnOpenProj?.addEventListener('click', () => this.openProjectModal());
+
+    const btnCloseProj = document.getElementById('btnCloseProjectModal');
+    btnCloseProj?.addEventListener('click', () => this.closeProjectModal());
+
+    const btnCreateProj = document.getElementById('btnCreateNewProject');
+    btnCreateProj?.addEventListener('click', () => this.createNewProjectPrompt());
   }
 
   private handleEditorChange() {
@@ -615,6 +630,156 @@ export class PlotailorApp {
     this.showToast(`🕒 ${new Date(snap.time).toLocaleTimeString()} の状態へロールバックしました（未来の履歴を切り捨て）`);
     this.updateStats();
     this.updateHistoryUI();
+  }
+
+  private async initProjectVFS() {
+    try {
+      await this.projectManager.initWorkspace();
+      const migrated = await this.projectManager.migrateFromLegacyStorage();
+      if (migrated) {
+        this.currentProjectId = migrated.id;
+      }
+      await this.saveToVFS();
+    } catch (err) {
+      console.warn('VFS init warning:', err);
+    }
+  }
+
+  private async saveToVFS() {
+    try {
+      const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
+      if (!activeCh) return;
+      await this.projectManager.saveChapter(
+        this.currentProjectId,
+        activeCh.id,
+        activeCh.title,
+        activeCh.content
+      );
+    } catch (err) {
+      console.warn('VFS auto-save warning:', err);
+    }
+  }
+
+  public async openProjectModal() {
+    const modal = document.getElementById('projectModal');
+    if (!modal) return;
+    await this.renderProjectList();
+    modal.style.display = 'flex';
+  }
+
+  public closeProjectModal() {
+    const modal = document.getElementById('projectModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  private async renderProjectList() {
+    const container = document.getElementById('projectListContainer');
+    if (!container) return;
+
+    try {
+      const projects = await this.projectManager.listProjects();
+      if (projects.length === 0) {
+        container.innerHTML = '<div style="font-size: 13px; color: var(--color-text-dim); text-align: center; padding: 24px;">まだ保存された作品がありません。</div>';
+        return;
+      }
+
+      container.innerHTML = projects.map((p) => {
+        const isCurrent = p.id === this.currentProjectId;
+        const dateStr = new Date(p.updatedAt).toLocaleDateString() + ' ' + new Date(p.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `
+          <div class="history-item ${isCurrent ? 'active' : ''}" data-project-id="${p.id}" style="${isCurrent ? 'border-color: var(--color-gold); background: rgba(184, 134, 11, 0.08);' : ''}">
+            <div class="history-item-info">
+              <div class="history-item-time" style="font-weight: 600; color: var(--color-text);">
+                ${p.title} ${isCurrent ? '<span style="color: var(--color-gold); font-size: 11px; margin-left: 6px;">[執筆中]</span>' : ''}
+              </div>
+              <div class="history-item-preview" style="font-size: 11px;">
+                総文字数: ${p.totalCharCount.toLocaleString()} 字 | 更新: ${dateStr}
+              </div>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              ${!isCurrent ? `<button class="ide-btn btn-switch-proj" data-id="${p.id}" style="font-size: 11px; padding: 2px 8px;">開く</button>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.btn-switch-proj').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = (e.currentTarget as HTMLElement).dataset.id;
+          if (id) {
+            await this.switchProject(id);
+            this.closeProjectModal();
+          }
+        });
+      });
+    } catch (err) {
+      container.innerHTML = `<div style="color: var(--color-danger); padding: 12px;">作品一覧の読込に失敗しました: ${err}</div>`;
+    }
+  }
+
+  private async createNewProjectPrompt() {
+    const title = window.prompt('新規作品のタイトルを入力してください:', `長編小説_${new Date().toISOString().slice(0, 10)}`);
+    if (!title || !title.trim()) return;
+
+    try {
+      const newProj = await this.projectManager.createProject({ title: title.trim() });
+      // Add default Chapter 1
+      await this.projectManager.saveChapter(
+        newProj.id,
+        'ch1',
+        '第一章 幕開け',
+        '　ここに新しい物語の最初の一行を書き始めます。'
+      );
+      await this.switchProject(newProj.id);
+      this.closeProjectModal();
+      this.showToast(`✨ 新規作品「${newProj.title}」を作成し、執筆を開始しました`);
+    } catch (err) {
+      window.alert(`作品の作成に失敗しました: ${err}`);
+    }
+  }
+
+  private async switchProject(projectId: string) {
+    try {
+      const data = await this.projectManager.getProject(projectId);
+      this.currentProjectId = projectId;
+      this.workTitle = data.meta.title;
+
+      const titleEl = document.getElementById('workTitleText');
+      if (titleEl) titleEl.textContent = this.workTitle;
+
+      if (data.chapters.length > 0) {
+        this.chapters = [];
+        for (const ch of data.chapters) {
+          const loaded = await this.projectManager.loadChapter(projectId, ch.id);
+          this.chapters.push({
+            id: ch.id,
+            title: ch.title,
+            charCount: ch.charCount,
+            content: loaded.content,
+          });
+        }
+      } else {
+        this.chapters = JSON.parse(JSON.stringify(DEFAULT_CHAPTERS));
+      }
+
+      this.currentChapterId = data.meta.activeChapterId && this.chapters.some((c) => c.id === data.meta.activeChapterId)
+        ? data.meta.activeChapterId
+        : this.chapters[0].id;
+
+      this.chapterStates.clear();
+      this.chapterSnapshots.clear();
+
+      this.saveToStorage();
+      this.renderChapterSelect();
+      this.loadChapter(this.currentChapterId);
+      this.renderLeftPane();
+      this.updateStats();
+      this.showToast(`📚 作品「${this.workTitle}」を開きました`);
+    } catch (err) {
+      console.error('Failed to switch project:', err);
+      this.showToast(`❌ 作品切り替えエラー: ${err}`);
+    }
   }
 
   private addNewChapter() {
