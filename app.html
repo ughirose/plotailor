@@ -222,6 +222,66 @@
         </form>
       </div>
     </div>
+  <!-- Export Modal -->
+  <div class="history-modal-backdrop" id="exportModal" style="display: none;">
+    <div class="history-modal-dialog" style="max-width: 580px;">
+      <div class="history-modal-header">
+        <h3 id="exportModalTitle">📦 作品エクスポート・出版出力</h3>
+        <button class="history-modal-close" id="btnCloseExportModal">&times;</button>
+      </div>
+      <div class="history-modal-body" style="padding: 20px;">
+        <p style="font-size: 13px; color: var(--color-text-dim); margin-bottom: 20px;">
+          執筆した原稿および設定データを、各種出版・投稿フォーマットや印刷プレビューに出力します。
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <!-- 1. Aozora Full Text -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📜 全章結合 青空文庫テキスト (.txt)</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">全章を順序通り結合し、ルビ・傍点・大見出し・改ページ記法を完全整形</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="ide-btn" id="btnCopyAozoraFull">コピー</button>
+              <button class="ide-btn btn-primary" id="btnDownloadAozoraTxt">DL (.txt)</button>
+            </div>
+          </div>
+
+          <!-- 2. Print / PDF Preview -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">🖨️ 縦書き原稿用紙 印刷・PDFプレビュー</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">A4縦書き組版・ルビ・ノンブル（ページ番号）付き印刷プレビューを別タブで表示</div>
+            </div>
+            <div>
+              <button class="ide-btn btn-primary" id="btnOpenPrintPreview">プレビュー表示</button>
+            </div>
+          </div>
+
+          <!-- 3. Lore Bible Markdown -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📚 世界観設定バイブル (.md)</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">全人物・用語・アイテム・伏線・拠点および因果相関図をまとめた資料集</div>
+            </div>
+            <div>
+              <button class="ide-btn" id="btnDownloadLoreBible">DL (.md)</button>
+            </div>
+          </div>
+
+          <!-- 4. Active Chapter Quick Copy -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">✂️ 現在の章のみ青空テキストコピー</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">現在編集中の章テキスト（ルビ・傍点整形済み）をクリップボードにコピー</div>
+            </div>
+            <div>
+              <button class="ide-btn" id="btnCopyActiveChapterAozora">コピー</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Fullscreen Exit Floating Button -->

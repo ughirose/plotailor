@@ -36,6 +36,7 @@ import {
   findShelvedCandidates,
   SHELF_THRESHOLD,
 } from '../core/lore/ShelvedLoreLifecycle.js';
+import { LiteraryExporter, normalizeAozoraMarkup } from '../core/export/LiteraryExporter.js';
 
 interface ChapterData {
   id: string;
@@ -474,13 +475,28 @@ export class PlotailorApp {
     }
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && this.isFullscreen) {
-        this.toggleFullscreen(false);
+      if (e.key === 'Escape') {
+        if (this.isFullscreen) {
+          this.toggleFullscreen(false);
+        }
+        this.closeExportModal();
       }
     });
 
     const btnExport = document.getElementById('btnExportAozora');
-    btnExport?.addEventListener('click', () => this.exportAozoraText());
+    btnExport?.addEventListener('click', () => this.openExportModal());
+
+    document.getElementById('btnCloseExportModal')?.addEventListener('click', () => this.closeExportModal());
+    document.getElementById('btnCopyAozoraFull')?.addEventListener('click', () => this.exportFullAozora('copy'));
+    document.getElementById('btnDownloadAozoraTxt')?.addEventListener('click', () => this.exportFullAozora('download'));
+    document.getElementById('btnOpenPrintPreview')?.addEventListener('click', () => this.exportPrintPreview());
+    document.getElementById('btnDownloadLoreBible')?.addEventListener('click', () => this.exportLoreBible());
+    document.getElementById('btnCopyActiveChapterAozora')?.addEventListener('click', () => this.exportActiveChapterAozora());
+
+    const exportModal = document.getElementById('exportModal');
+    exportModal?.addEventListener('click', (e) => {
+      if (e.target === exportModal) this.closeExportModal();
+    });
 
     const btnLeft = document.getElementById('btnToggleLeftPane');
     btnLeft?.addEventListener('click', () => this.toggleLeftPane());
@@ -1378,20 +1394,33 @@ export class PlotailorApp {
     if (btn) btn.classList.toggle('active', this.rightPaneOpen);
   }
 
-  private exportAozoraText() {
-    const raw = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(raw).then(() => {
-        this.showToast('✅ 青空文庫形式をクリップボードにコピーしました');
-      }).catch(() => {
-        this.fallbackCopy(raw);
-      });
-    } else {
-      this.fallbackCopy(raw);
+  public openExportModal() {
+    const modal = document.getElementById('exportModal');
+    if (modal) {
+      modal.style.display = 'flex';
     }
   }
 
-  private fallbackCopy(text: string) {
+  public closeExportModal() {
+    const modal = document.getElementById('exportModal');
+    if (modal) {
+      modal.style.display = 'none';
+    }
+  }
+
+  private copyTextToClipboard(text: string, successMsg: string) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(() => {
+        this.showToast(successMsg);
+      }).catch(() => {
+        this.fallbackCopy(text, successMsg);
+      });
+    } else {
+      this.fallbackCopy(text, successMsg);
+    }
+  }
+
+  private fallbackCopy(text: string, successMsg = '✅ クリップボードにコピーしました') {
     const ta = document.createElement('textarea');
     ta.value = text;
     ta.style.position = 'fixed';
@@ -1400,7 +1429,45 @@ export class PlotailorApp {
     ta.select();
     document.execCommand('copy');
     document.body.removeChild(ta);
-    this.showToast('✅ 青空文庫形式をクリップボードにコピーしました');
+    this.showToast(successMsg);
+  }
+
+  private exportFullAozora(action: 'copy' | 'download') {
+    const fullText = LiteraryExporter.exportAozoraFullText(this.workTitle, this.chapters);
+    if (action === 'copy') {
+      this.copyTextToClipboard(fullText, '✅ 全章青空文庫形式をコピーしました');
+    } else {
+      LiteraryExporter.downloadFile(`${this.workTitle}.txt`, fullText);
+      this.showToast(`📥「${this.workTitle}.txt」をダウンロードしました`);
+    }
+  }
+
+  private exportPrintPreview() {
+    const printHtml = LiteraryExporter.exportPrintHtml(this.workTitle, this.chapters, {
+      isVertical: this.isVertical,
+    });
+    const previewWindow = window.open('', '_blank');
+    if (previewWindow) {
+      previewWindow.document.open();
+      previewWindow.document.write(printHtml);
+      previewWindow.document.close();
+      this.showToast('🖨️ 印刷プレビューを別タブで開きました');
+    } else {
+      this.showToast('⚠️ ポップアップがブロックされました。ブラウザの設定をご確認ください');
+    }
+  }
+
+  private exportLoreBible() {
+    const entities = this.loreManager.getEntities();
+    const md = LiteraryExporter.exportLoreBibleMarkdown(this.workTitle, entities);
+    LiteraryExporter.downloadFile(`${this.workTitle}_設定資料集.md`, md, 'text/markdown;charset=utf-8');
+    this.showToast(`📥「${this.workTitle}_設定資料集.md」をダウンロードしました`);
+  }
+
+  private exportActiveChapterAozora() {
+    const raw = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
+    const normalized = normalizeAozoraMarkup(raw);
+    this.copyTextToClipboard(normalized, '✅ 現在の章（青空記法）をコピーしました');
   }
 
   private showToast(msg: string) {
