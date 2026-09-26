@@ -126,6 +126,16 @@ export class NarrativeLinterEngine {
       else if (diag.source?.includes('consecutive-passive')) ruleType = 'consecutive-passive';
       else if (diag.source?.includes('subject-predicate-mismatch')) ruleType = 'subject-predicate-mismatch';
 
+      // Deduplicate particle-repetition diagnostics on the same line for IDE issue list aggregation
+      if (ruleType === 'particle-repetition') {
+        const alreadyExists = syntacticItems.some(
+          (item) => item.ruleType === 'particle-repetition' && item.line === line && item.message === diag.message
+        );
+        if (alreadyExists) {
+          continue;
+        }
+      }
+
       const previewText = targetText.slice(diag.from, diag.to);
 
       syntacticItems.push({
