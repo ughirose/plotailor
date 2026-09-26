@@ -42,10 +42,10 @@ test.describe('Plotailor Literature IDE - Core Features E2E', () => {
     page.once('dialog', async (dialog) => {
       await dialog.accept();
     });
-    const deleteBtn = addedChapter.locator('.chapter-delete-btn');
-    await addedChapter.hover();
+    const lastChapter = page.locator('.chapter-item').last();
+    await lastChapter.hover();
+    const deleteBtn = lastChapter.locator('.chapter-delete-btn');
     await expect(deleteBtn).toBeVisible();
-    await deleteBtn.click();
     await deleteBtn.click();
 
     await expect(page.locator('.chapter-item')).toHaveCount(3);
@@ -139,5 +139,143 @@ test.describe('Plotailor Literature IDE - Core Features E2E', () => {
       path: path.join('docs', 'reports', 'screenshots', '03_plotailor_causality_dag.png'),
       fullPage: false,
     });
+  });
+
+  test('Typing Cadence (IKI) State Machine: burst, short pause, and deep pause transitions', async ({ page }) => {
+    const editor = page.locator('.cm-content');
+    await expect(editor).toBeVisible();
+
+    const cadenceIndicator = page.locator('#cadenceFooterIndicator');
+    await expect(cadenceIndicator).toBeVisible();
+
+    // 1. Rapid burst typing (<200ms IKI)
+    await editor.click();
+    await editor.type('速筆の刻。嵐が迫る。', { delay: 40 });
+
+    // Verify burst state
+    await expect(cadenceIndicator).toContainText('集中執筆');
+    const editorBody = page.locator('#editorBody');
+    await expect(editorBody).toHaveClass(/cadence-burst/);
+
+    // Screenshot in burst mode (noise suppression)
+    await page.screenshot({
+      path: path.join('docs', 'reports', 'screenshots', '04_plotailor_cadence_burst.png'),
+      fullPage: false,
+    });
+
+    // 2. Short pause (400 - 1000ms)
+    await page.waitForTimeout(500);
+    await expect(cadenceIndicator).toContainText('短休止');
+    await expect(editorBody).toHaveClass(/cadence-short-pause/);
+
+    // 3. Deep pause (> 1500ms)
+    await page.waitForTimeout(1200);
+    await expect(cadenceIndicator).toContainText('深層推敲');
+    await expect(editorBody).toHaveClass(/cadence-deep-pause/);
+  });
+
+  test('Multi-layer Decoration & POV Breach Error: editor layout and vertical writing toggle', async ({ page }) => {
+    const editor = page.locator('.cm-content');
+    await expect(editor).toBeVisible();
+
+    // 1. Test vertical writing mode
+    const btnVertical = page.locator('#btnToggleOrientation');
+    await expect(btnVertical).toBeVisible();
+    await btnVertical.click();
+    await expect(page.locator('#paneCenter')).toHaveClass(/vertical-rl/);
+
+    // Screenshot of multi-layer decoration & editor in vertical writing
+    await page.screenshot({
+      path: path.join('docs', 'reports', 'screenshots', '05_plotailor_multilayer_decoration.png'),
+      fullPage: false,
+    });
+
+    // 2. Switch back to horizontal writing
+    await btnVertical.click();
+    await expect(page.locator('#paneCenter')).not.toHaveClass(/vertical-rl/);
+  });
+
+  test('Dual-Track Timeline: Sjuzhet vs Fabula, cubic Bezier splines, and foreshadowing arcs', async ({ page }) => {
+    // 1. Switch left tab to timeline
+    const timelineTab = page.locator('button[data-tab="timeline"]');
+    await timelineTab.click();
+    await expect(timelineTab).toHaveClass(/active/);
+
+    // 2. Verify Dual-Track SVG canvas and tracks
+    const svgCanvas = page.locator('.dual-track-svg');
+    await expect(svgCanvas).toBeVisible();
+    await expect(svgCanvas).toContainText('Sjuzhet (読者体験軸)');
+    await expect(svgCanvas).toContainText('Fabula (客観時間軸)');
+
+    // 3. Verify connecting splines
+    const splines = page.locator('.timeline-spline');
+    const splineCount = await splines.count();
+    expect(splineCount).toBeGreaterThanOrEqual(3);
+
+    // 4. Verify analepsis (flashback) spline
+    const analepsisSpline = page.locator('.timeline-spline.analepsis');
+    await expect(analepsisSpline).toBeVisible();
+
+    // 5. Verify foreshadowing arc
+    const arc = page.locator('.foreshadowing-arc');
+    await expect(arc.first()).toBeVisible();
+
+    // Screenshot of dual-track timeline
+    await page.screenshot({
+      path: path.join('docs', 'reports', 'screenshots', '06_plotailor_dual_track_timeline.png'),
+      fullPage: false,
+    });
+  });
+
+  test('Shelved Lore Stock & Promotion: manual score S_manual, filter, and Alt+P rebind', async ({ page }) => {
+    // 1. Switch left tab to lore
+    const loreTab = page.locator('button[data-tab="lore"]');
+    await loreTab.click();
+    await expect(loreTab).toHaveClass(/active/);
+
+    // 2. Verify S_manual score badges
+    const scoreBadges = page.locator('.score-badge');
+    await expect(scoreBadges.first()).toBeVisible();
+    await expect(scoreBadges.first()).toContainText('S:');
+
+    // 3. Verify shelved filter chip
+    const shelvedFilterChip = page.locator('button[data-cat="shelved"]');
+    await expect(shelvedFilterChip).toBeVisible();
+
+    // 4. Open modal to create a shelved entity
+    const btnOpenNew = page.locator('#btnOpenNewLoreModal');
+    await btnOpenNew.click();
+
+    await page.fill('#loreEntityName', '忘却の古文書');
+    await page.selectOption('#loreEntityCategory', 'item');
+    await page.selectOption('#loreEntityStatus', 'shelved');
+    await page.fill('#loreEntityRole', '古代秘術の原本');
+    await page.fill('#loreEntityDesc', '星辰の盟約より古くから伝わる失われた秘術の写本。');
+    await page.click('#btnSaveLoreEntity');
+
+    // 5. Filter by shelved
+    await shelvedFilterChip.click();
+    await expect(shelvedFilterChip).toHaveClass(/active/);
+
+    const shelvedCard = page.locator('.lore-card').first();
+    await expect(shelvedCard).toBeVisible();
+    await expect(shelvedCard).toContainText('忘却の古文書');
+
+    // Verify promote button
+    const btnPromote = shelvedCard.locator('.btn-promote-lore');
+    await expect(btnPromote).toBeVisible();
+
+    // Screenshot of shelved lore card & score
+    await page.screenshot({
+      path: path.join('docs', 'reports', 'screenshots', '07_plotailor_shelved_lore.png'),
+      fullPage: false,
+    });
+
+    // 6. Click promote button to rebind
+    await btnPromote.click();
+
+    // Toast confirmation
+    const toast = page.locator('div', { hasText: '未配置棚から復帰' });
+    await expect(toast).toBeVisible();
   });
 });

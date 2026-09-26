@@ -71,7 +71,7 @@ export const DEFAULT_LORE_ENTITIES: LoreEntity[] = [
     role: '運命の合（Conjunction）',
     status: 'unresolved',
     description: '第4月14日の夜、二重満月が重なる刻に何者かによって盟約の封印が解かれるという伝承。',
-    aliases: ['双月合', '凶兆'],
+    aliases: ['双月合', '凶兆', '不穏な凶兆', '双月の凶兆'],
     relations: [
       { targetId: 'loc-fortress', label: '発生予兆' },
     ],
@@ -83,7 +83,7 @@ export const DEFAULT_LORE_ENTITIES: LoreEntity[] = [
     role: '極北防衛要塞',
     status: 'active',
     description: '帝国最北端の永久凍土に築かれた巨石要塞。古代の盟約台座を秘匿している。',
-    aliases: ['北の砦', '永久氷壁'],
+    aliases: ['北の砦', '北方の砦', '永久氷壁'],
     relations: [],
   },
 ];

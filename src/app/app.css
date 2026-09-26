@@ -1475,6 +1475,170 @@ body.fullscreen-active .fullscreen-exit-btn {
   pointer-events: none;
 }
 
+/* ==========================================================================
+   Typing Cadence (IKI) State Machine Styles
+   ========================================================================== */
+.editor-body {
+  transition: --cadence-transition 300ms ease;
+}
 
+/* Burst State (<200ms): Mute all annotations and linter noise to opacity 0.05 */
+.cadence-burst .cm-lint-warning,
+.cadence-burst .cm-pronoun-missing,
+.cadence-burst .cm-lint-multiple,
+.cadence-burst .cm-decoration-layer0,
+.cadence-burst .cm-decoration-layer1,
+.cadence-burst .cm-decoration-layer2 {
+  opacity: 0.05 !important;
+  transition: opacity 300ms ease-out !important;
+}
 
+/* Short Pause State (400-1000ms): Fade in Layer 2 (POV Violation) only (0.40) */
+.cadence-short-pause .cm-decoration-layer2 {
+  opacity: 0.40 !important;
+  transition: opacity 400ms ease-in-out !important;
+}
+.cadence-short-pause .cm-lint-warning,
+.cadence-short-pause .cm-pronoun-missing,
+.cadence-short-pause .cm-decoration-layer0,
+.cadence-short-pause .cm-decoration-layer1 {
+  opacity: 0.05 !important;
+  transition: opacity 400ms ease-in-out !important;
+}
 
+/* Deep Pause State (>1500ms): Fully restore all decorations to 1.0 */
+.cadence-deep-pause .cm-lint-warning,
+.cadence-deep-pause .cm-pronoun-missing,
+.cadence-deep-pause .cm-lint-multiple,
+.cadence-deep-pause .cm-decoration-layer0,
+.cadence-deep-pause .cm-decoration-layer1,
+.cadence-deep-pause .cm-decoration-layer2 {
+  opacity: 1.00 !important;
+  transition: opacity 600ms ease-in !important;
+}
+
+/* ==========================================================================
+   Multi-layer Decoration (Z-Index & Hierarchy)
+   ========================================================================== */
+/* Layer 0: Physical Anchor (Dotted border, Z-Index 10) */
+.cm-decoration-layer0 {
+  border-bottom: 1px dotted rgba(56, 189, 248, 0.6) !important;
+  z-index: 10;
+  position: relative;
+  transition: border-color 0.2s;
+}
+.cm-content[style*="vertical-rl"] .cm-decoration-layer0,
+.canvas-wrapper.is-vertical .cm-decoration-layer0 {
+  border-bottom: none !important;
+  border-left: 1px dotted rgba(56, 189, 248, 0.6) !important;
+}
+
+/* Layer 1: Foreshadowing Highlight (Gold background, Z-Index 20, multiply blend) */
+.cm-decoration-layer1 {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+  border-radius: 2px;
+  z-index: 20;
+  position: relative;
+  mix-blend-mode: multiply;
+}
+
+/* Layer 2: POV Violation (Wavy underline #ef4444, Z-Index 30) */
+.cm-decoration-layer2 {
+  text-decoration: wavy underline #ef4444 1.5px !important;
+  z-index: 30;
+  position: relative;
+}
+.cm-content[style*="vertical-rl"] .cm-decoration-layer2,
+.canvas-wrapper.is-vertical .cm-decoration-layer2 {
+  text-decoration: none !important;
+  border-right: 1.5px wavy #ef4444 !important;
+}
+
+/* ==========================================================================
+   Dual-Track Timeline (Discourse vs Story)
+   ========================================================================== */
+.dual-track-container {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+  overflow-x: auto;
+}
+
+.dual-track-svg {
+  display: block;
+  user-select: none;
+}
+
+.timeline-spline {
+  transition: stroke 0.2s, stroke-width 0.2s;
+  cursor: pointer;
+}
+.timeline-spline:hover {
+  stroke-width: 3.5px !important;
+  filter: brightness(1.3) !important;
+}
+
+.foreshadowing-arc {
+  transition: stroke-width 0.2s;
+  cursor: pointer;
+}
+.foreshadowing-arc:hover {
+  stroke-width: 3px !important;
+}
+
+@keyframes pulseDangling {
+  0% { opacity: 0.5; stroke: #ef4444; }
+  50% { opacity: 1.0; stroke: #ff7b72; stroke-width: 2.5px; }
+  100% { opacity: 0.5; stroke: #ef4444; }
+}
+
+.foreshadowing-arc.dangling-arc {
+  animation: pulseDangling 1.5s infinite;
+}
+
+.timeline-node {
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.timeline-node:hover circle {
+  r: 8;
+  filter: brightness(1.2);
+}
+
+/* ==========================================================================
+   Shelved Lore & S_manual Badges
+   ========================================================================== */
+.score-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(207, 168, 92, 0.15);
+  color: var(--color-gold);
+  border: 1px solid rgba(207, 168, 92, 0.3);
+  font-family: var(--font-mono);
+}
+
+.score-badge.shelved {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.btn-promote-lore {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-promote-lore:hover {
+  background: rgba(168, 85, 247, 0.3);
+  color: #fff;
+}

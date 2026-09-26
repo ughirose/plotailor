@@ -21,6 +21,21 @@ import {
 import { CausalDagEngine } from '../core/causality/CausalDagEngine.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
 import { ProjectManager, type ProjectMeta } from '../core/project/index.js';
+import { TypingCadenceMachine, type CadenceStatus } from '../core/editor/TypingCadenceMachine.js';
+import {
+  type MultiLayerItem,
+  PovBreachDetector,
+  multiLayerDecorationField,
+  setMultiLayerDecorations,
+  buildMultiLayerDecorationSet,
+} from '../core/editor/MultiLayerDecoration.js';
+import { DualTrackTimelineEngine, type TimelineSceneInput } from '../core/timeline/DualTrackTimeline.js';
+import {
+  calculateManualScore,
+  reconcileEntityLifecycles,
+  findShelvedCandidates,
+  SHELF_THRESHOLD,
+} from '../core/lore/ShelvedLoreLifecycle.js';
 
 interface ChapterData {
   id: string;
@@ -36,7 +51,7 @@ const DEFAULT_CHAPTERS: ChapterData[] = [
     charCount: 0,
     content: `　深藍の夜空を二つの月が照らし出していた。
 　第一衛星《セレネ》が蒼き冷光を投げかけ、第二衛星《フォボス》の琥珀色が地平の端を染める。
-　二重満月<<コンジャンクション>>の夜、北方の砦に集う兵たちの息は白く凍りついていた。
+　二重満月<<コンジャンクション>>の夜、北方の砦に集う兵たちの息は白く凍りついていた。不穏な凶兆が立ち込めている。
 
 「総督<<ヴァレリウス>>閣下、帝国軍の先遣隊が峡谷を越えたとの急報です」
 
@@ -91,7 +106,11 @@ export class PlotailorApp {
   private loreManager: LoreEntityManager;
   private dagEngine: CausalDagEngine = new CausalDagEngine();
   private loreDock!: LoreInspectorDock;
-  private activeLoreFilter: LoreCategory | 'all' = 'all';
+  private activeLoreFilter: LoreCategory | 'all' | 'shelved' = 'all';
+  private cadenceMachine: TypingCadenceMachine;
+  private povDetector = new PovBreachDetector();
+  private timelineEngine = new DualTrackTimelineEngine();
+  private currentPovCharacterId = 'char-valerius';
 
   constructor() {
     this.editorBody = document.getElementById('editorBody') as HTMLDivElement;
@@ -99,6 +118,10 @@ export class PlotailorApp {
       this.leftPaneOpen = false;
       this.rightPaneOpen = false;
     }
+
+    this.cadenceMachine = new TypingCadenceMachine({
+      onStateChange: (status) => this.handleCadenceState(status),
+    });
 
     this.narrativeDock = new NarrativeInspectorDock({
       onJumpToTarget: (from, to) => this.jumpToEditor(from, to),
@@ -149,6 +172,7 @@ export class PlotailorApp {
     this.renderLeftPane();
     this.renderRightPane();
     this.updateStats();
+    this.updateMultiLayerDecorations();
     this.initProjectVFS();
   }
 
@@ -252,6 +276,7 @@ export class PlotailorApp {
         keymap.of([...defaultKeymap, ...historyKeymap]),
         verticalWritingExtension(),
         cm6ImeGuard(),
+        multiLayerDecorationField,
         narrativeLinterExtension({
           debounceMs: 80,
           onAnalysisResult: (result) => {
@@ -264,7 +289,10 @@ export class PlotailorApp {
         }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
+            this.cadenceMachine.recordKeystroke();
             this.handleEditorChange();
+            this.updateMultiLayerDecorations();
+            this.checkShelvedCandidates();
           }
           if (update.selectionSet || update.docChanged) {
             this.updateCursorStats();
@@ -384,6 +412,14 @@ export class PlotailorApp {
     document.getElementById('historyModal')?.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).id === 'historyModal') {
         this.closeHistoryModal();
+      }
+    });
+
+    // Global Alt+P Promote Shelved Lore Shortcut
+    window.addEventListener('keydown', (e) => {
+      if (e.altKey && (e.key === 'p' || e.key === 'P')) {
+        e.preventDefault();
+        this.promoteShelvedLore();
       }
     });
 
@@ -540,11 +576,191 @@ export class PlotailorApp {
     }
     this.saveDebounceTimer = setTimeout(() => {
       this.saveToStorage();
+      this.reconcileShelvedLore(true);
       if (saveIndicator) {
         saveIndicator.textContent = '自動保存: 0.1秒前 (OPFS AES-GCM)';
         saveIndicator.style.color = 'var(--color-text-dim)';
       }
     }, 400);
+  }
+
+  private handleCadenceState(status: CadenceStatus) {
+    if (this.editorBody) {
+      this.cadenceMachine.applyToDom(this.editorBody);
+    }
+    const indicator = document.getElementById('cadenceFooterIndicator');
+    if (indicator) {
+      switch (status.state) {
+        case 'typing_burst':
+          indicator.textContent = '🔥 集中執筆 (Burst <200ms)';
+          indicator.style.color = '#38bdf8';
+          break;
+        case 'short_pause':
+          indicator.textContent = '⏸ 短休止 (400-1000ms)';
+          indicator.style.color = 'var(--color-warning)';
+          break;
+        case 'deep_pause':
+          indicator.textContent = '🧠 深層推敲 (>1.5s)';
+          indicator.style.color = 'var(--color-success)';
+          break;
+        case 'idle':
+        default:
+          indicator.textContent = 'ケイデンス: 待機';
+          indicator.style.color = 'var(--color-text-dim)';
+          break;
+      }
+    }
+  }
+
+  private updateMultiLayerDecorations() {
+    if (!this.cmEditor) return;
+    const doc = this.cmEditor.state.doc;
+    const text = doc.toString();
+    const entities = this.loreManager.getEntities();
+    const items: MultiLayerItem[] = [];
+
+    // Layer 0 & Layer 1: Anchors & Foreshadowings
+    for (const ent of entities) {
+      if (ent.status === 'shelved') continue;
+      const terms = [ent.name, ...(ent.aliases || [])];
+      for (const term of terms) {
+        if (!term || term.length < 2) continue;
+        let idx = text.indexOf(term);
+        while (idx !== -1) {
+          if (ent.category === 'foreshadowing') {
+            items.push({
+              from: idx,
+              to: idx + term.length,
+              layer: 1,
+              type: 'foreshadowing',
+              label: ent.name,
+              detail: ent.description,
+              sourceEntityId: ent.id,
+            });
+          } else {
+            items.push({
+              from: idx,
+              to: idx + term.length,
+              layer: 0,
+              type: 'physical_anchor',
+              label: ent.name,
+              detail: ent.description,
+              sourceEntityId: ent.id,
+            });
+          }
+          idx = text.indexOf(term, idx + 1);
+        }
+      }
+    }
+
+    // Layer 2: POV Violations
+    const breaches = this.povDetector.detect(
+      text,
+      { currentPovCharacterId: this.currentPovCharacterId, currentPovCharacterName: 'ヴァレリウス' },
+      entities
+    );
+    for (const breach of breaches) {
+      items.push({
+        from: breach.from,
+        to: breach.to,
+        layer: 2,
+        type: 'pov_violation',
+        label: breach.ownerCharacterName,
+        detail: breach.message,
+      });
+    }
+
+    const decSet = buildMultiLayerDecorationSet(text.length, items);
+    this.cmEditor.dispatch({
+      effects: setMultiLayerDecorations.of(decSet),
+    });
+  }
+
+  private checkShelvedCandidates() {
+    if (!this.cmEditor) return;
+    const text = this.cmEditor.state.doc.toString();
+    const shelvedEntities = this.loreManager.getEntities().filter((e) => e.status === 'shelved');
+    const matches = findShelvedCandidates(text, shelvedEntities);
+    if (matches.length > 0) {
+      const match = matches[0];
+      const saveIndicator = document.getElementById('saveStatusIndicator');
+      if (saveIndicator) {
+        saveIndicator.innerHTML = `💡 未配置設定「<strong>${match.matchedText}</strong>」検知 (Alt+Pで再バインド)`;
+        saveIndicator.style.color = 'var(--color-gold)';
+      }
+    }
+  }
+
+  private reconcileShelvedLore(isCommitted: boolean) {
+    const fullText = this.chapters.map((c) => c.content).join('\n\n');
+    const allEntities = this.loreManager.getEntities();
+    const result = reconcileEntityLifecycles(fullText, allEntities, isCommitted);
+
+    let changed = false;
+    for (const ent of result.updatedEntities) {
+      const existing = this.loreManager.getEntity(ent.id);
+      if (existing && existing.status !== ent.status) {
+        this.loreManager.updateEntity(ent.id, { status: ent.status });
+        changed = true;
+      }
+    }
+    for (const purged of result.purgedEntities) {
+      this.loreManager.deleteEntity(purged.id);
+      changed = true;
+    }
+
+    if (changed) {
+      this.renderLeftPane();
+      this.renderRightPane();
+    }
+  }
+
+  public promoteShelvedLore(entityId?: string) {
+    let target = entityId ? this.loreManager.getEntity(entityId) : null;
+    if (!target) {
+      const shelvedList = this.loreManager.getEntities().filter((e) => e.status === 'shelved');
+      if (shelvedList.length > 0) {
+        if (this.cmEditor) {
+          const text = this.cmEditor.state.doc.toString();
+          const head = this.cmEditor.state.selection.main.head;
+          const matches = findShelvedCandidates(text, shelvedList);
+          const nearby = matches.find((m) => Math.abs(m.from - head) < 50);
+          target = nearby ? nearby.entity : shelvedList[0];
+        } else {
+          target = shelvedList[0];
+        }
+      }
+    }
+
+    if (target) {
+      this.loreManager.updateEntity(target.id, { status: 'active' });
+      this.saveLoreData();
+      this.renderLeftPane();
+      this.renderRightPane();
+      this.updateMultiLayerDecorations();
+      this.showToast(`✨「${target.name}」を未配置棚から復帰（再バインド）しました`);
+    } else {
+      this.showToast(`未配置棚に再バインド可能な項目はありません`);
+    }
+  }
+
+  private renderTimelineSvg(): string {
+    const scenes: TimelineSceneInput[] = this.chapters.map((ch, idx) => ({
+      id: ch.id,
+      chapterId: ch.id,
+      title: ch.title,
+      charCount: Math.max(100, ch.charCount || ch.content.length),
+      storyDayStart: idx === 1 ? 10 : (idx === 0 ? 100 : 250),
+      storyDayEnd: idx === 1 ? 12 : (idx === 0 ? 102 : 255),
+      foreshadowingRef: idx === 0
+        ? { type: 'plant', foreshadowingId: 'fore-omen' }
+        : idx === 2
+        ? { type: 'resolve', foreshadowingId: 'fore-omen' }
+        : undefined,
+    }));
+
+    this.timelineEngine.setScenes(scenes);
+    return this.timelineEngine.renderSvg();
   }
 
   public jumpToEditor(from: number, to: number) {
@@ -614,6 +830,7 @@ export class PlotailorApp {
     this.renderLeftPane();
     this.updateStats();
     this.updateHistoryUI();
+    this.updateMultiLayerDecorations();
   }
 
   public openHistoryModal() {
@@ -1367,17 +1584,21 @@ export class PlotailorApp {
       btnNew?.addEventListener('click', () => this.addNewChapter());
     } else if (this.activeLeftTab === 'lore') {
       const allEntities = this.loreManager.getEntities();
-      const filtered = this.activeLoreFilter === 'all'
-        ? allEntities
-        : this.loreManager.getEntities(this.activeLoreFilter);
+      let filtered = allEntities;
+      if (this.activeLoreFilter === 'shelved') {
+        filtered = allEntities.filter((e) => e.status === 'shelved');
+      } else if (this.activeLoreFilter !== 'all') {
+        filtered = this.loreManager.getEntities(this.activeLoreFilter).filter((e) => e.status !== 'shelved');
+      }
 
       const counts = {
         all: allEntities.length,
-        character: allEntities.filter((e) => e.category === 'character').length,
-        term: allEntities.filter((e) => e.category === 'term').length,
-        item: allEntities.filter((e) => e.category === 'item').length,
-        foreshadowing: allEntities.filter((e) => e.category === 'foreshadowing').length,
-        location: allEntities.filter((e) => e.category === 'location').length,
+        character: allEntities.filter((e) => e.category === 'character' && e.status !== 'shelved').length,
+        term: allEntities.filter((e) => e.category === 'term' && e.status !== 'shelved').length,
+        item: allEntities.filter((e) => e.category === 'item' && e.status !== 'shelved').length,
+        foreshadowing: allEntities.filter((e) => e.category === 'foreshadowing' && e.status !== 'shelved').length,
+        location: allEntities.filter((e) => e.category === 'location' && e.status !== 'shelved').length,
+        shelved: allEntities.filter((e) => e.status === 'shelved').length,
       };
 
       const getCategoryLabel = (cat: string) => {
@@ -1404,34 +1625,52 @@ export class PlotailorApp {
           <button class="lore-filter-chip ${this.activeLoreFilter === 'item' ? 'active' : ''}" data-cat="item">武具 (${counts.item})</button>
           <button class="lore-filter-chip ${this.activeLoreFilter === 'foreshadowing' ? 'active' : ''}" data-cat="foreshadowing">伏線 (${counts.foreshadowing})</button>
           <button class="lore-filter-chip ${this.activeLoreFilter === 'location' ? 'active' : ''}" data-cat="location">拠点 (${counts.location})</button>
+          <button class="lore-filter-chip ${this.activeLoreFilter === 'shelved' ? 'active' : ''}" data-cat="shelved" style="border-color: rgba(168,85,247,0.4); color: #c084fc;">未配置 (${counts.shelved})</button>
         </div>
 
         <div id="loreCardList">
           ${filtered.length === 0 ? `<div style="font-size: 12px; color: var(--color-text-dim); text-align: center; padding: 20px;">該当する設定項目がありません</div>` : ''}
-          ${filtered.map((ent) => `
+          ${filtered.map((ent) => {
+            const score = calculateManualScore(ent);
+            const isShelved = ent.status === 'shelved';
+            return `
             <div class="lore-card" data-id="${ent.id}">
               <div class="lore-card-header">
                 <span class="lore-card-title">${ent.name}</span>
-                <span class="lore-badge cat-${ent.category}">${getCategoryLabel(ent.category)}</span>
+                <span style="display: flex; gap: 4px; align-items: center;">
+                  <span class="score-badge ${isShelved ? 'shelved' : ''}">S: ${score}</span>
+                  <span class="lore-badge cat-${ent.category}">${getCategoryLabel(ent.category)}</span>
+                </span>
               </div>
               ${ent.role ? `<div class="lore-card-role">${ent.role} ${ent.status ? `<span style="opacity: 0.7; font-size: 10px;">[${ent.status}]</span>` : ''}</div>` : ''}
               <div class="lore-card-desc">${ent.description}</div>
               <div class="lore-card-actions">
+                ${isShelved ? `<button class="ide-btn btn-promote-lore" data-id="${ent.id}">＋ 本文へ再配置 (Alt+P)</button>` : ''}
                 <button class="ide-btn btn-insert-lore" data-name="${ent.name}" style="font-size: 10px; padding: 2px 6px;">＋ 挿入</button>
                 <button class="ide-btn btn-edit-lore" data-id="${ent.id}" style="font-size: 10px; padding: 2px 6px;">✏️ 編集</button>
                 <button class="ide-btn btn-delete-lore" data-id="${ent.id}" style="font-size: 10px; padding: 2px 6px; color: var(--color-danger);">✕</button>
               </div>
             </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       `;
 
       // Filter chips click
       container.querySelectorAll('.lore-filter-chip').forEach((chip) => {
         chip.addEventListener('click', (e) => {
-          const cat = (e.currentTarget as HTMLElement).dataset.cat as LoreCategory | 'all';
+          const cat = (e.currentTarget as HTMLElement).dataset.cat as LoreCategory | 'all' | 'shelved';
           this.activeLoreFilter = cat || 'all';
           this.renderLeftPane();
+        });
+      });
+
+      // Promote from shelf buttons
+      container.querySelectorAll('.btn-promote-lore').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = (e.currentTarget as HTMLElement).dataset.id;
+          if (id) this.promoteShelvedLore(id);
         });
       });
 
@@ -1486,17 +1725,30 @@ export class PlotailorApp {
       });
     } else if (this.activeLeftTab === 'timeline') {
       container.innerHTML = `
-        <div class="nav-section-title">架空暦法・連続時間軸</div>
-        <div class="dock-card">
+        <div class="nav-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>デュアル軸タイムライン (Sjuzhet / Fabula)</span>
+          <span style="font-size: 10px; color: var(--color-gold);">三次ベジェスプライン</span>
+        </div>
+        <div class="dual-track-container" id="dualTrackContainer">
+          ${this.renderTimelineSvg()}
+        </div>
+        <div class="dock-card" style="margin-top: 10px;">
           <div class="dock-card-title">🌙 帝国星辰暦 742年</div>
           <div class="dock-card-body">
             現在の日付: 第4月 14日（絶対日: 2,450）<br>
-            第一衛星月相: 満月（1.00）<br>
-            第二衛星月相: 満月（0.98）<br>
+            第一衛星月相: 満月（1.00） | 第二衛星月相: 満月（0.98）<br>
             <strong style="color: var(--color-gold);">✦ 今夜: 二重満月合（Conjunction）</strong>
           </div>
         </div>
       `;
+
+      // Bind node click to jump to scene
+      container.querySelectorAll('.timeline-node').forEach((node) => {
+        node.addEventListener('click', () => {
+          const sId = (node as HTMLElement).dataset.sceneId;
+          if (sId) this.loadChapter(sId);
+        });
+      });
     }
   }
 
@@ -1767,7 +2019,11 @@ export class PlotailorApp {
 
 // Initialize on DOM load if running in browser
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-  window.addEventListener('DOMContentLoaded', () => {
-    new PlotailorApp();
-  });
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', () => {
+      (window as any).plotailorApp = new PlotailorApp();
+    });
+  } else {
+    (window as any).plotailorApp = new PlotailorApp();
+  }
 }

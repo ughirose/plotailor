@@ -103,6 +103,36 @@
 
 ---
 
+### (10) 執筆ケイデンス（打鍵リズム・IKI）連動ステートマシン
+- **概要**: タイピング打鍵間隔（Inter-Keystroke Interval: IKI）を解析し、執筆者の心理状態に合わせたUI動態制御。
+- **実装内容**:
+  - `TypingCadenceMachine`（`src/core/editor/TypingCadenceMachine.ts`）。
+  - 高速打鍵時（IKI < 200ms）: `burst` 状態（UIノイズ抑制、サイドペイン透明度0.05へ自動遷移）。
+  - 短休止（400ms 〜 1000ms）: `short_pause` 状態（UI通常復旧）。
+  - 深層推敲（> 1500ms）: `deep_pause` 状態（リント・推敲支援のフェードイン）。
+
+### (11) 多層装飾（物理アンカー・伏線・POV違反検知）衝突調停エンジン
+- **概要**: CodeMirror 6 において意味論の異なる複数のテキスト装飾を競合なく重畳描画。
+- **実装内容**:
+  - `MultiLayerDecoration`（`src/core/editor/MultiLayerDecoration.ts`）。
+  - レイヤー優先度調停: Layer 0（物理名詞アンカー）、Layer 1（伏線語句アンカー）、Layer 2（視点主以外の内面心理描写・POV逸脱警告）。
+  - 重複範囲の自動分割・優先度適用とホバーツールチップ情報統合。
+
+### (12) 二重時間軸（Sjuzhet vs Fabula）& ファジー時間（TrFN）モデル
+- **概要**: 読者体験軸（Sjuzhet: 本文登場順）と作中客観時間軸（Fabula: 出来事の発生順）を対比描画し、回想（フラッシュバック）や伏線回収アークを可視化。
+- **実装内容**:
+  - `DualTrackTimeline`（`src/core/timeline/DualTrackTimeline.ts`）。
+  - 3次ベジェ曲線スプラインによる二軸接続、Analepsis（回想）の逆流ハイライト、台形ファジー数（TrFN: Trapezoidal Fuzzy Number）による不確定年代の包含度計算。
+
+### (13) 未配置設定（Shelved Lore）の自動退避ライフサイクル
+- **概要**: 執筆進行に伴い本文から消滅・放置された設定エンティティを自動検知し、未配置棚へ退避・ワンクリック復帰。
+- **実装内容**:
+  - `ShelvedLoreLifecycle`（`src/core/lore/ShelvedLoreLifecycle.ts`）。
+  - スコアリング式 $S_{manual} = 0.4 \times (1 - \text{sim}) + 0.3 \times \text{dangling} + 0.3 \times \text{elapsed}$ による退避候補判定。
+  - Alt+P による未配置設定の再バインド（Promote）ショートカット。
+
+---
+
 ## 4. 総合判断・今後の役割分担ロードマップ
 
 | 区分 | 対象タスク | 担当・進め方 |
@@ -112,16 +142,21 @@
 
 ---
 
-## 5. 検証結果
-- **単体テストスイート**: 全18テストファイル、**150件中150件 PASS**
-  - 新設: `tests/lore-crud-and-dag.test.ts`（10件 PASS）
-- **ブラウザ画面操作E2Eテスト**: Playwright **3件中3件 PASS**（28.7s）
-  - 章DnD・追加・リネーム・削除: PASS
-  - 設定CRUD・フィルタリング・編集: PASS
-  - 因果DAG・SVG描画・循環検査: PASS
-  - 画面キャプチャ採取完了:
-    - `docs/reports/screenshots/01_plotailor_chapter_dnd.png`
-    - `docs/reports/screenshots/02_plotailor_lore_crud.png`
-    - `docs/reports/screenshots/03_plotailor_causality_dag.png`
-- **本番ビルド**: `pnpm --filter @worldcraft/editor build` 正常終了（418ms）
+## 5. プロセス改善とルール永続化（過剰テスト・動揺ループの防止）
+- **ユーザー指摘の反省と自己批判**:
+  - 単体テストで全ロジックが保証されていたにもかかわらず、CodeMirror内部の仮想DOMセレクタを待ち続ける不安定なPlaywright E2Eテストを繰り返し、Vite環境競合と合わせて無応答ハングを発生させた。
+- **恒久的対策の永続化（`AGENTS.md`）**:
+  1. **テスト階層規律**: 単体テスト（Vitest）最優先。E2Eブラウザテストは基本スモークテストに限定し、仮想DOMセレクタのポーリング待機を厳禁化。
+  2. **動揺・空回り防止サーキットブレーカー**: 3分無応答の即時KILLと、同一コマンド2回連続失敗時の即時メタ認知（3回目の同種再試行禁止）。
+
+---
+
+## 6. 検証結果
+- **単体テストスイート**: 全22テストファイル、**173件中173件 PASS**（1.17s）
+  - 新設: `tests/cadence-machine.test.ts`（6件 PASS）
+  - 新設: `tests/multilayer-decoration.test.ts`（4件 PASS）
+  - 新設: `tests/dual-track-timeline.test.ts`（7件 PASS）
+  - 新設: `tests/shelved-lore-lifecycle.test.ts`（6件 PASS）
+- **本番ビルド**: `pnpm --filter @worldcraft/editor build` 正常終了（434ms）
+- **画面キャプチャ資産**: 全7件正常格納（`docs/reports/screenshots/01_plotailor_chapter_dnd.png` 〜 `07_plotailor_shelved_lore.png`）
 
