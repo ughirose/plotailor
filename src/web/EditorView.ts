@@ -4,12 +4,14 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import { BracketPairChecker, type BracketDiagnostic } from '../core/editor/BracketPairChecker.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
+  private bracketChecker: BracketPairChecker;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private rawText: string;
@@ -19,6 +21,7 @@ export class EditorView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.linter = new LoreLinterEngine();
+    this.bracketChecker = new BracketPairChecker();
     this.popEngine = new PoPAuditEngine('author-session-01');
 
     // Setup fictional calendar
@@ -162,6 +165,12 @@ export class EditorView {
               <div id="linter-results-container"></div>
             </div>
 
+            <!-- Bracket & Quote Diagnostics -->
+            <div class="tree-group">
+              <div class="tree-title">ブラケット・引用符整合性 (リアルタイム)</div>
+              <div id="bracket-results-container"></div>
+            </div>
+
             <!-- Cognitive Fog State -->
             <div class="tree-group">
               <div class="tree-title">認知フォグ因果律判定</div>
@@ -277,9 +286,12 @@ export class EditorView {
       wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
     }
 
-    // 3. Run Lore Linter
-    const diagnostics = this.linter.lint(this.rawText);
+    // 3. Run Lore Linter & Bracket Checker
+    const diagnostics = this.linter.lint(this.rawText, { isComposing: this.isComposing });
     this.renderDiagnostics(diagnostics);
+
+    const bracketDiagnostics = this.bracketChecker.check(this.rawText, { isComposing: this.isComposing });
+    this.renderBracketDiagnostics(bracketDiagnostics);
 
     // 4. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
@@ -298,6 +310,36 @@ export class EditorView {
     const seleneEl = this.container.querySelector('#moon-phase-selene');
     if (lunaEl) lunaEl.textContent = `${(lunaPhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
     if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
+  }
+
+  private renderBracketDiagnostics(diagnostics: BracketDiagnostic[]): void {
+    const container = this.container.querySelector('#bracket-results-container');
+    if (!container) return;
+
+    if (diagnostics.length === 0) {
+      container.innerHTML = `
+        <div style="font-size: 0.8rem; color: #10b981; padding: 0.5rem 0;">
+          ✨ 括弧・引用符の不整合なし
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = diagnostics
+      .map(
+        (d) => `
+        <div class="diagnostic-card" style="border-left: 3px solid #ef4444;">
+          <div class="diagnostic-header">
+            <span style="color: #f87171;">⚠️ 括弧エラー (${d.line}行目 ${d.column}列)</span>
+            <span style="font-size: 0.7rem; color: var(--text-dim);">${d.type}</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.2rem;">
+            ${d.message}
+          </p>
+        </div>
+      `
+      )
+      .join('');
   }
 
   private renderDiagnostics(diagnostics: LoreDiagnostic[]): void {

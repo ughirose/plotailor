@@ -12,6 +12,7 @@ import type { SubgraphSlice } from '@schema';
 import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
+import { BracketPairChecker, type BracketDiagnostic } from '../editor/BracketPairChecker.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
@@ -26,6 +27,7 @@ export interface WorkspaceState {
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
   activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
   diagnostics: LoreDiagnostic[];
+  bracketDiagnostics: BracketDiagnostic[];
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -36,6 +38,7 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private bracketChecker: BracketPairChecker;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
@@ -50,6 +53,7 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.bracketChecker = new BracketPairChecker();
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
@@ -63,6 +67,7 @@ export class ThreePaneWorkspace {
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
       diagnostics: [],
+      bracketDiagnostics: [],
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -92,9 +97,10 @@ export class ThreePaneWorkspace {
       this.hotSwapManager.reportKeystroke(isComposing);
     }
 
-    // Run Lore Linter (bypassed if composing with Japanese IME)
+    // Run Lore Linter & Bracket Checker (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+    this.state.bracketDiagnostics = this.bracketChecker.check(newText, { isComposing });
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -168,7 +174,7 @@ export class ThreePaneWorkspace {
         contentHtml:
           this.state.activeRightTab === 'pop-audit'
             ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件 | 括弧エラー: ${this.state.bracketDiagnostics.length}件</span></div>`,
       },
     };
   }
