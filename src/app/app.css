@@ -1546,40 +1546,71 @@ body.fullscreen-active .fullscreen-exit-btn {
 }
 
 /* ==========================================================================
-   Multi-layer Decoration (Z-Index & Hierarchy)
+   Multi-layer Decoration (Z-Index, High Contrast & Legend Hierarchy)
    ========================================================================== */
-/* Layer 0: Physical Anchor (Dotted border, Z-Index 10) */
+/* Layer 0: Physical Anchor / Character Mention (Cyan Dotted border, Z-Index 10) */
 .cm-decoration-layer0 {
-  border-bottom: 1px dotted rgba(56, 189, 248, 0.6) !important;
+  border-bottom: 1.5px dotted #38bdf8 !important;
+  color: #7dd3fc !important;
+  font-weight: 500;
   z-index: 10;
   position: relative;
-  transition: border-color 0.2s;
+  transition: all 0.2s ease;
 }
 .cm-content[style*="vertical-rl"] .cm-decoration-layer0,
-.canvas-wrapper.is-vertical .cm-decoration-layer0 {
+.canvas-wrapper.is-vertical .cm-decoration-layer0,
+.vertical-rl .cm-decoration-layer0 {
   border-bottom: none !important;
-  border-left: 1px dotted rgba(56, 189, 248, 0.6) !important;
+  border-left: 1.5px dotted #38bdf8 !important;
+}
+body.theme-washi .cm-decoration-layer0 {
+  color: #0284c7 !important;
+  border-color: #0284c7 !important;
 }
 
-/* Layer 1: Foreshadowing Highlight (Gold background, Z-Index 20, multiply blend) */
+/* Layer 1: Foreshadowing / Lore Highlight (Luminous Gold background, Z-Index 20) */
 .cm-decoration-layer1 {
-  background-color: rgba(245, 158, 11, 0.15) !important;
-  border-radius: 2px;
+  background-color: rgba(207, 168, 92, 0.24) !important;
+  color: #f3d692 !important;
+  font-weight: 600;
+  border-bottom: 2px solid var(--color-gold, #cfa85c) !important;
+  border-radius: 3px;
+  padding: 1px 3px;
   z-index: 20;
   position: relative;
-  mix-blend-mode: multiply;
+  box-shadow: 0 0 6px rgba(207, 168, 92, 0.2);
+}
+.cm-content[style*="vertical-rl"] .cm-decoration-layer1,
+.canvas-wrapper.is-vertical .cm-decoration-layer1,
+.vertical-rl .cm-decoration-layer1 {
+  border-bottom: none !important;
+  border-left: 2px solid var(--color-gold, #cfa85c) !important;
+}
+body.theme-washi .cm-decoration-layer1 {
+  background-color: rgba(184, 134, 11, 0.18) !important;
+  color: #8c5b05 !important;
+  border-color: #8c5b05 !important;
 }
 
-/* Layer 2: POV Violation (Wavy underline #ef4444, Z-Index 30) */
+/* Layer 2: POV Violation / Strict Alert (High-Visibility Red Wavy, Z-Index 30) */
 .cm-decoration-layer2 {
-  text-decoration: wavy underline #ef4444 1.5px !important;
+  background-color: rgba(239, 68, 68, 0.18) !important;
+  color: #fca5a5 !important;
+  font-weight: 600;
+  text-decoration: wavy underline #ef4444 2px !important;
+  border-radius: 2px;
   z-index: 30;
   position: relative;
 }
 .cm-content[style*="vertical-rl"] .cm-decoration-layer2,
-.canvas-wrapper.is-vertical .cm-decoration-layer2 {
+.canvas-wrapper.is-vertical .cm-decoration-layer2,
+.vertical-rl .cm-decoration-layer2 {
   text-decoration: none !important;
-  border-right: 1.5px wavy #ef4444 !important;
+  border-right: 2px wavy #ef4444 !important;
+}
+body.theme-washi .cm-decoration-layer2 {
+  background-color: rgba(220, 38, 38, 0.15) !important;
+  color: #b91c1c !important;
 }
 
 /* ==========================================================================
