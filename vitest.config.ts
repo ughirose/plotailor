@@ -9,11 +9,11 @@ export default defineConfig({
     exclude: ['e2e/**', 'node_modules/**'],
   },
   resolve: {
-    alias: {
-      '@schema': path.resolve(__dirname, '../packages/schema/src/index.ts'),
-      '@core': path.resolve(__dirname, '../worldcraft/src/index.ts'),
-      '@editor': path.resolve(__dirname, 'src/index.ts'),
-      '@editor/*': path.resolve(__dirname, 'src/*'),
-    },
+    alias: [
+      { find: '@schema', replacement: path.resolve(__dirname, 'src/mocks/schema.ts') },
+      { find: '@core', replacement: path.resolve(__dirname, 'src/mocks/core.ts') },
+      { find: '@nano', replacement: path.resolve(__dirname, 'src/mocks/nano.ts') },
+      { find: '@editor', replacement: path.resolve(__dirname, 'src/index.ts') },
+    ],
   },
 });

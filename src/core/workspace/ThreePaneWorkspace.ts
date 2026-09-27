@@ -12,6 +12,11 @@ import type { SubgraphSlice } from '@schema';
 import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
+import {
+  ExclamationSpacingFormatter,
+  type ExclamationSpacingDiagnostic,
+  type ExclamationSpacingOptions,
+} from '../editor/ExclamationSpacingFormatter.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
@@ -26,6 +31,7 @@ export interface WorkspaceState {
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
   activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
   diagnostics: LoreDiagnostic[];
+  exclamationDiagnostics: ExclamationSpacingDiagnostic[];
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -36,6 +42,7 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private exclamationFormatter: ExclamationSpacingFormatter;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
@@ -50,6 +57,7 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.exclamationFormatter = new ExclamationSpacingFormatter();
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
@@ -63,9 +71,14 @@ export class ThreePaneWorkspace {
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
       diagnostics: [],
+      exclamationDiagnostics: [],
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
+
+    if (options?.initialText) {
+      this.onTextChange(options.initialText, false);
+    }
   }
 
   public getState(): WorkspaceState {
@@ -96,6 +109,9 @@ export class ThreePaneWorkspace {
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
 
+    // Run Exclamation Spacing Linter
+    this.state.exclamationDiagnostics = this.exclamationFormatter.lint(newText, { isComposing });
+
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
       this.popEngine.recordEvent({
@@ -108,11 +124,33 @@ export class ThreePaneWorkspace {
   }
 
   /**
+   * Batch auto-formats exclamation and question mark spacing throughout the document.
+   */
+  public formatExclamationSpacing(
+    options?: ExclamationSpacingOptions
+  ): { formattedText: string; fixesApplied: number } {
+    const result = this.exclamationFormatter.format(this.state.rawText, {
+      isComposing: this.state.isComposing,
+      ...options,
+    });
+
+    if (result.fixesApplied > 0) {
+      this.onTextChange(result.formattedText, this.state.isComposing);
+    }
+
+    return result;
+  }
+
+  /**
    * Safe atomic save to OPFS in background without stalling the UI.
    */
-  public async autoSave(): Promise<boolean> {
+  public async autoSave(options?: { autoFormatExclamationSpacing?: boolean }): Promise<boolean> {
     if (this.state.isComposing || this.state.isSaving) {
       return false; // Skip saving while author is actively converting IME
+    }
+
+    if (options?.autoFormatExclamationSpacing) {
+      this.formatExclamationSpacing();
     }
 
     this.state.isSaving = true;
@@ -168,7 +206,7 @@ export class ThreePaneWorkspace {
         contentHtml:
           this.state.activeRightTab === 'pop-audit'
             ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件 / 空白不備: ${this.state.exclamationDiagnostics.length}件</span></div>`,
       },
     };
   }
