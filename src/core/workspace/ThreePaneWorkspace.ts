@@ -12,6 +12,7 @@ import type { SubgraphSlice } from '@schema';
 import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
+import { PassiveVoiceChecker, type PassiveVoiceDiagnostic } from '../nlp/PassiveVoiceChecker.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
@@ -26,6 +27,7 @@ export interface WorkspaceState {
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
   activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
   diagnostics: LoreDiagnostic[];
+  passiveDiagnostics: PassiveVoiceDiagnostic[];
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -36,6 +38,7 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private passiveVoiceChecker: PassiveVoiceChecker;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
@@ -43,6 +46,7 @@ export class ThreePaneWorkspace {
   constructor(options?: {
     initialText?: string;
     regulations?: TermRegulation[];
+    passiveVoiceThreshold?: number;
     worker?: WorkerInstance;
   }) {
     this.ontologyEngine = new WorldOntologyEngine();
@@ -50,19 +54,26 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.passiveVoiceChecker = new PassiveVoiceChecker({ threshold: options?.passiveVoiceThreshold ?? 2 });
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
       this.hotSwapManager = new WorkerHotSwapManager(options.worker);
     }
 
+    const initialText = options?.initialText ?? '';
+    const { map: initialMap } = AozoraParser.parse(initialText);
+    const initialDiagnostics = initialText ? this.linter.lint(initialText, { displayMap: initialMap }) : [];
+    const initialPassiveDiagnostics = initialText ? this.passiveVoiceChecker.check(initialText, { displayMap: initialMap }) : [];
+
     this.state = {
       currentDocumentId: `doc-${Date.now()}`,
-      rawText: options?.initialText ?? '',
+      rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
-      diagnostics: [],
+      diagnostics: initialDiagnostics,
+      passiveDiagnostics: initialPassiveDiagnostics,
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -92,9 +103,10 @@ export class ThreePaneWorkspace {
       this.hotSwapManager.reportKeystroke(isComposing);
     }
 
-    // Run Lore Linter (bypassed if composing with Japanese IME)
+    // Run Lore Linter and Passive Voice Checker (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+    this.state.passiveDiagnostics = this.passiveVoiceChecker.check(newText, { isComposing, displayMap: map });
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -168,7 +180,7 @@ export class ThreePaneWorkspace {
         contentHtml:
           this.state.activeRightTab === 'pop-audit'
             ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span><span> / 受動態過多: ${this.state.passiveDiagnostics.length}件</span></div>`,
       },
     };
   }
