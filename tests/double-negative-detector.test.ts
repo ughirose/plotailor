@@ -5,7 +5,7 @@ import {
   StyleDiscomfortDetector,
   BUILTIN_DISCOMFORT_RULES,
   type DiscomfortRule,
-} from '../src/core/editor/StyleDiscomfortDetector.js';
+} from '../src/index.js';
 import { EditorView } from '../src/web/EditorView.js';
 
 describe('StyleDiscomfortDetector', () => {

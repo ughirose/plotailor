@@ -186,6 +186,7 @@ export * from './core/nlp/EmotionalArcChart.js';
 export * from './core/editor/CharacterHeatmap.js';
 export * from './core/nlp/TaigenRhythmEngine.js';
 export * from './core/editor/KanjiHirakuDictionary.js';
+export * from './core/editor/HierarchicalTocEngine.js';
 export { EditorView } from './web/EditorView.js';
 
 

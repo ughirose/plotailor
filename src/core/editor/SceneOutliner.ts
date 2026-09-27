@@ -55,11 +55,10 @@ export class SceneOutliner {
   }
 
   /**
-   * Static helper to parse scenes directly without manual instantiation.
+   * Static helper to analyze manuscript scenes directly.
    */
   public static analyzeScenes(rawText: string, options?: SceneOutlinerOptions): SceneNode[] {
-    const outliner = new SceneOutliner(options);
-    return outliner.parse(rawText);
+    return new SceneOutliner(options).parse(rawText);
   }
 
   /**
