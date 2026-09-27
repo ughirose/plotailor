@@ -18,13 +18,15 @@ import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
 import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
 import { OPFSStorage } from '../storage/OPFSStorage.js';
 import { WorkerHotSwapManager, type WorkerInstance } from '../runtime/WorkerHotSwapManager.js';
+import { ForeshadowingEngine, type ForeshadowingJumpTarget } from '../editor/ForeshadowingEngine.js';
+import { ForeshadowingProgressPanel } from '../editor/ForeshadowingProgressPanel.js';
 
 export interface WorkspaceState {
   currentDocumentId: string;
   rawText: string;
   isComposing: boolean;
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
-  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
+  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance' | 'foreshadowing';
   diagnostics: LoreDiagnostic[];
   isSaving: boolean;
   lastSavedTimestamp: number;
@@ -38,6 +40,8 @@ export class ThreePaneWorkspace {
   private linter: LoreLinterEngine;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
+  private foreshadowingEngine: ForeshadowingEngine;
+  private foreshadowingPanel: ForeshadowingProgressPanel;
   private state: WorkspaceState;
 
   constructor(options?: {
@@ -52,13 +56,17 @@ export class ThreePaneWorkspace {
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
+    const initialText = options?.initialText ?? '';
+    this.foreshadowingEngine = new ForeshadowingEngine(initialText);
+    this.foreshadowingPanel = new ForeshadowingProgressPanel(this.foreshadowingEngine);
+
     if (options?.worker) {
       this.hotSwapManager = new WorkerHotSwapManager(options.worker);
     }
 
     this.state = {
       currentDocumentId: `doc-${Date.now()}`,
-      rawText: options?.initialText ?? '',
+      rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
@@ -80,6 +88,18 @@ export class ThreePaneWorkspace {
     return this.hotSwapManager;
   }
 
+  public getForeshadowingEngine(): ForeshadowingEngine {
+    return this.foreshadowingEngine;
+  }
+
+  public getForeshadowingPanel(): ForeshadowingProgressPanel {
+    return this.foreshadowingPanel;
+  }
+
+  public jumpToForeshadowing(id: string): ForeshadowingJumpTarget | null {
+    return this.foreshadowingEngine.jumpToForeshadowing(id);
+  }
+
   /**
    * Handle text edits from the central CodeMirror 6 editor.
    * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, and avoids interrupting author.
@@ -95,6 +115,9 @@ export class ThreePaneWorkspace {
     // Run Lore Linter (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+
+    // Update foreshadowing engine state
+    this.foreshadowingEngine.parseManuscript(newText);
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -151,7 +174,15 @@ export class ThreePaneWorkspace {
     rightPane: { activeTab: string; contentHtml: string };
   } {
     const parsedHtml = this.viewport.renderContent(this.state.rawText);
-    const auditViewModel = this.auditView.render();
+
+    let rightContentHtml = '';
+    if (this.state.activeRightTab === 'pop-audit') {
+      rightContentHtml = `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`;
+    } else if (this.state.activeRightTab === 'foreshadowing') {
+      rightContentHtml = this.foreshadowingPanel.renderHtml();
+    } else {
+      rightContentHtml = `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`;
+    }
 
     return {
       leftPane: {
@@ -165,10 +196,7 @@ export class ThreePaneWorkspace {
       },
       rightPane: {
         activeTab: this.state.activeRightTab,
-        contentHtml:
-          this.state.activeRightTab === 'pop-audit'
-            ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+        contentHtml: rightContentHtml,
       },
     };
   }
