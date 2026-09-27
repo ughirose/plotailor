@@ -4,12 +4,17 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import {
+  ExclamationSpacingFormatter,
+  type ExclamationSpacingDiagnostic,
+} from '../core/editor/ExclamationSpacingFormatter.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
+  private exclamationFormatter: ExclamationSpacingFormatter;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private rawText: string;
@@ -19,6 +24,7 @@ export class EditorView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.linter = new LoreLinterEngine();
+    this.exclamationFormatter = new ExclamationSpacingFormatter();
     this.popEngine = new PoPAuditEngine('author-session-01');
 
     // Setup fictional calendar
@@ -127,6 +133,9 @@ export class EditorView {
               <button class="tool-btn" id="btn-insert-bouten">
                 <span>︙</span> 傍点挿入
               </button>
+              <button class="tool-btn" id="btn-format-exclamation" title="感嘆符・疑問符直後の全角空白を一括自動挿入 (Ctrl+Shift+F)">
+                <span>⚡</span> 全角空白成形
+              </button>
             </div>
             <div class="toolbar-group">
               <span id="ime-indicator" style="font-size: 0.75rem; color: #10b981;">● IME: 待機</span>
@@ -162,6 +171,17 @@ export class EditorView {
               <div id="linter-results-container"></div>
             </div>
 
+            <!-- Exclamation Spacing Diagnostics -->
+            <div class="tree-group">
+              <div class="tree-title" style="display: flex; justify-content: space-between; align-items: center;">
+                <span>感嘆符・疑問符空白リント</span>
+                <button id="btn-exclamation-fix-all" class="tool-btn" style="font-size: 0.7rem; padding: 0.1rem 0.4rem;">
+                  一括自動挿入
+                </button>
+              </div>
+              <div id="exclamation-results-container"></div>
+            </div>
+
             <!-- Cognitive Fog State -->
             <div class="tree-group">
               <div class="tree-title">認知フォグ因果律判定</div>
@@ -194,6 +214,8 @@ export class EditorView {
     const btnToggleVertical = this.container.querySelector('#btn-toggle-vertical');
     const btnInsertRuby = this.container.querySelector('#btn-insert-ruby');
     const btnInsertBouten = this.container.querySelector('#btn-insert-bouten');
+    const btnFormatExclamation = this.container.querySelector('#btn-format-exclamation');
+    const btnExclamationFixAll = this.container.querySelector('#btn-exclamation-fix-all');
     const imeIndicator = this.container.querySelector('#ime-indicator') as HTMLElement;
 
     // Input events with Japanese IME guard
@@ -244,6 +266,41 @@ export class EditorView {
     btnInsertBouten?.addEventListener('click', () => {
       this.insertAtCursor('《《傍点文字》》');
     });
+
+    // Exclamation spacing format buttons
+    btnFormatExclamation?.addEventListener('click', () => {
+      this.runExclamationFormat();
+    });
+
+    btnExclamationFixAll?.addEventListener('click', () => {
+      this.runExclamationFormat();
+    });
+
+    // Keybindings: Ctrl+Shift+F or Cmd+Shift+F for formatting, Ctrl+S for save & format
+    rawTextarea?.addEventListener('keydown', (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        this.runExclamationFormat();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        this.runExclamationFormat();
+      }
+    });
+  }
+
+  private runExclamationFormat(): void {
+    if (this.isComposing) return;
+    const rawTextarea = this.container.querySelector('#editor-raw') as HTMLTextAreaElement;
+    if (!rawTextarea) return;
+
+    const { formattedText, fixesApplied } = this.exclamationFormatter.format(rawTextarea.value, {
+      isComposing: this.isComposing,
+    });
+
+    if (fixesApplied > 0) {
+      rawTextarea.value = formattedText;
+      this.updateEditorState();
+    }
   }
 
   private insertAtCursor(text: string): void {
@@ -277,9 +334,14 @@ export class EditorView {
       wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
     }
 
-    // 3. Run Lore Linter
+    // 3. Run Lore Linter & Exclamation Spacing Linter
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
+
+    const exclamationDiags = this.exclamationFormatter.lint(this.rawText, {
+      isComposing: this.isComposing,
+    });
+    this.renderExclamationDiagnostics(exclamationDiags);
 
     // 4. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
@@ -298,6 +360,35 @@ export class EditorView {
     const seleneEl = this.container.querySelector('#moon-phase-selene');
     if (lunaEl) lunaEl.textContent = `${(lunaPhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
     if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
+  }
+
+  private renderExclamationDiagnostics(diagnostics: ExclamationSpacingDiagnostic[]): void {
+    const container = this.container.querySelector('#exclamation-results-container');
+    if (!container) return;
+
+    if (diagnostics.length === 0) {
+      container.innerHTML = `
+        <div style="font-size: 0.8rem; color: #10b981; padding: 0.5rem 0;">
+          ✨ 感嘆符・疑問符の全角空白不備なし
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = diagnostics
+      .map(
+        (d) => `
+        <div class="diagnostic-card" style="border-left: 3px solid #f59e0b;">
+          <div class="diagnostic-header">
+            <span>⚠️ 空白不備: 「${d.char}」の直後</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.4rem;">
+            ${d.message}
+          </p>
+        </div>
+      `
+      )
+      .join('');
   }
 
   private renderDiagnostics(diagnostics: LoreDiagnostic[]): void {
