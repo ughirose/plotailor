@@ -4,12 +4,14 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import { PovConsistencyAnalyzer } from '../core/editor/PovConsistencyAnalyzer.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
+  private povAnalyzer: PovConsistencyAnalyzer;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private rawText: string;
@@ -19,6 +21,9 @@ export class EditorView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.linter = new LoreLinterEngine();
+    this.povAnalyzer = new PovConsistencyAnalyzer({
+      knownCharacters: ['ヴァレリウス', 'アーサー', 'エレナ'],
+    });
     this.popEngine = new PoPAuditEngine('author-session-01');
 
     // Setup fictional calendar
@@ -128,7 +133,8 @@ export class EditorView {
                 <span>︙</span> 傍点挿入
               </button>
             </div>
-            <div class="toolbar-group">
+            <div class="toolbar-group" style="display: flex; align-items: center; gap: 0.75rem;">
+              <div id="pov-badge-display"></div>
               <span id="ime-indicator" style="font-size: 0.75rem; color: #10b981;">● IME: 待機</span>
             </div>
           </div>
@@ -280,6 +286,13 @@ export class EditorView {
     // 3. Run Lore Linter
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
+
+    // 3.5. Run POV Analysis & Update Badge
+    const povResult = this.povAnalyzer.analyze(this.rawText, { isComposing: this.isComposing });
+    const povBadgeDisplay = this.container.querySelector('#pov-badge-display');
+    if (povBadgeDisplay) {
+      povBadgeDisplay.innerHTML = povResult.badge.badgeHtml;
+    }
 
     // 4. Record PoP Edit Event
     const event = this.popEngine.recordEvent({

@@ -1289,3 +1289,42 @@ ruby.rendered-ruby rt {
   border-color: var(--accent-gold);
   outline: none;
 }
+
+/* POV Consistency Badge Styles */
+.pov-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  line-height: 1.4;
+  user-select: none;
+  transition: all var(--transition-normal);
+}
+
+.pov-badge.pov-normal {
+  background: rgba(46, 160, 67, 0.12);
+  color: #56d364;
+  border-color: rgba(46, 160, 67, 0.3);
+}
+
+.pov-badge.pov-warning {
+  background: rgba(211, 78, 54, 0.15);
+  color: #f87171;
+  border-color: rgba(211, 78, 54, 0.4);
+  animation: povPulse 2s infinite ease-in-out;
+}
+
+.pov-badge.pov-neutral {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  border-color: var(--border-subtle);
+}
+
+@keyframes povPulse {
+  0%, 100% { border-color: rgba(211, 78, 54, 0.4); }
+  50% { border-color: rgba(211, 78, 54, 0.8); box-shadow: 0 0 8px rgba(211, 78, 54, 0.3); }
+}

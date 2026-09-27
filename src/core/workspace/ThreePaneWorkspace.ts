@@ -12,6 +12,11 @@ import type { SubgraphSlice } from '@schema';
 import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
+import {
+  PovConsistencyAnalyzer,
+  type PovAnalysisResult,
+  type CharacterPovProfile,
+} from '../editor/PovConsistencyAnalyzer.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
@@ -26,6 +31,7 @@ export interface WorkspaceState {
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
   activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
   diagnostics: LoreDiagnostic[];
+  povResult: PovAnalysisResult;
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -36,6 +42,7 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private povAnalyzer: PovConsistencyAnalyzer;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
@@ -43,6 +50,8 @@ export class ThreePaneWorkspace {
   constructor(options?: {
     initialText?: string;
     regulations?: TermRegulation[];
+    knownCharacters?: (string | CharacterPovProfile)[];
+    targetFocalCharacter?: string | null;
     worker?: WorkerInstance;
   }) {
     this.ontologyEngine = new WorldOntologyEngine();
@@ -50,19 +59,27 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.povAnalyzer = new PovConsistencyAnalyzer({
+      knownCharacters: options?.knownCharacters,
+      targetFocalCharacter: options?.targetFocalCharacter,
+    });
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
       this.hotSwapManager = new WorkerHotSwapManager(options.worker);
     }
 
+    const initialText = options?.initialText ?? '';
+    const initialPovResult = this.povAnalyzer.analyze(initialText);
+
     this.state = {
       currentDocumentId: `doc-${Date.now()}`,
-      rawText: options?.initialText ?? '',
+      rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
       diagnostics: [],
+      povResult: initialPovResult,
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -80,6 +97,10 @@ export class ThreePaneWorkspace {
     return this.hotSwapManager;
   }
 
+  public getPovAnalyzer(): PovConsistencyAnalyzer {
+    return this.povAnalyzer;
+  }
+
   /**
    * Handle text edits from the central CodeMirror 6 editor.
    * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, and avoids interrupting author.
@@ -95,6 +116,9 @@ export class ThreePaneWorkspace {
     // Run Lore Linter (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+
+    // Run POV Consistency Analyzer
+    this.state.povResult = this.povAnalyzer.analyze(newText, { isComposing });
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -168,7 +192,7 @@ export class ThreePaneWorkspace {
         contentHtml:
           this.state.activeRightTab === 'pop-audit'
             ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+            : `<div class="consistency-dock"><div class="pov-badge-container">${this.state.povResult.badge.badgeHtml}</div><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
       },
     };
   }
