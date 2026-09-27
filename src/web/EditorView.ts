@@ -4,12 +4,14 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import { SentenceEndingCadenceCalculator, type SentenceCadenceResult } from '../core/nlp/SentenceEndingCadenceCalculator.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
+  private cadenceCalculator: SentenceEndingCadenceCalculator;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private rawText: string;
@@ -19,6 +21,7 @@ export class EditorView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.linter = new LoreLinterEngine();
+    this.cadenceCalculator = new SentenceEndingCadenceCalculator();
     this.popEngine = new PoPAuditEngine('author-session-01');
 
     // Setup fictional calendar
@@ -162,6 +165,12 @@ export class EditorView {
               <div id="linter-results-container"></div>
             </div>
 
+            <!-- Sentence Ending Cadence Score -->
+            <div class="tree-group">
+              <div class="tree-title">文末表現単調度 (た/だ4連続解析)</div>
+              <div id="cadence-results-container"></div>
+            </div>
+
             <!-- Cognitive Fog State -->
             <div class="tree-group">
               <div class="tree-title">認知フォグ因果律判定</div>
@@ -281,7 +290,11 @@ export class EditorView {
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
 
-    // 4. Record PoP Edit Event
+    // 4. Run Sentence Cadence Analysis
+    const cadenceResult = this.cadenceCalculator.analyze(this.rawText);
+    this.renderCadenceResult(cadenceResult);
+
+    // 5. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
       id: `evt-${Date.now()}`,
       eventType: 'TEXT_INSERT',
@@ -290,7 +303,7 @@ export class EditorView {
     });
     this.renderPoPChain();
 
-    // 5. Update Moon Phase
+    // 6. Update Moon Phase
     const t = 368450; // Current scalar day
     const lunaPhase = this.celestialEngine.getMoonPhase('sat_luna', t);
     const selenePhase = this.celestialEngine.getMoonPhase('sat_selene', t);
@@ -347,6 +360,47 @@ export class EditorView {
         }
       });
     });
+  }
+
+  private renderCadenceResult(cadence: SentenceCadenceResult): void {
+    const container = this.container.querySelector('#cadence-results-container');
+    if (!container) return;
+
+    const scoreColor = cadence.cadenceScore >= 80 ? '#10b981' : (cadence.cadenceScore >= 50 ? '#f59e0b' : '#f43f5e');
+
+    let html = `
+      <div class="diagnostic-card" style="background: rgba(255, 255, 255, 0.03); border-color: ${scoreColor}44;">
+        <div class="diagnostic-header" style="color: ${scoreColor};">
+          <span>🎵 テンポスコア: ${cadence.cadenceScore}点 / 100</span>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">ペナルティ: -${cadence.monotonyPenalty}</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.4; margin-top: 0.3rem;">
+          総文数: ${cadence.totalSentences}句 / 「た・だ」文末: ${cadence.pastTenseCount}句 (比率: ${Math.round(cadence.pastTenseRatio * 100)}%)<br />
+          最大連続数: <strong>${cadence.maxConsecutivePastTense}句</strong>
+        </p>
+    `;
+
+    if (cadence.runs.length === 0) {
+      html += `
+        <div style="font-size: 0.75rem; color: #10b981; margin-top: 0.4rem;">
+          ✨ 「た/だ」の4連続以上の重複はありません。文末のリズムが保たれています。
+        </div>
+      `;
+    } else {
+      cadence.advice.forEach((item) => {
+        const badgeBg = item.level === 'error' ? 'rgba(244, 63, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)';
+        const badgeColor = item.level === 'error' ? '#f43f5e' : '#f59e0b';
+        html += `
+          <div style="margin-top: 0.5rem; padding: 0.4rem; background: ${badgeBg}; border-radius: 4px; border-left: 3px solid ${badgeColor}; font-size: 0.75rem;">
+            <div style="font-weight: 600; color: ${badgeColor}; margin-bottom: 0.2rem;">⚠️ ${item.message}</div>
+            <div style="color: var(--text-muted); line-height: 1.3;">${item.suggestion}</div>
+          </div>
+        `;
+      });
+    }
+
+    html += `</div>`;
+    container.innerHTML = html;
   }
 
   private renderPoPChain(): void {
