@@ -7,8 +7,8 @@
   "dependencies": {
     "@codemirror/state": "^6.4.0",
     "@codemirror/view": "^6.23.0",
-    "@worldcraft/core": "workspace:*",
-    "@worldcraft/schema": "workspace:*"
+    "@worldcraft/core": "file:./stubs/core",
+    "@worldcraft/schema": "file:./stubs/schema"
   },
   "scripts": {
     "dev": "vite",

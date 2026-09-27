@@ -4,12 +4,14 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import { TaigenRhythmEngine, type RhythmAnalysisResult } from '../core/nlp/TaigenRhythmEngine.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
+  private rhythmEngine: TaigenRhythmEngine;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private rawText: string;
@@ -19,6 +21,7 @@ export class EditorView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.linter = new LoreLinterEngine();
+    this.rhythmEngine = new TaigenRhythmEngine();
     this.popEngine = new PoPAuditEngine('author-session-01');
 
     // Setup fictional calendar
@@ -162,6 +165,12 @@ export class EditorView {
               <div id="linter-results-container"></div>
             </div>
 
+            <!-- Rhythm & Syntactic Analysis -->
+            <div class="tree-group">
+              <div class="tree-title">構文リズム・体言止め・主語重複解析</div>
+              <div id="rhythm-results-container"></div>
+            </div>
+
             <!-- Cognitive Fog State -->
             <div class="tree-group">
               <div class="tree-title">認知フォグ因果律判定</div>
@@ -277,9 +286,12 @@ export class EditorView {
       wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
     }
 
-    // 3. Run Lore Linter
+    // 3. Run Lore Linter & Rhythm Engine
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
+
+    const rhythmResult = this.rhythmEngine.analyze(this.rawText);
+    this.renderRhythmDiagnostics(rhythmResult);
 
     // 4. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
@@ -347,6 +359,53 @@ export class EditorView {
         }
       });
     });
+  }
+
+  private renderRhythmDiagnostics(result: RhythmAnalysisResult): void {
+    const container = this.container.querySelector('#rhythm-results-container');
+    if (!container) return;
+
+    if (result.taigenDomeMatches.length === 0 && result.duplicateSubjectMatches.length === 0) {
+      container.innerHTML = `
+        <div style="font-size: 0.8rem; color: #10b981; padding: 0.5rem 0;">
+          ✨ 文末リズム・主語重複問題なし
+        </div>
+      `;
+      return;
+    }
+
+    let html = '';
+
+    result.taigenDomeMatches.forEach(m => {
+      html += `
+        <div class="diagnostic-card" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3);">
+          <div class="diagnostic-header" style="color: #f59e0b;">
+            <span>⚠️ ${m.count}文連続体言止め検知</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.4;">
+            ${m.message}
+          </p>
+        </div>
+      `;
+    });
+
+    result.duplicateSubjectMatches.forEach(m => {
+      html += `
+        <div class="diagnostic-card" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);">
+          <div class="diagnostic-header" style="color: #ef4444;">
+            <span>⚠️ 主語「${m.subject}」重複</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.8rem; line-height: 1.4; margin-bottom: 0.3rem;">
+            ${m.message}
+          </p>
+          <div style="font-size: 0.75rem; color: #a5b4fc;">
+            【提案】${m.suggestions.map(s => s.description).join(' / ')}
+          </div>
+        </div>
+      `;
+    });
+
+    container.innerHTML = html;
   }
 
   private renderPoPChain(): void {

@@ -13,6 +13,7 @@ import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
+import { TaigenRhythmEngine, type RhythmAnalysisResult } from '../nlp/TaigenRhythmEngine.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
 import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
@@ -26,6 +27,7 @@ export interface WorkspaceState {
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
   activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
   diagnostics: LoreDiagnostic[];
+  rhythmResult: RhythmAnalysisResult | null;
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -36,6 +38,7 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private rhythmEngine: TaigenRhythmEngine;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
@@ -50,22 +53,29 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.rhythmEngine = new TaigenRhythmEngine();
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
       this.hotSwapManager = new WorkerHotSwapManager(options.worker);
     }
 
+    const initialText = options?.initialText ?? '';
     this.state = {
       currentDocumentId: `doc-${Date.now()}`,
-      rawText: options?.initialText ?? '',
+      rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
       diagnostics: [],
+      rhythmResult: initialText ? this.rhythmEngine.analyze(initialText) : null,
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
+  }
+
+  public getRhythmEngine(): TaigenRhythmEngine {
+    return this.rhythmEngine;
   }
 
   public getState(): WorkspaceState {
@@ -92,9 +102,10 @@ export class ThreePaneWorkspace {
       this.hotSwapManager.reportKeystroke(isComposing);
     }
 
-    // Run Lore Linter (bypassed if composing with Japanese IME)
+    // Run Lore Linter & Rhythm Analysis (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+    this.state.rhythmResult = isComposing ? null : this.rhythmEngine.analyze(newText);
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -168,7 +179,11 @@ export class ThreePaneWorkspace {
         contentHtml:
           this.state.activeRightTab === 'pop-audit'
             ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+            : `<div class="consistency-dock">
+                <span>検出表記ゆれ: ${this.state.diagnostics.length}件</span>
+                <span>体言止め連続警告: ${this.state.rhythmResult?.summary.consecutiveTaigenDomeMatches ?? 0}件</span>
+                <span>主語重複警告: ${this.state.rhythmResult?.summary.duplicateSubjectMatches ?? 0}件</span>
+              </div>`,
       },
     };
   }
