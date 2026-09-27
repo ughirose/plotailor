@@ -129,6 +129,7 @@ export * from './core/editor/AozoraParser.js';
 export * from './core/editor/ScrollNormalizer.js';
 export * from './core/editor/VerticalViewport.js';
 export * from './core/editor/LoreLinter.js';
+export * from './core/editor/KanjiHirakuDictionary.js';
 export * from './core/nlp/AhoCorasickAutomaton.js';
 export * from './core/storage/MobileResilientStorage.js';
 export * from './core/runtime/WorkerHotSwapManager.js';

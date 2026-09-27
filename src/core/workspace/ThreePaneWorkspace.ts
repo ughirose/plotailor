@@ -12,6 +12,12 @@ import type { SubgraphSlice } from '@schema';
 import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
+import {
+  KanjiHirakuDictionaryEngine,
+  type HirakuDiagnostic,
+  type HirakuDictionaryEntry,
+  type HirakuFilterConfig,
+} from '../editor/KanjiHirakuDictionary.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
@@ -26,6 +32,7 @@ export interface WorkspaceState {
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
   activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
   diagnostics: LoreDiagnostic[];
+  hirakuDiagnostics: HirakuDiagnostic[];
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -36,6 +43,7 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private hirakuEngine: KanjiHirakuDictionaryEngine;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
@@ -43,6 +51,8 @@ export class ThreePaneWorkspace {
   constructor(options?: {
     initialText?: string;
     regulations?: TermRegulation[];
+    hirakuEntries?: HirakuDictionaryEntry[];
+    hirakuFilterConfig?: HirakuFilterConfig;
     worker?: WorkerInstance;
   }) {
     this.ontologyEngine = new WorldOntologyEngine();
@@ -50,6 +60,7 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.hirakuEngine = new KanjiHirakuDictionaryEngine(options?.hirakuEntries, options?.hirakuFilterConfig);
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
@@ -63,6 +74,7 @@ export class ThreePaneWorkspace {
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
       diagnostics: [],
+      hirakuDiagnostics: [],
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -80,6 +92,10 @@ export class ThreePaneWorkspace {
     return this.hotSwapManager;
   }
 
+  public getHirakuEngine(): KanjiHirakuDictionaryEngine {
+    return this.hirakuEngine;
+  }
+
   /**
    * Handle text edits from the central CodeMirror 6 editor.
    * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, and avoids interrupting author.
@@ -92,9 +108,10 @@ export class ThreePaneWorkspace {
       this.hotSwapManager.reportKeystroke(isComposing);
     }
 
-    // Run Lore Linter (bypassed if composing with Japanese IME)
+    // Run Lore Linter & Kanji Hiraku Linter (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+    this.state.hirakuDiagnostics = this.hirakuEngine.lint(newText, { isComposing, displayMap: map });
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -151,7 +168,6 @@ export class ThreePaneWorkspace {
     rightPane: { activeTab: string; contentHtml: string };
   } {
     const parsedHtml = this.viewport.renderContent(this.state.rawText);
-    const auditViewModel = this.auditView.render();
 
     return {
       leftPane: {
@@ -168,7 +184,7 @@ export class ThreePaneWorkspace {
         contentHtml:
           this.state.activeRightTab === 'pop-audit'
             ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span> / <span>ひらくべき漢字: ${this.state.hirakuDiagnostics.length}件</span></div>`,
       },
     };
   }
