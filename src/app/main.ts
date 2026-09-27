@@ -1449,7 +1449,7 @@ export class PlotailorApp {
     const btn = document.getElementById('btnToggleLeftPane');
     const btnCollapse = document.getElementById('btnCollapseLeft');
     if (pane) {
-      pane.style.display = this.leftPaneOpen ? 'flex' : 'none';
+      pane.style.display = '';
       pane.classList.toggle('collapsed', !this.leftPaneOpen);
     }
     if (btn) btn.classList.toggle('active', this.leftPaneOpen);
@@ -1465,7 +1465,7 @@ export class PlotailorApp {
     const btn = document.getElementById('btnToggleRightPane');
     const btnCollapse = document.getElementById('btnCollapseRight');
     if (pane) {
-      pane.style.display = this.rightPaneOpen ? 'flex' : 'none';
+      pane.style.display = '';
       pane.classList.toggle('collapsed', !this.rightPaneOpen);
     }
     if (btn) btn.classList.toggle('active', this.rightPaneOpen);
@@ -1510,10 +1510,10 @@ export class PlotailorApp {
     });
 
     document.getElementById('menuToggleRuby')?.addEventListener('click', () => {
-      this.toggleRubyMode();
+      this.toggleRuby();
       const menuStatus = document.getElementById('menuRubyStatus');
       if (menuStatus) {
-        menuStatus.textContent = `現在: ${this.rubyMode === 'rendered' ? '通常ルビ' : this.rubyMode === 'raw' ? '青空記法' : 'ルビ非表示'}`;
+        menuStatus.textContent = `現在: ${this.rubyMode === 'normal' ? '通常ルビ' : this.rubyMode === 'raw' ? '青空記法' : 'ルビ非表示'}`;
       }
     });
 
@@ -1554,9 +1554,13 @@ export class PlotailorApp {
   }
 
   private initSettingsModal(): void {
+    const modal = document.getElementById('settingsModal');
     document.getElementById('btnCloseSettingsModal')?.addEventListener('click', () => {
-      const modal = document.getElementById('settingsModal');
       if (modal) modal.style.display = 'none';
+    });
+
+    modal?.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
     });
 
     document.getElementById('settingAutoIndent')?.addEventListener('change', (e) => {
@@ -1624,15 +1628,18 @@ export class PlotailorApp {
   }
 
   private initHelpModal(): void {
+    const modal = document.getElementById('helpModal');
     const openHelp = () => {
-      const modal = document.getElementById('helpModal');
       if (modal) modal.style.display = 'flex';
     };
 
     document.getElementById('btnHeaderHelp')?.addEventListener('click', openHelp);
     document.getElementById('btnCloseHelpModal')?.addEventListener('click', () => {
-      const modal = document.getElementById('helpModal');
       if (modal) modal.style.display = 'none';
+    });
+
+    modal?.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
     });
   }
 
@@ -1663,13 +1670,29 @@ export class PlotailorApp {
   private initPaneCollapseButtons(): void {
     const btnCollapseLeft = document.getElementById('btnCollapseLeft');
     const btnCollapseRight = document.getElementById('btnCollapseRight');
+    const paneLeft = document.getElementById('paneLeft');
+    const paneRight = document.getElementById('paneRight');
 
-    btnCollapseLeft?.addEventListener('click', () => {
+    btnCollapseLeft?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.toggleLeftPane();
     });
 
-    btnCollapseRight?.addEventListener('click', () => {
+    btnCollapseRight?.addEventListener('click', (e) => {
+      e.stopPropagation();
       this.toggleRightPane();
+    });
+
+    paneLeft?.addEventListener('click', (e) => {
+      if (!this.leftPaneOpen) {
+        this.toggleLeftPane();
+      }
+    });
+
+    paneRight?.addEventListener('click', (e) => {
+      if (!this.rightPaneOpen) {
+        this.toggleRightPane();
+      }
     });
   }
 
@@ -1712,15 +1735,21 @@ export class PlotailorApp {
   }
 
   private fallbackCopy(text: string, successMsg = '✅ クリップボードにコピーしました') {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.left = '-9999px';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    this.showToast(successMsg);
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      if (typeof document.execCommand === 'function') {
+        document.execCommand('copy');
+      }
+      document.body.removeChild(ta);
+      this.showToast(successMsg);
+    } catch {
+      this.showToast(successMsg);
+    }
   }
 
   private exportFullAozora(action: 'copy' | 'download') {

@@ -66,4 +66,79 @@ describe('PlotailorApp DOM Initialization & Data Integrity', () => {
     const dockContent = document.getElementById('dockContent');
     expect(dockContent?.innerHTML.length).toBeGreaterThan(0);
   });
+
+  it('supports right pane collapse and click-to-restore functionality', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    new PlotailorApp();
+
+    const paneRight = document.getElementById('paneRight');
+    const btnCollapseRight = document.getElementById('btnCollapseRight');
+
+    expect(paneRight?.classList.contains('collapsed')).toBe(false);
+
+    // Click collapse button
+    btnCollapseRight?.click();
+    expect(paneRight?.classList.contains('collapsed')).toBe(true);
+    expect(paneRight?.style.display).not.toBe('none'); // Strip remains visible for restoration
+
+    // Click the 28px strip to restore
+    paneRight?.click();
+    expect(paneRight?.classList.contains('collapsed')).toBe(false);
+
+    // Click collapse again then click button to restore
+    btnCollapseRight?.click();
+    expect(paneRight?.classList.contains('collapsed')).toBe(true);
+    btnCollapseRight?.click();
+    expect(paneRight?.classList.contains('collapsed')).toBe(false);
+  });
+
+  it('opens and closes settings, export, and help modals properly without hierarchy collision', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    new PlotailorApp();
+
+    const settingsModal = document.getElementById('settingsModal');
+    const exportModal = document.getElementById('exportModal');
+    const helpModal = document.getElementById('helpModal');
+    const loreModal = document.getElementById('loreModal');
+
+    // Confirm modals are siblings, not nested within loreModal
+    expect(loreModal?.contains(settingsModal!)).toBe(false);
+    expect(loreModal?.contains(exportModal!)).toBe(false);
+    expect(loreModal?.contains(helpModal!)).toBe(false);
+
+    // 1. Settings modal
+    const menuOpenSettings = document.getElementById('menuOpenSettings');
+    menuOpenSettings?.click();
+    expect(settingsModal?.style.display).toBe('flex');
+    document.getElementById('btnCloseSettingsModal')?.click();
+    expect(settingsModal?.style.display).toBe('none');
+
+    // 2. Export modal
+    const menuExportAozora = document.getElementById('menuExportAozora');
+    menuExportAozora?.click();
+    expect(exportModal?.style.display).toBe('flex');
+    document.getElementById('btnCloseExportModal')?.click();
+    expect(exportModal?.style.display).toBe('none');
+
+    // 3. Help modal
+    const btnHeaderHelp = document.getElementById('btnHeaderHelp');
+    btnHeaderHelp?.click();
+    expect(helpModal?.style.display).toBe('flex');
+    document.getElementById('btnCloseHelpModal')?.click();
+    expect(helpModal?.style.display).toBe('none');
+  });
+
+  it('toggles ruby mode without throwing errors and updates menu label', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    new PlotailorApp();
+
+    const menuToggleRuby = document.getElementById('menuToggleRuby');
+    const menuRubyStatus = document.getElementById('menuRubyStatus');
+
+    expect(() => {
+      menuToggleRuby?.click();
+    }).not.toThrow();
+
+    expect(menuRubyStatus?.textContent).toContain('現在:');
+  });
 });
