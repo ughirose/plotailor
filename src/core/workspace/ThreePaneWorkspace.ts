@@ -18,14 +18,16 @@ import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
 import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
 import { OPFSStorage } from '../storage/OPFSStorage.js';
 import { WorkerHotSwapManager, type WorkerInstance } from '../runtime/WorkerHotSwapManager.js';
+import { SceneOutliner, type SceneNode, type SceneOutlinerOptions } from '../editor/SceneOutliner.js';
 
 export interface WorkspaceState {
   currentDocumentId: string;
   rawText: string;
   isComposing: boolean;
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
-  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
+  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'scene-outliner' | 'appearance';
   diagnostics: LoreDiagnostic[];
+  scenes: SceneNode[];
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -37,6 +39,7 @@ export class ThreePaneWorkspace {
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
   private storage: MobileResilientStorage;
+  private sceneOutliner: SceneOutliner;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
 
@@ -44,25 +47,31 @@ export class ThreePaneWorkspace {
     initialText?: string;
     regulations?: TermRegulation[];
     worker?: WorkerInstance;
+    sceneOutlinerOptions?: SceneOutlinerOptions;
   }) {
     this.ontologyEngine = new WorldOntologyEngine();
     this.popEngine = new PoPAuditEngine('three-pane-session');
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.sceneOutliner = new SceneOutliner(options?.sceneOutlinerOptions);
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
       this.hotSwapManager = new WorkerHotSwapManager(options.worker);
     }
 
+    const initialText = options?.initialText ?? '';
+    const initialScenes = this.sceneOutliner.parse(initialText);
+
     this.state = {
       currentDocumentId: `doc-${Date.now()}`,
-      rawText: options?.initialText ?? '',
+      rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
       diagnostics: [],
+      scenes: initialScenes,
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -80,6 +89,10 @@ export class ThreePaneWorkspace {
     return this.hotSwapManager;
   }
 
+  public getSceneOutliner(): SceneOutliner {
+    return this.sceneOutliner;
+  }
+
   /**
    * Handle text edits from the central CodeMirror 6 editor.
    * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, and avoids interrupting author.
@@ -95,6 +108,9 @@ export class ThreePaneWorkspace {
     // Run Lore Linter (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+
+    // Update Scene Outliner
+    this.state.scenes = this.sceneOutliner.parse(newText);
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -166,7 +182,9 @@ export class ThreePaneWorkspace {
       rightPane: {
         activeTab: this.state.activeRightTab,
         contentHtml:
-          this.state.activeRightTab === 'pop-audit'
+          this.state.activeRightTab === 'scene-outliner'
+            ? this.sceneOutliner.renderRightDockTree(this.state.scenes)
+            : this.state.activeRightTab === 'pop-audit'
             ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
             : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
       },
