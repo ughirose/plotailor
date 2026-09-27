@@ -117,7 +117,7 @@ export class PlotailorApp {
   private currentPovCharacterId = 'char-valerius';
 
   constructor() {
-    this.editorBody = document.getElementById('editorBody') as HTMLDivElement;
+    this.editorBody = (document.getElementById('editorBody') || document.getElementById('editor-body')) as HTMLDivElement;
     if (window.innerWidth <= 768) {
       this.leftPaneOpen = false;
       this.rightPaneOpen = false;
@@ -2338,12 +2338,16 @@ export class PlotailorApp {
 }
 
 // Initialize on DOM load if running in browser
-if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.getElementById('editor-body')) {
-  if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', () => {
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const initApp = () => {
+    if (document.getElementById('editorBody') || document.getElementById('editor-body')) {
       (window as any).plotailorApp = new PlotailorApp();
-    });
+    }
+  };
+
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', initApp);
   } else {
-    (window as any).plotailorApp = new PlotailorApp();
+    initApp();
   }
 }

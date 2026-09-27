@@ -18,8 +18,11 @@ export default defineConfig({
       name: 'html-rewrite-middleware',
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
-          if (req.url === '/app' || req.url === '/app/' || req.url?.startsWith('/app?')) {
+          const url = req.url || '';
+          if (url === '/' || url === '/app' || url === '/app/' || url.startsWith('/app?')) {
             req.url = '/app.html';
+          } else if (url === '/lp' || url === '/lp/' || url.startsWith('/lp?')) {
+            req.url = '/index.html';
           }
           next();
         });
