@@ -287,6 +287,46 @@ const verticalWheelHandler = EditorView.domEventHandlers({
   },
 });
 
+import { VerticalKeyNavigationEngine, type ArrowKey } from './VerticalKeyNavigationEngine.js';
+
+function handleVerticalArrow(view: EditorView, key: ArrowKey): boolean {
+  if (!isVerticalMode(view)) return false;
+  const doc = view.state.doc.toString();
+  const sel = view.state.selection.main;
+  const result = VerticalKeyNavigationEngine.calculateNavigation({
+    text: doc,
+    cursorOffset: sel.head,
+    key,
+  });
+  if (result.newOffset !== sel.head) {
+    view.dispatch({
+      selection: { anchor: result.newOffset, head: result.newOffset },
+      scrollIntoView: true,
+    });
+    return true;
+  }
+  return false;
+}
+
+export const verticalArrowNavigationKeymap = keymap.of([
+  {
+    key: 'ArrowUp',
+    run: (view: EditorView) => handleVerticalArrow(view, 'ArrowUp'),
+  },
+  {
+    key: 'ArrowDown',
+    run: (view: EditorView) => handleVerticalArrow(view, 'ArrowDown'),
+  },
+  {
+    key: 'ArrowLeft',
+    run: (view: EditorView) => handleVerticalArrow(view, 'ArrowLeft'),
+  },
+  {
+    key: 'ArrowRight',
+    run: (view: EditorView) => handleVerticalArrow(view, 'ArrowRight'),
+  },
+]);
+
 /**
  * Keymap handler to trap Tab and Shift-Tab inside the editor,
  * preventing focus loss to side panes and inserting full-width space for Japanese novel indent.
@@ -342,6 +382,7 @@ export function verticalWritingExtension(): Extension {
     verticalWritingPlugin,
     verticalMouseHandler,
     verticalWheelHandler,
+    verticalArrowNavigationKeymap,
     tabIndentKeymap,
     verticalScrollTheme,
   ];
