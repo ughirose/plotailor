@@ -39,16 +39,57 @@
       </div>
 
       <div class="ide-header-right">
-        <button class="ide-btn" id="btnHeaderUndo" title="元に戻す (Ctrl+Z)">↩ 戻す (Ctrl+Z)</button>
-        <button class="ide-btn" id="btnHeaderRedo" title="やり直す (Ctrl+Y)">↪ 進む (Ctrl+Y)</button>
-        <button class="ide-btn" id="btnToggleLeftPane" title="左ペインの開閉">◨ 目次</button>
+        <button class="ide-btn" id="btnToggleLeftPane" title="左ペインの開閉 (Ctrl+B)">◨ 目次</button>
         <button class="ide-btn" id="btnToggleOrientation" title="縦書き／横書きの切り替え">縦書き</button>
-        <button class="ide-btn" id="btnToggleWrap" title="文字折り返しの切り替え">折り返し: ON</button>
-        <button class="ide-btn" id="btnToggleRuby" title="ルビ表示切り替え（通常ルビ / 青空記法直接 / ルビOFF隠蔽）">ルビ: 通常</button>
         <button class="ide-btn" id="btnToggleTheme" title="和紙色／夜間色の切り替え">🌙 夜間色</button>
-        <button class="ide-btn" id="btnFullscreen" title="集中執筆全画面モード">⛶ 全画面</button>
-        <button class="ide-btn btn-primary" id="btnExportAozora" title="青空文庫形式をクリップボードにコピー">青空形式出力</button>
-        <button class="ide-btn" id="btnToggleRightPane" title="右ペイン（伏線・因果インスペクタ）の開閉">◧ 伏線</button>
+        <button class="ide-btn" id="btnFullscreen" title="集中執筆全画面モード (F11)">⛶ 全画面</button>
+        <button class="ide-btn" id="btnToggleRightPane" title="右ペイン（伏線・推敲インスペクタ）の開閉">◧ 伏線</button>
+        
+        <!-- Hamburger Menu for Auxiliary Tools -->
+        <div class="header-menu-container" style="position: relative;">
+          <button class="ide-btn" id="btnHamburgerMenu" title="その他のツール・設定・エクスポート" aria-haspopup="true" aria-expanded="false" style="padding: 4px 10px; font-size: 14px;">
+            ☰
+          </button>
+          <div class="header-dropdown-menu" id="hamburgerDropdown" style="display: none;">
+            <div class="dropdown-item" id="menuExportAozora">
+              <span>🖋️</span>
+              <div>
+                <strong>青空文庫形式出力</strong>
+                <small>ルビ・傍点を反映してクリップボードにコピー</small>
+              </div>
+            </div>
+            <div class="dropdown-item" id="menuExportPoP">
+              <span>🛡️</span>
+              <div>
+                <strong>PoP創作証明エクスポート</strong>
+                <small>改ざん不能なMerkle創作履歴証明書を発行</small>
+              </div>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" id="menuToggleRuby">
+              <span>ふ</span>
+              <div>
+                <strong>ルビ表示モード切替</strong>
+                <small id="menuRubyStatus">現在: 通常ルビ</small>
+              </div>
+            </div>
+            <div class="dropdown-item" id="menuToggleWrap">
+              <span>↩</span>
+              <div>
+                <strong>文字折り返し切替</strong>
+                <small id="menuWrapStatus">現在: ON</small>
+              </div>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" id="menuOpenHelp">
+              <span>📖</span>
+              <div>
+                <strong>操作ガイド・ショートカット</strong>
+                <small>キーバインドと執筆マニュアル</small>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -56,6 +97,10 @@
     <main class="ide-workspace">
       <!-- Left Pane: Chapter Outline & Lore Navigation -->
       <aside class="pane-left" id="paneLeft">
+        <div class="pane-top-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--color-border); background: rgba(0,0,0,0.15);">
+          <span style="font-size: 11px; font-weight: 600; color: var(--color-gold); letter-spacing: 0.05em;">NAVI / 設定</span>
+          <button class="pane-collapse-btn" id="btnCollapseLeft" title="左ペインを折りたたむ (◀)" style="background: none; border: none; color: var(--color-text-dim); cursor: pointer; font-size: 12px; padding: 2px 6px;">◀</button>
+        </div>
         <div class="pane-tabs">
           <button class="pane-tab-btn active" data-tab="toc">原稿目次</button>
           <button class="pane-tab-btn" data-tab="lore">登場人物・世界観</button>
@@ -98,6 +143,37 @@
 
       <!-- Right Pane: Lore & Foreshadowing Inspector & PoP Audit Dock -->
       <aside class="pane-right" id="paneRight">
+        <div class="pane-top-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--color-border); background: rgba(0,0,0,0.15);">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 11px; font-weight: 600; color: var(--color-gold); letter-spacing: 0.05em;">INSPECTOR</span>
+            <button class="ide-btn" id="btnToggleLegendCard" title="装飾ハイライト凡例の表示/非表示" style="padding: 1px 6px; font-size: 10px; height: 18px; border-color: rgba(207,168,92,0.4);">凡例 ▾</button>
+          </div>
+          <button class="pane-collapse-btn" id="btnCollapseRight" title="右ペインを折りたたむ (▶)" style="background: none; border: none; color: var(--color-text-dim); cursor: pointer; font-size: 12px; padding: 2px 6px;">▶</button>
+        </div>
+        
+        <!-- Decoration Legend Collapsible Card -->
+        <div class="decoration-legend-panel" id="decorationLegendPanel" style="display: none; padding: 8px 10px; background: rgba(14,17,23,0.95); border-bottom: 1px solid var(--color-border); font-size: 11px;">
+          <div style="font-weight: 600; margin-bottom: 6px; color: var(--color-text-dim);">エディタ内装飾の凡例（ハイライト）</div>
+          <div style="display: flex; flex-direction: column; gap: 5px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="display: inline-block; width: 14px; height: 14px; border-bottom: 2px dotted #38bdf8;"></span>
+              <span><strong style="color: #38bdf8;">水色点線</strong>: 登場人物・世界観設定（クリックで詳細）</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="display: inline-block; width: 14px; height: 14px; background: rgba(207,168,92,0.3); border-bottom: 2px solid var(--color-gold); border-radius: 2px;"></span>
+              <span><strong style="color: #f3d692;">金箔背景</strong>: 伏線キーワード（配置・回収状態と連動）</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="display: inline-block; width: 14px; height: 14px; background: rgba(239,68,68,0.2); border-bottom: 2px wavy #ef4444; border-radius: 2px;"></span>
+              <span><strong style="color: #fca5a5;">赤色波線</strong>: 視点ブレ・重要矛盾警告</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="display: inline-block; width: 14px; height: 14px; border-bottom: 2px wavy #f59e0b;"></span>
+              <span><strong style="color: #f59e0b;">黄波線 / 緑</strong>: 助詞3連続・体言止め・文体違和感</span>
+            </div>
+          </div>
+        </div>
+
         <div class="pane-tabs">
           <button class="pane-tab-btn active" data-dock-tab="lore">伏線・設定</button>
           <button class="pane-tab-btn" data-dock-tab="linter">推敲・文体</button>

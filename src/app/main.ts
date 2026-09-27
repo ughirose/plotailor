@@ -492,6 +492,9 @@ export class PlotailorApp {
 
     this.initPaneResizers();
     this.initQuickFormatButtons();
+    this.initHamburgerMenu();
+    this.initPaneCollapseButtons();
+    this.initDecorationLegend();
 
     const btnExport = document.getElementById('btnExportAozora');
     btnExport?.addEventListener('click', () => this.openExportModal());
@@ -1395,16 +1398,113 @@ export class PlotailorApp {
     this.leftPaneOpen = !this.leftPaneOpen;
     const pane = document.getElementById('paneLeft');
     const btn = document.getElementById('btnToggleLeftPane');
-    if (pane) pane.style.display = this.leftPaneOpen ? 'flex' : 'none';
+    const btnCollapse = document.getElementById('btnCollapseLeft');
+    if (pane) {
+      pane.style.display = this.leftPaneOpen ? 'flex' : 'none';
+      pane.classList.toggle('collapsed', !this.leftPaneOpen);
+    }
     if (btn) btn.classList.toggle('active', this.leftPaneOpen);
+    if (btnCollapse) {
+      btnCollapse.textContent = this.leftPaneOpen ? '◀' : '▶';
+      btnCollapse.title = this.leftPaneOpen ? '左ペインを折りたたむ (◀)' : '左ペインを展開 (▶)';
+    }
   }
 
   private toggleRightPane() {
     this.rightPaneOpen = !this.rightPaneOpen;
     const pane = document.getElementById('paneRight');
     const btn = document.getElementById('btnToggleRightPane');
-    if (pane) pane.style.display = this.rightPaneOpen ? 'flex' : 'none';
+    const btnCollapse = document.getElementById('btnCollapseRight');
+    if (pane) {
+      pane.style.display = this.rightPaneOpen ? 'flex' : 'none';
+      pane.classList.toggle('collapsed', !this.rightPaneOpen);
+    }
     if (btn) btn.classList.toggle('active', this.rightPaneOpen);
+    if (btnCollapse) {
+      btnCollapse.textContent = this.rightPaneOpen ? '▶' : '◀';
+      btnCollapse.title = this.rightPaneOpen ? '右ペインを折りたたむ (▶)' : '右ペインを展開 (◀)';
+    }
+  }
+
+  private initHamburgerMenu(): void {
+    const btnMenu = document.getElementById('btnHamburgerMenu');
+    const dropdown = document.getElementById('hamburgerDropdown');
+    if (!btnMenu || !dropdown) return;
+
+    btnMenu.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isVisible = dropdown.style.display !== 'none';
+      dropdown.style.display = isVisible ? 'none' : 'flex';
+      btnMenu.setAttribute('aria-expanded', isVisible ? 'false' : 'true');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!btnMenu.contains(e.target as Node) && !dropdown.contains(e.target as Node)) {
+        dropdown.style.display = 'none';
+        btnMenu.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    document.getElementById('menuExportAozora')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      this.openExportModal();
+    });
+
+    document.getElementById('menuExportPoP')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      this.activeRightTab = 'pop';
+      if (!this.rightPaneOpen) {
+        this.toggleRightPane();
+      } else {
+        this.renderRightPane();
+      }
+    });
+
+    document.getElementById('menuToggleRuby')?.addEventListener('click', () => {
+      this.toggleRubyMode();
+      const menuStatus = document.getElementById('menuRubyStatus');
+      if (menuStatus) {
+        menuStatus.textContent = `現在: ${this.rubyMode === 'rendered' ? '通常ルビ' : this.rubyMode === 'raw' ? '青空記法' : 'ルビ非表示'}`;
+      }
+    });
+
+    document.getElementById('menuToggleWrap')?.addEventListener('click', () => {
+      this.toggleWrap();
+      const menuStatus = document.getElementById('menuWrapStatus');
+      if (menuStatus) {
+        menuStatus.textContent = `現在: ${this.isLineWrapping ? 'ON' : 'OFF'}`;
+      }
+    });
+
+    document.getElementById('menuOpenHelp')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      window.open('site/help.html', '_blank');
+    });
+  }
+
+  private initPaneCollapseButtons(): void {
+    const btnCollapseLeft = document.getElementById('btnCollapseLeft');
+    const btnCollapseRight = document.getElementById('btnCollapseRight');
+
+    btnCollapseLeft?.addEventListener('click', () => {
+      this.toggleLeftPane();
+    });
+
+    btnCollapseRight?.addEventListener('click', () => {
+      this.toggleRightPane();
+    });
+  }
+
+  private initDecorationLegend(): void {
+    const btnLegend = document.getElementById('btnToggleLegendCard');
+    const panel = document.getElementById('decorationLegendPanel');
+    if (!btnLegend || !panel) return;
+
+    btnLegend.addEventListener('click', () => {
+      const isHidden = panel.style.display === 'none';
+      panel.style.display = isHidden ? 'block' : 'none';
+      btnLegend.textContent = isHidden ? '凡例 ▴' : '凡例 ▾';
+    });
   }
 
   public openExportModal() {
