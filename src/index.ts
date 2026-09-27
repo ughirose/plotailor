@@ -165,5 +165,13 @@ export * from './core/editor/VerticalWritingExtension.js';
 export * from './core/fs/index.js';
 export * from './core/project/index.js';
 export { PlotailorApp } from './app/main.js';
+export * from './core/editor/BracketPairChecker.js';
+export * from './core/editor/EllipsisDashLinter.js';
+export * from './core/editor/KanjiHiraganaRatioEngine.js';
+export * from './core/nlp/PassiveVoiceChecker.js';
+export * from './core/nlp/SentenceEndingCadenceCalculator.js';
+export * from './core/editor/ParagraphIndenter.js';
+export * from './core/editor/DemonstrativeDensityLinter.js';
+export * from './core/editor/StyleDiscomfortDetector.js';
 
 

@@ -19,6 +19,10 @@ import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
 import { OPFSStorage } from '../storage/OPFSStorage.js';
 import { RevisionHistoryManager } from '../storage/RevisionHistoryManager.js';
 import { WorkerHotSwapManager, type WorkerInstance } from '../runtime/WorkerHotSwapManager.js';
+import { EllipsisDashLinterEngine, type EllipsisDashDiagnostic } from '../editor/EllipsisDashLinter.js';
+import { PassiveVoiceChecker, type PassiveVoiceDiagnostic } from '../nlp/PassiveVoiceChecker.js';
+import { SentenceEndingCadenceCalculator, type CadenceAnalysisResult } from '../nlp/SentenceEndingCadenceCalculator.js';
+import { ParagraphIndenter } from '../editor/ParagraphIndenter.js';
 
 export interface WorkspaceState {
   currentDocumentId: string;
@@ -27,6 +31,9 @@ export interface WorkspaceState {
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
   activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance' | 'revision-history';
   diagnostics: LoreDiagnostic[];
+  ellipsisDashDiagnostics: EllipsisDashDiagnostic[];
+  passiveDiagnostics: PassiveVoiceDiagnostic[];
+  cadenceResult: CadenceAnalysisResult | null;
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -41,18 +48,27 @@ export class ThreePaneWorkspace {
   private storage: MobileResilientStorage;
   private revisionManager: RevisionHistoryManager;
   private hotSwapManager: WorkerHotSwapManager | null = null;
+  private ellipsisLinter: EllipsisDashLinterEngine;
+  private passiveChecker: PassiveVoiceChecker;
+  private cadenceCalculator: SentenceEndingCadenceCalculator;
   private state: WorkspaceState;
 
   constructor(options?: {
     initialText?: string;
     regulations?: TermRegulation[];
     worker?: WorkerInstance;
+    passiveVoiceThreshold?: number;
   }) {
     this.ontologyEngine = new WorldOntologyEngine();
     this.popEngine = new PoPAuditEngine('three-pane-session');
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.ellipsisLinter = new EllipsisDashLinterEngine();
+    this.passiveChecker = new PassiveVoiceChecker({
+      threshold: options?.passiveVoiceThreshold ?? 3,
+    });
+    this.cadenceCalculator = new SentenceEndingCadenceCalculator();
     this.rawStorage = new OPFSStorage();
     this.storage = new MobileResilientStorage(this.rawStorage);
 
@@ -64,13 +80,17 @@ export class ThreePaneWorkspace {
     }
 
     const initialText = options?.initialText ?? '';
+    const { map } = AozoraParser.parse(initialText);
     this.state = {
       currentDocumentId: docId,
       rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
-      diagnostics: [],
+      diagnostics: initialText ? this.linter.lint(initialText, { displayMap: map }) : [],
+      ellipsisDashDiagnostics: initialText ? this.ellipsisLinter.lint(initialText, { displayMap: map }) : [],
+      passiveDiagnostics: initialText ? this.passiveChecker.check(initialText, { displayMap: map }) : [],
+      cadenceResult: initialText ? this.cadenceCalculator.analyze(initialText) : null,
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -108,9 +128,12 @@ export class ThreePaneWorkspace {
       this.hotSwapManager.reportKeystroke(isComposing);
     }
 
-    // Run Lore Linter (bypassed if composing with Japanese IME)
+    // Run Lore Linter & Wave 1 Linters (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+    this.state.ellipsisDashDiagnostics = this.ellipsisLinter.lint(newText, { isComposing, displayMap: map });
+    this.state.passiveDiagnostics = this.passiveChecker.check(newText, { isComposing, displayMap: map });
+    this.state.cadenceResult = this.cadenceCalculator.analyze(newText);
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -121,6 +144,28 @@ export class ThreePaneWorkspace {
         authorId: 'local-author',
       });
     }
+  }
+
+  public getUnindentedParagraphs(): any[] {
+    return ParagraphIndenter.detectUnindentedLines(this.state.rawText);
+  }
+
+  public applyParagraphIndentation(): string {
+    const indented = ParagraphIndenter.applyIndent(this.state.rawText);
+    this.onTextChange(indented);
+    return indented;
+  }
+
+  public removeParagraphIndentation(): string {
+    const removed = ParagraphIndenter.removeIndent(this.state.rawText);
+    this.onTextChange(removed);
+    return removed;
+  }
+
+  public toggleParagraphIndentation(): string {
+    const toggled = ParagraphIndenter.toggleIndent(this.state.rawText);
+    this.onTextChange(toggled);
+    return toggled;
   }
 
   /**
@@ -184,7 +229,9 @@ export class ThreePaneWorkspace {
     } else if (this.state.activeRightTab === 'revision-history') {
       rightPaneHtml = this.revisionManager.renderDockViewHtml();
     } else {
-      rightPaneHtml = `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`;
+      const oddCount = this.state.ellipsisDashDiagnostics?.length ?? 0;
+      const passiveCount = this.state.passiveDiagnostics?.length ?? 0;
+      rightPaneHtml = `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span> / <span>偶数対警告: ${oddCount}件</span> / <span>受動態過多: ${passiveCount}件</span></div>`;
     }
 
     return {

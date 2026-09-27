@@ -4,12 +4,14 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import { StyleDiscomfortDetector, type StyleDiagnostic } from '../core/editor/StyleDiscomfortDetector.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
+  private styleDetector: StyleDiscomfortDetector;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private rawText: string;
@@ -19,6 +21,7 @@ export class EditorView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.linter = new LoreLinterEngine();
+    this.styleDetector = new StyleDiscomfortDetector();
     this.popEngine = new PoPAuditEngine('author-session-01');
 
     // Setup fictional calendar
@@ -59,7 +62,7 @@ export class EditorView {
     // Sample initial text with Aozora ruby and lore terms
     this.rawText = `　王都の夜空には二つの月が冷たく輝いていた。
 　北の砦から帰還した｜ヴァレリウス将軍《ばれりうすしょうぐん》は、腰の｜紫電の剣《しでんのけん》にそっと触れた。
-「近衛軍の動きが妙だ。停戦の誓いを破る気か」
+「近衛軍の動きが妙だ。停戦の誓いを破る気か。過剰な警護は必要ないわけではない。今夜、皇女様がお見えになられる」
 　若き従卒のアーサーは恐れおののいた。《《予言の夜》》はすでに始まっていたのだ。`;
   }
 
@@ -160,6 +163,12 @@ export class EditorView {
             <div class="tree-group">
               <div class="tree-title">設定語句リント (Aho-Corasick)</div>
               <div id="linter-results-container"></div>
+            </div>
+
+            <!-- Style Discomfort Diagnostics -->
+            <div class="tree-group">
+              <div class="tree-title">文体違和感・過剰敬語検知</div>
+              <div id="style-results-container"></div>
             </div>
 
             <!-- Cognitive Fog State -->
@@ -277,9 +286,12 @@ export class EditorView {
       wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
     }
 
-    // 3. Run Lore Linter
+    // 3. Run Lore Linter & Style Discomfort Detector
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
+
+    const styleDiagnostics = this.styleDetector.detect(this.rawText, { isComposing: this.isComposing });
+    this.renderStyleDiagnostics(styleDiagnostics);
 
     // 4. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
@@ -298,6 +310,64 @@ export class EditorView {
     const seleneEl = this.container.querySelector('#moon-phase-selene');
     if (lunaEl) lunaEl.textContent = `${(lunaPhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
     if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
+  }
+
+  private renderStyleDiagnostics(diagnostics: StyleDiagnostic[]): void {
+    const container = this.container.querySelector('#style-results-container');
+    if (!container) return;
+
+    if (diagnostics.length === 0) {
+      container.innerHTML = `
+        <div style="font-size: 0.8rem; color: #10b981; padding: 0.5rem 0;">
+          ✨ 二重否定・過剰敬語の違和感なし
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = diagnostics
+      .map(
+        (d) => `
+        <div class="diagnostic-card">
+          <div class="diagnostic-header">
+            <span>⚠️ ${d.category === 'double_negative' ? '二重否定検知' : '過剰・二重敬語検知'}: 「${d.text}」</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.4rem;">
+            ${d.message}
+          </p>
+          ${
+            d.suggestions.length > 0 && !d.suggestions[0].startsWith('（')
+              ? d.suggestions
+                  .map(
+                    (s) => `
+                <button class="tool-btn style-quickfix-btn" data-text="${d.text}" data-suggest="${s}" style="font-size: 0.75rem; background: rgba(16, 185, 129, 0.2); margin-right: 0.25rem;">
+                  「${s}」に提案修正
+                </button>
+              `
+                  )
+                  .join('')
+              : ''
+          }
+        </div>
+      `
+      )
+      .join('');
+
+    // QuickFix handlers for style fixes
+    container.querySelectorAll('.style-quickfix-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const text = target.dataset.text;
+        const suggest = target.dataset.suggest;
+        if (text && suggest) {
+          const rawTextarea = this.container.querySelector('#editor-raw') as HTMLTextAreaElement;
+          if (rawTextarea) {
+            rawTextarea.value = rawTextarea.value.replaceAll(text, suggest);
+            this.updateEditorState();
+          }
+        }
+      });
+    });
   }
 
   private renderDiagnostics(diagnostics: LoreDiagnostic[]): void {
