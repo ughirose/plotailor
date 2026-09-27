@@ -6,12 +6,16 @@ import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
+import { ForeshadowingEngine, type ForeshadowingJumpTarget } from '../core/editor/ForeshadowingEngine.js';
+import { ForeshadowingProgressPanel } from '../core/editor/ForeshadowingProgressPanel.js';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
+  private foreshadowingEngine: ForeshadowingEngine;
+  private foreshadowingPanel: ForeshadowingProgressPanel;
   private rawText: string;
   private isVerticalMode: boolean = false;
   private isComposing: boolean = false;
@@ -56,11 +60,19 @@ export class EditorView {
     ];
     this.linter.setRegulations(regulations);
 
-    // Sample initial text with Aozora ruby and lore terms
+    // Sample initial text with Aozora ruby, lore terms, and foreshadowing tags
     this.rawText = `　王都の夜空には二つの月が冷たく輝いていた。
+@plant(f01, "誓いの指輪")
 　北の砦から帰還した｜ヴァレリウス将軍《ばれりうすしょうぐん》は、腰の｜紫電の剣《しでんのけん》にそっと触れた。
 「近衛軍の動きが妙だ。停戦の誓いを破る気か」
-　若き従卒のアーサーは恐れおののいた。《《予言の夜》》はすでに始まっていたのだ。`;
+　若き従卒のアーサーは恐れおののいた。《《予言の夜》》はすでに始まっていたのだ。
+@hint(f01, "指輪の紋章が青く発光")
+第2章 誓いと疑惑
+@plant(f02, "古代の密書")
+　アーサーは懐の羊皮紙を強く握りしめた。`;
+
+    this.foreshadowingEngine = new ForeshadowingEngine(this.rawText);
+    this.foreshadowingPanel = new ForeshadowingProgressPanel(this.foreshadowingEngine);
   }
 
   render(): void {
@@ -149,13 +161,18 @@ export class EditorView {
           </div>
         </main>
 
-        <!-- 3. RIGHT PANE: Real-time Consistency & PoP Audit -->
+        <!-- 3. RIGHT PANE: Consistency, Foreshadowing Dock & PoP Audit -->
         <aside class="pane pane-right">
           <div class="pane-header">
-            <span>🛡️ 整合性監査 ＆ PoP証明</span>
+            <span>🛡️ 整合性監査 ＆ 伏線・PoP証明</span>
             <span class="status-dot"></span>
           </div>
           <div class="pane-content">
+            <!-- Chapter Foreshadowing Progress & Unresolved List Panel -->
+            <div class="tree-group">
+              <div id="foreshadowing-panel-container"></div>
+            </div>
+
             <!-- Lore Diagnostics -->
             <div class="tree-group">
               <div class="tree-title">設定語句リント (Aho-Corasick)</div>
@@ -281,7 +298,11 @@ export class EditorView {
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
 
-    // 4. Record PoP Edit Event
+    // 4. Update Foreshadowing Progress & Panel
+    this.foreshadowingEngine.parseManuscript(this.rawText);
+    this.renderForeshadowingPanel();
+
+    // 5. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
       id: `evt-${Date.now()}`,
       eventType: 'TEXT_INSERT',
@@ -290,7 +311,7 @@ export class EditorView {
     });
     this.renderPoPChain();
 
-    // 5. Update Moon Phase
+    // 6. Update Moon Phase
     const t = 368450; // Current scalar day
     const lunaPhase = this.celestialEngine.getMoonPhase('sat_luna', t);
     const selenePhase = this.celestialEngine.getMoonPhase('sat_selene', t);
@@ -298,6 +319,35 @@ export class EditorView {
     const seleneEl = this.container.querySelector('#moon-phase-selene');
     if (lunaEl) lunaEl.textContent = `${(lunaPhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
     if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
+  }
+
+  private renderForeshadowingPanel(): void {
+    const panelContainer = this.container.querySelector('#foreshadowing-panel-container') as HTMLElement;
+    if (!panelContainer) return;
+
+    panelContainer.innerHTML = this.foreshadowingPanel.renderHtml();
+    this.foreshadowingPanel.bindEvents(panelContainer, (target: ForeshadowingJumpTarget) => {
+      this.jumpToTarget(target);
+    });
+  }
+
+  public jumpToTarget(target: ForeshadowingJumpTarget): void {
+    const rawTextarea = this.container.querySelector('#editor-raw') as HTMLTextAreaElement;
+    if (!rawTextarea) return;
+
+    // Focus editor and set cursor selection
+    rawTextarea.focus();
+
+    if (target.charOffset >= 0 && target.charOffset <= rawTextarea.value.length) {
+      rawTextarea.selectionStart = target.charOffset;
+      // Select the length of the tag line or jump position
+      const lineEnd = rawTextarea.value.indexOf('\n', target.charOffset);
+      rawTextarea.selectionEnd = lineEnd !== -1 ? lineEnd : rawTextarea.value.length;
+    }
+
+    // Scroll to position
+    const lineHeight = 20; // approximate pixel line height
+    rawTextarea.scrollTop = (target.lineNumber - 1) * lineHeight;
   }
 
   private renderDiagnostics(diagnostics: LoreDiagnostic[]): void {
