@@ -187,9 +187,18 @@ export class PlotailorApp {
   }
 
   private loadStateFromStorage() {
+    // 0. Active project ID
+    try {
+      const savedProjId = localStorage.getItem('plotailor_active_project_id');
+      if (savedProjId && savedProjId.trim()) {
+        this.currentProjectId = savedProjId.trim();
+      }
+    } catch {}
+
     // 1. Work title
     try {
-      const savedTitle = localStorage.getItem('plotailor_work_title');
+      const projTitle = localStorage.getItem(`plotailor_project_${this.currentProjectId}_title`);
+      const savedTitle = projTitle || localStorage.getItem('plotailor_work_title');
       if (savedTitle && savedTitle.trim()) {
         this.workTitle = savedTitle.trim();
       }
@@ -199,7 +208,8 @@ export class PlotailorApp {
 
     // 2. Chapters data
     try {
-      const savedChapters = localStorage.getItem('plotailor_chapters');
+      const projChapters = localStorage.getItem(`plotailor_project_${this.currentProjectId}_chapters`);
+      const savedChapters = projChapters || localStorage.getItem('plotailor_chapters');
       if (savedChapters) {
         const parsed = JSON.parse(savedChapters);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -219,7 +229,8 @@ export class PlotailorApp {
 
     // 3. Active chapter
     try {
-      const savedActive = localStorage.getItem('plotailor_active_chapter_id');
+      const projActive = localStorage.getItem(`plotailor_project_${this.currentProjectId}_active_chapter`);
+      const savedActive = projActive || localStorage.getItem('plotailor_active_chapter_id');
       if (savedActive && this.chapters.some((c) => c.id === savedActive)) {
         this.currentChapterId = savedActive;
       } else {
@@ -298,6 +309,10 @@ export class PlotailorApp {
 
   private saveToStorage() {
     try {
+      localStorage.setItem('plotailor_active_project_id', this.currentProjectId);
+      localStorage.setItem(`plotailor_project_${this.currentProjectId}_title`, this.workTitle);
+      localStorage.setItem(`plotailor_project_${this.currentProjectId}_chapters`, JSON.stringify(this.chapters));
+      localStorage.setItem(`plotailor_project_${this.currentProjectId}_active_chapter`, this.currentChapterId);
       localStorage.setItem('plotailor_chapters', JSON.stringify(this.chapters));
       localStorage.setItem('plotailor_active_chapter_id', this.currentChapterId);
       localStorage.setItem('plotailor_work_title', this.workTitle);
@@ -986,20 +1001,63 @@ export class PlotailorApp {
   private async initProjectVFS() {
     try {
       await this.projectManager.initWorkspace();
-      const migrated = await this.projectManager.migrateFromLegacyStorage();
-      if (migrated) {
-        this.currentProjectId = migrated.id;
-      } else {
-        try {
-          await this.projectManager.getProject(this.currentProjectId);
-        } catch {
-          await this.projectManager.createProject({
-            id: this.currentProjectId,
-            title: this.workTitle,
+      const projects = await this.projectManager.listProjects();
+
+      if (projects.length === 0) {
+        const migrated = await this.projectManager.migrateFromLegacyStorage();
+        if (migrated) {
+          this.currentProjectId = migrated.id;
+        } else {
+          const defaultProj = await this.projectManager.createProject({
+            id: 'default_work',
+            title: this.workTitle || '星辰の境界線',
           });
+          this.currentProjectId = defaultProj.id;
+          for (let i = 0; i < this.chapters.length; i++) {
+            const ch = this.chapters[i];
+            await this.projectManager.saveChapter(this.currentProjectId, ch.id, ch.title, ch.content);
+          }
+          await this.loreManager.saveToVFS(this.currentProjectId);
+        }
+      } else {
+        const targetProj = projects.find((p) => p.id === this.currentProjectId) || projects[0];
+        if (targetProj) {
+          this.currentProjectId = targetProj.id;
+          const projData = await this.projectManager.getProject(targetProj.id);
+          this.workTitle = projData.meta.title;
+          const titleEl = document.getElementById('workTitleText');
+          if (titleEl) titleEl.textContent = this.workTitle;
+
+          if (projData.chapters.length > 0) {
+            this.chapters = [];
+            for (const ch of projData.chapters) {
+              const loaded = await this.projectManager.loadChapter(targetProj.id, ch.id);
+              this.chapters.push({
+                id: ch.id,
+                title: ch.title,
+                charCount: ch.charCount,
+                content: loaded.content,
+              });
+            }
+          }
+          if (projData.meta.activeChapterId && this.chapters.some((c) => c.id === projData.meta.activeChapterId)) {
+            this.currentChapterId = projData.meta.activeChapterId;
+          } else if (this.chapters.length > 0) {
+            this.currentChapterId = this.chapters[0].id;
+          }
+
+          await this.loreManager.loadFromVFS(this.currentProjectId);
+          this.loreDock.updateDictionary(this.loreManager.toLoreTermDefinitions());
         }
       }
-      await this.saveToVFS();
+
+      this.saveToStorage();
+      this.renderChapterSelect();
+      this.loadChapter(this.currentChapterId);
+      this.renderLeftPane();
+      this.renderRightPane();
+      this.updateStats();
+      this.updateMultiLayerDecorations();
     } catch (err) {
       console.warn('VFS init warning:', err);
     }
@@ -1007,14 +1065,28 @@ export class PlotailorApp {
 
   private async saveToVFS() {
     try {
-      const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
-      if (!activeCh) return;
-      await this.projectManager.saveChapter(
-        this.currentProjectId,
-        activeCh.id,
-        activeCh.title,
-        activeCh.content
-      );
+      try {
+        await this.projectManager.getProject(this.currentProjectId);
+      } catch {
+        await this.projectManager.createProject({
+          id: this.currentProjectId,
+          title: this.workTitle,
+        });
+      }
+
+      for (const ch of this.chapters) {
+        await this.projectManager.saveChapter(
+          this.currentProjectId,
+          ch.id,
+          ch.title,
+          ch.content
+        );
+      }
+      await this.projectManager.updateProjectMeta(this.currentProjectId, {
+        title: this.workTitle,
+        activeChapterId: this.currentChapterId,
+      });
+      await this.loreManager.saveToVFS(this.currentProjectId);
     } catch (err) {
       console.warn('VFS auto-save warning:', err);
     }
@@ -1083,14 +1155,19 @@ export class PlotailorApp {
     if (!title || !title.trim()) return;
 
     try {
+      await this.saveToVFS();
       const newProj = await this.projectManager.createProject({ title: title.trim() });
-      // Add default Chapter 1
       await this.projectManager.saveChapter(
         newProj.id,
         'ch1',
         '第一章 幕開け',
         '　ここに新しい物語の最初の一行を書き始めます。'
       );
+
+      // Reset lore entities completely to eliminate residual sample data
+      this.loreManager.setEntities([]);
+      await this.loreManager.saveToVFS(newProj.id);
+
       await this.switchProject(newProj.id);
       this.closeProjectModal();
       this.showToast(`✨ 新規作品「${newProj.title}」を作成し、執筆を開始しました`);
@@ -1101,6 +1178,8 @@ export class PlotailorApp {
 
   private async switchProject(projectId: string) {
     try {
+      await this.saveToVFS();
+
       const data = await this.projectManager.getProject(projectId);
       this.currentProjectId = projectId;
       this.workTitle = data.meta.title;
@@ -1120,12 +1199,17 @@ export class PlotailorApp {
           });
         }
       } else {
-        this.chapters = JSON.parse(JSON.stringify(DEFAULT_CHAPTERS));
+        this.chapters = [
+          { id: 'ch1', title: '第一章 幕開け', charCount: 22, content: '　ここに新しい物語の最初の一行を書き始めます。' },
+        ];
       }
 
       this.currentChapterId = data.meta.activeChapterId && this.chapters.some((c) => c.id === data.meta.activeChapterId)
         ? data.meta.activeChapterId
         : this.chapters[0].id;
+
+      await this.loreManager.loadFromVFS(projectId);
+      this.loreDock.updateDictionary(this.loreManager.toLoreTermDefinitions());
 
       this.chapterStates.clear();
       this.chapterSnapshots.clear();
@@ -1134,7 +1218,9 @@ export class PlotailorApp {
       this.renderChapterSelect();
       this.loadChapter(this.currentChapterId);
       this.renderLeftPane();
+      this.renderRightPane();
       this.updateStats();
+      this.updateMultiLayerDecorations();
       this.showToast(`📚 作品「${this.workTitle}」を開きました`);
     } catch (err) {
       console.error('Failed to switch project:', err);

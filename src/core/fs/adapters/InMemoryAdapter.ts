@@ -8,6 +8,14 @@ interface InMemoryNode {
   ctime: number;
 }
 
+interface SerializedNode {
+  type: VNodeType;
+  text?: string;
+  children?: Record<string, SerializedNode>;
+  mtime: number;
+  ctime: number;
+}
+
 export class InMemoryAdapter implements FileSystemAdapter {
   private root: InMemoryNode = {
     type: 'directory',
@@ -18,6 +26,79 @@ export class InMemoryAdapter implements FileSystemAdapter {
 
   private encoder = new TextEncoder();
   private decoder = new TextDecoder();
+  private storageKey: string | null;
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(storageKey: string | null = 'plotailor_vfs_tree') {
+    this.storageKey = storageKey;
+    if (this.storageKey && typeof localStorage !== 'undefined') {
+      this.loadFromStorage();
+    }
+  }
+
+  private serializeNode(node: InMemoryNode): SerializedNode {
+    const serialized: SerializedNode = {
+      type: node.type,
+      mtime: node.mtime,
+      ctime: node.ctime,
+    };
+    if (node.type === 'file' && node.data) {
+      serialized.text = this.decoder.decode(node.data);
+    } else if (node.type === 'directory' && node.children) {
+      serialized.children = {};
+      for (const [name, child] of node.children.entries()) {
+        serialized.children[name] = this.serializeNode(child);
+      }
+    }
+    return serialized;
+  }
+
+  private deserializeNode(serialized: SerializedNode): InMemoryNode {
+    const node: InMemoryNode = {
+      type: serialized.type,
+      mtime: serialized.mtime || Date.now(),
+      ctime: serialized.ctime || Date.now(),
+    };
+    if (serialized.type === 'file') {
+      node.data = serialized.text ? this.encoder.encode(serialized.text) : new Uint8Array(0);
+    } else if (serialized.type === 'directory') {
+      node.children = new Map();
+      if (serialized.children) {
+        for (const [name, child] of Object.entries(serialized.children)) {
+          node.children.set(name, this.deserializeNode(child));
+        }
+      }
+    }
+    return node;
+  }
+
+  private saveToStorage(): void {
+    if (!this.storageKey || typeof localStorage === 'undefined') return;
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      try {
+        const serialized = this.serializeNode(this.root);
+        localStorage.setItem(this.storageKey!, JSON.stringify(serialized));
+      } catch (err) {
+        console.warn('VFS persist error:', err);
+      }
+    }, 50);
+  }
+
+  private loadFromStorage(): void {
+    if (!this.storageKey || typeof localStorage === 'undefined') return;
+    try {
+      const raw = localStorage.getItem(this.storageKey);
+      if (raw) {
+        const parsed: SerializedNode = JSON.parse(raw);
+        if (parsed && parsed.type === 'directory') {
+          this.root = this.deserializeNode(parsed);
+        }
+      }
+    } catch (err) {
+      console.warn('VFS load error:', err);
+    }
+  }
 
   private normalizePath(rawPath: string): string[] {
     return rawPath
@@ -83,6 +164,7 @@ export class InMemoryAdapter implements FileSystemAdapter {
       }
       current = next;
     }
+    this.saveToStorage();
   }
 
   async readdir(path: string): Promise<VFSEntry[]> {
@@ -146,6 +228,7 @@ export class InMemoryAdapter implements FileSystemAdapter {
       ctime: existing ? existing.ctime : now,
     });
     parentNode.mtime = now;
+    this.saveToStorage();
   }
 
   async readText(path: string): Promise<string> {
@@ -175,6 +258,7 @@ export class InMemoryAdapter implements FileSystemAdapter {
     }
     parent.children.delete(fileName);
     parent.mtime = Date.now();
+    this.saveToStorage();
   }
 
   async rmdir(path: string, recursive: boolean = false): Promise<void> {
@@ -197,5 +281,6 @@ export class InMemoryAdapter implements FileSystemAdapter {
     }
     parent.children.delete(dirName);
     parent.mtime = Date.now();
+    this.saveToStorage();
   }
 }

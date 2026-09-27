@@ -238,9 +238,16 @@ export class ProjectManager {
     if (!legacyTitle && !legacyChaptersStr) return null;
 
     const projects = await this.listProjects();
-    const existing = projects.find((p) => p.title === (legacyTitle || '星辰の境界線'));
+    const existing = projects.find((p) => p.title === (legacyTitle || '星辰の境界線') || p.id === 'default_work');
     if (existing) {
       return existing;
+    }
+
+    if (await this.vfs.exists(`${this.rootPath}/default_work`)) {
+      try {
+        const existingData = await this.getProject('default_work');
+        return existingData.meta;
+      } catch {}
     }
 
     const title = legacyTitle || '星辰の境界線';

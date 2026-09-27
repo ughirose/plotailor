@@ -141,4 +141,63 @@ describe('PlotailorApp DOM Initialization & Data Integrity', () => {
 
     expect(menuRubyStatus?.textContent).toContain('現在:');
   });
+
+  it('creates clean new project without residual sample data and supports multi-project switching and refresh', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    const app = new PlotailorApp();
+
+    // 1. Initial default project check
+    const titleEl = document.getElementById('workTitleText');
+    expect(titleEl?.textContent).toBe('星辰の境界線');
+
+    // Mock window.prompt for new project
+    const originalPrompt = window.prompt;
+    window.prompt = vi.fn().mockReturnValue('完全新規の異世界奇譚');
+
+    // 2. Create new project
+    await (app as any).createNewProjectPrompt();
+
+    expect(titleEl?.textContent).toBe('完全新規の異世界奇譚');
+    const chapterSelect = document.getElementById('chapterSelect') as HTMLSelectElement;
+    expect(chapterSelect.children.length).toBe(1);
+    expect(chapterSelect.children[0].textContent).toContain('第一章 幕開け');
+
+    // Confirm sample character "ヴァレリウス" is purged from new project
+    const newEntities = (app as any).loreManager.getEntities();
+    expect(newEntities.some((e: any) => e.name === 'ヴァレリウス将軍')).toBe(false);
+    expect(newEntities.length).toBe(0);
+
+    // 3. Add an entity specific to this new project
+    (app as any).loreManager.createEntity({
+      name: 'エリス',
+      category: 'character',
+      description: '旅の魔導士',
+    });
+    await (app as any).saveLoreData();
+    expect((app as any).loreManager.getEntities().length).toBe(1);
+
+    // 4. Switch back to default project
+    await (app as any).switchProject('default_work');
+    expect(titleEl?.textContent).toBe('星辰の境界線');
+
+    // 5. Switch back to new project
+    const projects = await (app as any).projectManager.listProjects();
+    const createdProj = projects.find((p: any) => p.title === '完全新規の異世界奇譚');
+    expect(createdProj).toBeDefined();
+
+    await (app as any).switchProject(createdProj.id);
+    expect(titleEl?.textContent).toBe('完全新規の異世界奇譚');
+    expect((app as any).loreManager.getEntities().some((e: any) => e.name === 'エリス')).toBe(true);
+
+    // 6. Simulate browser refresh (reload / re-instantiate PlotailorApp)
+    const refreshedApp = new PlotailorApp();
+    // Allow VFS init to settle
+    await (refreshedApp as any).initProjectVFS();
+
+    const refreshedTitleEl = document.getElementById('workTitleText');
+    expect(refreshedTitleEl?.textContent).toBe('完全新規の異世界奇譚');
+
+    // Cleanup mock
+    window.prompt = originalPrompt;
+  });
 });

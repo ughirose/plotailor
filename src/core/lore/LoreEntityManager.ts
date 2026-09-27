@@ -104,6 +104,10 @@ export class LoreEntityManager {
     return this.entities.filter((e) => e.category === category);
   }
 
+  public setEntities(entities: LoreEntity[]): void {
+    this.entities = [...entities];
+  }
+
   public getEntity(id: string): LoreEntity | undefined {
     return this.entities.find((e) => e.id === id);
   }
