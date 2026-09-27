@@ -6,12 +6,15 @@ import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
+import { EmotionalArcAnalyzer } from '../core/nlp/EmotionalArcAnalyzer.js';
+import { EmotionalArcChart } from '../core/nlp/EmotionalArcChart.js';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
+  private emotionalAnalyzer: EmotionalArcAnalyzer;
   private rawText: string;
   private isVerticalMode: boolean = false;
   private isComposing: boolean = false;
@@ -20,6 +23,7 @@ export class EditorView {
     this.container = container;
     this.linter = new LoreLinterEngine();
     this.popEngine = new PoPAuditEngine('author-session-01');
+    this.emotionalAnalyzer = new EmotionalArcAnalyzer();
 
     // Setup fictional calendar
     this.celestialEngine = new CelestialCalendarEngine(
@@ -60,7 +64,14 @@ export class EditorView {
     this.rawText = `　王都の夜空には二つの月が冷たく輝いていた。
 　北の砦から帰還した｜ヴァレリウス将軍《ばれりうすしょうぐん》は、腰の｜紫電の剣《しでんのけん》にそっと触れた。
 「近衛軍の動きが妙だ。停戦の誓いを破る気か」
-　若き従卒のアーサーは恐れおののいた。《《予言の夜》》はすでに始まっていたのだ。`;
+　若き従卒のアーサーは恐れおののいた。《《予言の夜》》はすでに始まっていたのだ。
+
+===
+
+　北の砦の夜明けは血のように赤く染まった。
+　襲撃の警告ラッパが鳴り響き、全軍が剣を抜き放つ。決戦の火蓋が切って落とされた。
+「一人たりとも逃すな！突撃！」
+　ヴァレリウス将軍の怒号が響き渡る。一撃のもとに敵陣を突破し、奇跡の勝利を掴み取ったのだった。`;
   }
 
   render(): void {
@@ -156,6 +167,11 @@ export class EditorView {
             <span class="status-dot"></span>
           </div>
           <div class="pane-content">
+            <!-- Character Emotional Arc Chart Card -->
+            <div class="tree-group">
+              <div id="emotional-arc-container"></div>
+            </div>
+
             <!-- Lore Diagnostics -->
             <div class="tree-group">
               <div class="tree-title">設定語句リント (Aho-Corasick)</div>
@@ -281,7 +297,15 @@ export class EditorView {
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
 
-    // 4. Record PoP Edit Event
+    // 4. Render Emotional Arc Chart
+    const arcResult = this.emotionalAnalyzer.analyze(this.rawText);
+    const chart = new EmotionalArcChart(arcResult);
+    const arcContainer = this.container.querySelector('#emotional-arc-container');
+    if (arcContainer) {
+      arcContainer.innerHTML = chart.renderHtmlContainer({ width: 300, height: 160 });
+    }
+
+    // 5. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
       id: `evt-${Date.now()}`,
       eventType: 'TEXT_INSERT',
@@ -290,7 +314,7 @@ export class EditorView {
     });
     this.renderPoPChain();
 
-    // 5. Update Moon Phase
+    // 6. Update Moon Phase
     const t = 368450; // Current scalar day
     const lunaPhase = this.celestialEngine.getMoonPhase('sat_luna', t);
     const selenePhase = this.celestialEngine.getMoonPhase('sat_selene', t);

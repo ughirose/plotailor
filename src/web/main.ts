@@ -3,6 +3,7 @@
  * 
  * Features:
  * - 3-Pane Non-Modal Editor Mockup with interactive character & lore cards
+ * - Character Emotional Arc & Climax Tension Chart
  * - In-place auto-ruby expansion (renders beautiful <ruby> in both horizontal and vertical modes, keeping Aozora format under the hood)
  * - Proof of Process (PoP) real-time Merkle hash generation
  * - Discreet Narrative-Nano (5.8M) Developer Lab Drawer (裏メニュー)
@@ -11,6 +12,8 @@
 import './styles.css';
 import { sha256 } from '../core/pop/MerkleHashChain.js';
 import { SPSCRingBuffer } from '../core/ipc/SharedMemoryProtocol.js';
+import { EmotionalArcAnalyzer } from '../core/nlp/EmotionalArcAnalyzer.js';
+import { EmotionalArcChart } from '../core/nlp/EmotionalArcChart.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   initPlotailorApp();
@@ -38,8 +41,19 @@ function initInteractiveEditor(): void {
   const assistantDesc = document.getElementById('assistantContextDesc') as HTMLElement;
   const assistantConsistency = document.getElementById('assistantConsistencyBody') as HTMLElement;
 
+  const emotionalAnalyzer = new EmotionalArcAnalyzer();
+
   let isComposing = false;
   let keystrokeSeq = 0;
+
+  // Create emotional arc card container in right pane if not present
+  const paneRight = document.querySelector('.pane-right');
+  let arcCardContainer = document.getElementById('mockEmotionalArcContainer');
+  if (paneRight && !arcCardContainer) {
+    arcCardContainer = document.createElement('div');
+    arcCardContainer.id = 'mockEmotionalArcContainer';
+    paneRight.insertBefore(arcCardContainer, paneRight.firstChild);
+  }
 
   // World and Character Encyclopedia Definitions
   const worldEntities: Record<string, {
@@ -272,7 +286,7 @@ function initInteractiveEditor(): void {
   }
 
   /**
-   * Updates word count and generates PoP Merkle SHA-256 hash
+   * Updates word count, generates PoP Merkle SHA-256 hash, and renders Emotional Arc Chart
    */
   function updateStatsAndProof(): void {
     if (!editorArea) return;
@@ -290,6 +304,13 @@ function initInteractiveEditor(): void {
 
     if (popLiveHash) {
       popLiveHash.textContent = `Seq #${keystrokeSeq} Hash: ${hash.substring(0, 16)}...`;
+    }
+
+    // Render Emotional Arc Chart
+    if (arcCardContainer) {
+      const arcResult = emotionalAnalyzer.analyze(editorArea.innerText);
+      const chart = new EmotionalArcChart(arcResult);
+      arcCardContainer.innerHTML = chart.renderHtmlContainer({ width: 260, height: 140 });
     }
   }
 
