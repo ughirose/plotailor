@@ -45,12 +45,23 @@
         <button class="ide-btn" id="btnFullscreen" title="集中執筆全画面モード (F11)">⛶ 全画面</button>
         <button class="ide-btn" id="btnToggleRightPane" title="右ペイン（伏線・推敲インスペクタ）の開閉">◧ 伏線</button>
         
+        <!-- Quick Help Shortcut Button -->
+        <button class="ide-btn" id="btnHeaderHelp" title="操作ガイド・ショートカット一覧 (?)" style="padding: 2px 9px; font-weight: bold; font-size: 13px;">?</button>
+
         <!-- Hamburger Menu for Auxiliary Tools -->
         <div class="header-menu-container" style="position: relative;">
           <button class="ide-btn" id="btnHamburgerMenu" title="その他のツール・設定・エクスポート" aria-haspopup="true" aria-expanded="false" style="padding: 4px 10px; font-size: 14px;">
             ☰
           </button>
           <div class="header-dropdown-menu" id="hamburgerDropdown" style="display: none;">
+            <div class="dropdown-item" id="menuOpenSettings">
+              <span>⚙️</span>
+              <div>
+                <strong>エディタ環境設定</strong>
+                <small>自動字下げ・フォントサイズ・ルビ補完ON/OFF</small>
+              </div>
+            </div>
+            <div class="dropdown-divider"></div>
             <div class="dropdown-item" id="menuExportAozora">
               <span>🖋️</span>
               <div>
@@ -144,11 +155,12 @@
       <!-- Right Pane: Lore & Foreshadowing Inspector & PoP Audit Dock -->
       <aside class="pane-right" id="paneRight">
         <div class="pane-top-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--color-border); background: rgba(0,0,0,0.15);">
+          <!-- Collapse Button Placed at LEFT as requested -->
+          <button class="pane-collapse-btn" id="btnCollapseRight" title="右ペインを折りたたむ (▶)" style="background: none; border: none; color: var(--color-text-dim); cursor: pointer; font-size: 12px; padding: 2px 6px;">▶</button>
           <div style="display: flex; align-items: center; gap: 6px;">
             <span style="font-size: 11px; font-weight: 600; color: var(--color-gold); letter-spacing: 0.05em;">INSPECTOR</span>
             <button class="ide-btn" id="btnToggleLegendCard" title="装飾ハイライト凡例の表示/非表示" style="padding: 1px 6px; font-size: 10px; height: 18px; border-color: rgba(207,168,92,0.4);">凡例 ▾</button>
           </div>
-          <button class="pane-collapse-btn" id="btnCollapseRight" title="右ペインを折りたたむ (▶)" style="background: none; border: none; color: var(--color-text-dim); cursor: pointer; font-size: 12px; padding: 2px 6px;">▶</button>
         </div>
         
         <!-- Decoration Legend Collapsible Card -->
@@ -366,6 +378,124 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal (Environment Preferences) -->
+  <div class="history-modal-backdrop" id="settingsModal" style="display: none;">
+    <div class="history-modal-dialog" style="max-width: 540px;">
+      <div class="history-modal-header">
+        <h3><span>⚙️</span> エディタ環境設定</h3>
+        <button class="history-modal-close" id="btnCloseSettingsModal">&times;</button>
+      </div>
+      <div class="history-modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+        <!-- 1. Auto Indent Toggle -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="font-size: 13px;">段落自動字下げ (Tabキー全角スペース)</strong>
+            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">Tabキーで全角スペース「　」を挿入し段落頭をインデント</small>
+          </div>
+          <input type="checkbox" id="settingAutoIndent" checked style="width: 18px; height: 18px; cursor: pointer;">
+        </div>
+
+        <!-- 2. Auto Ruby Complete -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="font-size: 13px;">ルビリアルタイム展開・自動補完</strong>
+            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">《ルビ》記法を入力した際にリッチルビとして展開表示</small>
+          </div>
+          <input type="checkbox" id="settingAutoRuby" checked style="width: 18px; height: 18px; cursor: pointer;">
+        </div>
+
+        <!-- 3. Realtime Linter -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="font-size: 13px;">推敲・文体装飾リント表示</strong>
+            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">助詞連続や視点ブレなどの波線・下線ハイライトを表示</small>
+          </div>
+          <input type="checkbox" id="settingRealtimeLinter" checked style="width: 18px; height: 18px; cursor: pointer;">
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 4px 0;">
+
+        <!-- 4. Font Size -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="font-size: 13px;">本文フォントサイズ</strong>
+            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">エディタ内の文字サイズを調整</small>
+          </div>
+          <select id="settingFontSize" class="ide-input" style="width: 120px;">
+            <option value="14px">小 (14px)</option>
+            <option value="16px" selected>標準 (16px)</option>
+            <option value="18px">中 (18px)</option>
+            <option value="20px">大 (20px)</option>
+            <option value="24px">特大 (24px)</option>
+          </select>
+        </div>
+
+        <!-- 5. Font Family -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="font-size: 13px;">本文フォント指定</strong>
+            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">明朝体・ゴシック体・システム標準の切り替え</small>
+          </div>
+          <select id="settingFontFamily" class="ide-input" style="width: 150px;">
+            <option value="mincho" selected>しっぽり明朝 (推奨)</option>
+            <option value="gothic">BIZ UDPゴシック</option>
+            <option value="system">システム標準</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help & Shortcuts Modal -->
+  <div class="history-modal-backdrop" id="helpModal" style="display: none;">
+    <div class="history-modal-dialog" style="max-width: 580px;">
+      <div class="history-modal-header">
+        <h3><span>📖</span> 操作ガイド ＆ ショートカットキー</h3>
+        <button class="history-modal-close" id="btnCloseHelpModal">&times;</button>
+      </div>
+      <div class="history-modal-body" style="padding: 20px;">
+        <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <th style="text-align: left; color: var(--color-gold);">機能</th>
+            <th style="text-align: right; color: var(--color-gold);">ショートカットキー / 操作</th>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>元に戻す / やり直す</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Ctrl + Z / Ctrl + Y</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>選択テキストをルビ化</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Ctrl + R</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>全画面集中執筆モード</td>
+            <td style="text-align: right; font-family: var(--font-mono);">F11 / Escで解除</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>左ペイン（目次）開閉</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Ctrl + B または ヘッダーボタン</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>段落字下げ / 逆字下げ</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Tab / Shift + Tab</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>縦書き段落移動</td>
+            <td style="text-align: right; font-family: var(--font-mono);">←（左隣の段落） / →（右隣の段落）</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>縦書き文字移動</td>
+            <td style="text-align: right; font-family: var(--font-mono);">↑（1文字上） / ↓（1文字下）</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>全モーダルを閉じる</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Esc</td>
+          </tr>
+        </table>
       </div>
     </div>
   </div>

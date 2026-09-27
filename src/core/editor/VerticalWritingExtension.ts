@@ -287,49 +287,89 @@ const verticalWheelHandler = EditorView.domEventHandlers({
   },
 });
 
-import { VerticalKeyNavigationEngine, type ArrowKey } from './VerticalKeyNavigationEngine.js';
+import { Prec } from '@codemirror/state';
 
-function handleVerticalArrow(view: EditorView, key: ArrowKey): boolean {
-  if (!isVerticalMode(view)) return false;
-  const doc = view.state.doc.toString();
-  const sel = view.state.selection.main;
-  const result = VerticalKeyNavigationEngine.calculateNavigation({
-    text: doc,
-    cursorOffset: sel.head,
-    key,
-  });
-  if (result.newOffset !== sel.head) {
-    view.dispatch({
-      selection: { anchor: result.newOffset, head: result.newOffset },
-      scrollIntoView: true,
-    });
-    return true;
-  }
-  return false;
+export let isAutoIndentEnabled = true;
+export function setAutoIndentEnabled(enabled: boolean) {
+  isAutoIndentEnabled = enabled;
 }
 
-export const verticalArrowNavigationKeymap = keymap.of([
-  {
-    key: 'ArrowUp',
-    run: (view: EditorView) => handleVerticalArrow(view, 'ArrowUp'),
-  },
-  {
-    key: 'ArrowDown',
-    run: (view: EditorView) => handleVerticalArrow(view, 'ArrowDown'),
-  },
-  {
-    key: 'ArrowLeft',
-    run: (view: EditorView) => handleVerticalArrow(view, 'ArrowLeft'),
-  },
-  {
-    key: 'ArrowRight',
-    run: (view: EditorView) => handleVerticalArrow(view, 'ArrowRight'),
-  },
-]);
+function handleVerticalArrow(
+  view: EditorView,
+  key: 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight'
+): boolean {
+  if (!isVerticalMode(view)) return false;
+  const doc = view.state.doc;
+  const sel = view.state.selection.main;
+  const currentPos = sel.head;
+  const currentLine = doc.lineAt(currentPos);
+  const offsetInLine = currentPos - currentLine.from;
+
+  let targetPos = currentPos;
+
+  if (key === 'ArrowUp') {
+    // 視覚的な上＝同じ段落（行）の1文字上へ
+    if (currentPos > currentLine.from) {
+      targetPos = currentPos - 1;
+    } else if (currentLine.number > 1) {
+      const prevLine = doc.line(currentLine.number - 1);
+      targetPos = prevLine.to;
+    }
+  } else if (key === 'ArrowDown') {
+    // 視覚的な下＝同じ段落（行）の1文字下へ
+    if (currentPos < currentLine.to) {
+      targetPos = currentPos + 1;
+    } else if (currentLine.number < doc.lines) {
+      const nextLine = doc.line(currentLine.number + 1);
+      targetPos = nextLine.from;
+    }
+  } else if (key === 'ArrowLeft') {
+    // 視覚的な左＝左側の段落（次の段落）の同位置へ移動！
+    if (currentLine.number < doc.lines) {
+      const nextLine = doc.line(currentLine.number + 1);
+      targetPos = nextLine.from + Math.min(offsetInLine, nextLine.length);
+    }
+  } else if (key === 'ArrowRight') {
+    // 視覚的な右＝右側の段落（前の段落）の同位置へ移動！
+    if (currentLine.number > 1) {
+      const prevLine = doc.line(currentLine.number - 1);
+      targetPos = prevLine.from + Math.min(offsetInLine, prevLine.length);
+    }
+  }
+
+  if (targetPos !== currentPos) {
+    view.dispatch({
+      selection: { anchor: targetPos, head: targetPos },
+      scrollIntoView: true,
+    });
+  }
+  return true;
+}
+
+export const verticalArrowNavigationKeymap = Prec.highest(
+  keymap.of([
+    {
+      key: 'ArrowUp',
+      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowUp'),
+    },
+    {
+      key: 'ArrowDown',
+      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowDown'),
+    },
+    {
+      key: 'ArrowLeft',
+      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowLeft'),
+    },
+    {
+      key: 'ArrowRight',
+      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowRight'),
+    },
+  ])
+);
 
 /**
  * Keymap handler to trap Tab and Shift-Tab inside the editor,
- * preventing focus loss to side panes and inserting full-width space for Japanese novel indent.
+ * preventing focus loss to side panes and optionally inserting full-width space for Japanese novel indent.
  */
 import { keymap } from '@codemirror/view';
 
@@ -337,10 +377,12 @@ export const tabIndentKeymap = keymap.of([
   {
     key: 'Tab',
     run: (view: EditorView) => {
+      if (!isAutoIndentEnabled) return false;
       view.dispatch(view.state.replaceSelection('　'));
       return true;
     },
     shift: (view: EditorView) => {
+      if (!isAutoIndentEnabled) return false;
       const sel = view.state.selection.main;
       const line = view.state.doc.lineAt(sel.from);
       if (line.text.startsWith('　') || line.text.startsWith(' ') || line.text.startsWith('\t')) {

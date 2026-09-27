@@ -531,24 +531,38 @@ html, body {
   word-break: break-word;
 }
 
-/* Vertical Writing Mode */
+/* Vertical Writing Mode - Reliable Horizontal Scroll on Long Text */
 .pane-center.vertical-rl .canvas-wrapper {
-  overflow-x: auto;
-  overflow-y: auto;
-  display: flex;
-  justify-content: flex-end;
+  overflow-x: scroll !important;
+  overflow-y: hidden !important;
+  display: block !important;
+  direction: rtl; /* Right-to-left block flow enables smooth horizontal scroll without flex-end cutoff */
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gold) rgba(0, 0, 0, 0.25);
+}
+
+.pane-center.vertical-rl .canvas-wrapper::-webkit-scrollbar {
+  height: 10px;
+}
+.pane-center.vertical-rl .canvas-wrapper::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 5px;
+}
+.pane-center.vertical-rl .canvas-wrapper::-webkit-scrollbar-thumb {
+  background: var(--color-gold);
+  border-radius: 5px;
 }
 
 .pane-center.vertical-rl .editor-body {
+  direction: ltr; /* Reset text direction while preserving vertical-rl column order */
   writing-mode: vertical-rl;
   -webkit-writing-mode: vertical-rl;
   height: 100%;
-  width: auto;
-  min-width: fit-content;
-  max-width: none;
+  width: max-content !important;
+  min-width: 100%;
   padding: 36px 48px;
   line-height: 1.85;
-  margin-left: auto;
+  box-sizing: border-box;
   overflow: visible;
 }
 
@@ -605,19 +619,25 @@ html, body {
   word-break: break-word !important;
 }
 
-/* Ruby and Bouten Typography (Strictly matching landing page mockup) */
+/* Ruby and Bouten Typography (Clean inline-ruby without gaps) */
 ruby, .cm-ruby {
+  display: inline-ruby !important;
   ruby-align: center;
   ruby-position: over;
+  ruby-overhang: auto;
   cursor: pointer;
   line-height: inherit;
   vertical-align: baseline;
-  margin: 0;
-  padding: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  letter-spacing: normal !important;
 }
 
 rb, .cm-ruby rb, .cm-ruby-base {
-  ruby-align: center;
+  display: ruby-base !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  letter-spacing: inherit;
   line-height: inherit;
 }
 
@@ -627,13 +647,17 @@ rb, .cm-ruby rb, .cm-ruby-base {
 }
 
 rt, .cm-ruby rt, .cm-ruby-text {
-  font-size: 0.55em !important;
+  display: ruby-text !important;
+  font-size: 0.5em !important;
   color: var(--color-gold) !important;
   letter-spacing: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
   user-select: none !important;
   font-family: var(--font-serif) !important;
   line-height: 1 !important;
   text-align: center !important;
+  white-space: nowrap !important;
 }
 
 .pane-center.theme-night ruby rt,
@@ -1763,33 +1787,62 @@ body.theme-washi .cm-decoration-layer2 {
 /* ==========================================================================
    Collapsible Panes & Pane Resizing States
    ========================================================================== */
+/* ==========================================================================
+   Collapsible Panes & Pane Resizing States (With 28px Clickable Restoring Strip)
+   ========================================================================== */
 .pane-left.collapsed {
-  width: 0 !important;
-  min-width: 0 !important;
-  max-width: 0 !important;
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
   padding: 0 !important;
-  border-right: none !important;
+  border-right: 1px solid var(--color-border) !important;
   overflow: hidden !important;
-  visibility: hidden;
+  visibility: visible !important;
+  background: rgba(0, 0, 0, 0.25);
+  cursor: pointer;
 }
 
 .pane-right.collapsed {
-  width: 0 !important;
-  min-width: 0 !important;
-  max-width: 0 !important;
+  width: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
   padding: 0 !important;
-  border-left: none !important;
+  border-left: 1px solid var(--color-border) !important;
   overflow: hidden !important;
-  visibility: hidden;
+  visibility: visible !important;
+  background: rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+.pane-left.collapsed .pane-tabs,
+.pane-left.collapsed .pane-content,
+.pane-right.collapsed .pane-tabs,
+.pane-right.collapsed .dock-content,
+.pane-right.collapsed .decoration-legend-panel {
+  display: none !important;
+}
+
+.pane-left.collapsed .pane-top-bar,
+.pane-right.collapsed .pane-top-bar {
+  padding: 8px 2px !important;
+  justify-content: center !important;
+  background: transparent !important;
+}
+
+.pane-left.collapsed .pane-top-bar span,
+.pane-right.collapsed .pane-top-bar span,
+.pane-right.collapsed .pane-top-bar #btnToggleLegendCard {
+  display: none !important;
 }
 
 .pane-collapse-btn {
   transition: transform 0.2s ease, color 0.2s ease;
+  font-weight: bold;
 }
 
 .pane-collapse-btn:hover {
   color: var(--color-gold) !important;
-  transform: scale(1.15);
+  transform: scale(1.2);
 }
 
 /* ==========================================================================
@@ -1806,4 +1859,49 @@ body.theme-washi .cm-decoration-layer2 {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* ==========================================================================
+   Washi Theme Overrides for Legend, Dropdown, and Modals
+   ========================================================================== */
+body.theme-washi .header-dropdown-menu {
+  background: #f7f4ea !important;
+  border-color: #dcd3b8 !important;
+  color: #2c251e !important;
+  box-shadow: 0 12px 28px rgba(78, 64, 46, 0.25) !important;
+}
+
+body.theme-washi .dropdown-item {
+  color: #2c251e !important;
+}
+
+body.theme-washi .dropdown-item:hover {
+  background: rgba(207, 168, 92, 0.2) !important;
+  color: #1a1612 !important;
+}
+
+body.theme-washi .dropdown-item small {
+  color: #6e6456 !important;
+}
+
+body.theme-washi .dropdown-divider {
+  background: #dcd3b8 !important;
+}
+
+body.theme-washi .decoration-legend-panel {
+  background: #f4efdf !important;
+  border-color: #dcd3b8 !important;
+  color: #2c251e !important;
+  box-shadow: 0 4px 12px rgba(78, 64, 46, 0.15) !important;
+}
+
+body.theme-washi .decoration-legend-panel strong {
+  filter: brightness(0.85);
+}
+
+body.theme-washi .history-modal-dialog {
+  background: #f7f4ea !important;
+  border-color: #dcd3b8 !important;
+  color: #2c251e !important;
+}
+
 
