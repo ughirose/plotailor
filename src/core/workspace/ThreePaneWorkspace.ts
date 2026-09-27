@@ -12,6 +12,7 @@ import type { SubgraphSlice } from '@schema';
 import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
+import { DemonstrativeDensityLinter, type DemonstrativeDiagnostic, type DemonstrativeLinterOptions } from '../editor/DemonstrativeDensityLinter.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
@@ -26,6 +27,7 @@ export interface WorkspaceState {
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
   activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
   diagnostics: LoreDiagnostic[];
+  demonstrativeDiagnostics: DemonstrativeDiagnostic[];
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -36,6 +38,7 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private demonstrativeLinter: DemonstrativeDensityLinter;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
@@ -43,6 +46,7 @@ export class ThreePaneWorkspace {
   constructor(options?: {
     initialText?: string;
     regulations?: TermRegulation[];
+    demonstrativeOptions?: DemonstrativeLinterOptions;
     worker?: WorkerInstance;
   }) {
     this.ontologyEngine = new WorldOntologyEngine();
@@ -50,6 +54,7 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.demonstrativeLinter = new DemonstrativeDensityLinter(options?.demonstrativeOptions);
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
@@ -63,6 +68,7 @@ export class ThreePaneWorkspace {
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
       diagnostics: [],
+      demonstrativeDiagnostics: [],
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -80,6 +86,10 @@ export class ThreePaneWorkspace {
     return this.hotSwapManager;
   }
 
+  public getDemonstrativeLinter(): DemonstrativeDensityLinter {
+    return this.demonstrativeLinter;
+  }
+
   /**
    * Handle text edits from the central CodeMirror 6 editor.
    * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, and avoids interrupting author.
@@ -92,9 +102,10 @@ export class ThreePaneWorkspace {
       this.hotSwapManager.reportKeystroke(isComposing);
     }
 
-    // Run Lore Linter (bypassed if composing with Japanese IME)
+    // Run Lore Linter & Demonstrative Density Linter (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+    this.state.demonstrativeDiagnostics = this.demonstrativeLinter.lint(newText, { isComposing, displayMap: map });
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -168,7 +179,7 @@ export class ThreePaneWorkspace {
         contentHtml:
           this.state.activeRightTab === 'pop-audit'
             ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span> / <span>指示語警告: ${this.state.demonstrativeDiagnostics.length}件</span></div>`,
       },
     };
   }
