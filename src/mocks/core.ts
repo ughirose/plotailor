@@ -1,21 +1,21 @@
 export class WorldOntologyEngine {
-  applyDelta(_delta: any): void {}
+  applyDelta(_delta: unknown): void {}
 }
 
 export class CelestialCalendarEngine {
-  constructor(_config?: any, _satellites?: any) {}
-  getMoonPhase(_satelliteId: string, _timeScalar: number): number {
+  constructor(public config: unknown, public moons: unknown[]) {}
+  getMoonPhase(_id: string, _t: number): number {
     return 0.5;
   }
   getMoonPhaseName(_phase: number): string {
-    return '満月';
+    return '上弦の月';
   }
 }
 
-export function calculateDistance(..._args: any[]): number {
-  return 0;
+export function calculateDistance(locA: string, locB: string): number {
+  return locA === locB ? 0 : 500;
 }
 
-export function calculateTransmissionDelay(..._args: any[]): number {
-  return 0;
+export function calculateTransmissionDelay(distance: number, speed: number): number {
+  return speed === Infinity ? 0 : Math.ceil(distance / speed);
 }

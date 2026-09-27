@@ -173,5 +173,19 @@ export * from './core/nlp/SentenceEndingCadenceCalculator.js';
 export * from './core/editor/ParagraphIndenter.js';
 export * from './core/editor/DemonstrativeDensityLinter.js';
 export * from './core/editor/StyleDiscomfortDetector.js';
+export * from './core/editor/PovConsistencyAnalyzer.js';
+export * from './core/editor/ParticleRepetitionLinter.js';
+export * from './core/editor/SceneOutliner.js';
+export * from './core/editor/RubySyntaxParser.js';
+export * from './core/editor/RubyShortcutExtension.js';
+export * from './core/editor/ForeshadowingEngine.js';
+export * from './core/editor/ForeshadowingProgressPanel.js';
+export * from './core/editor/ExclamationSpacingFormatter.js';
+export * from './core/nlp/EmotionalArcAnalyzer.js';
+export * from './core/nlp/EmotionalArcChart.js';
+export * from './core/editor/CharacterHeatmap.js';
+export * from './core/nlp/TaigenRhythmEngine.js';
+export * from './core/editor/KanjiHirakuDictionary.js';
+export { EditorView } from './web/EditorView.js';
 
 

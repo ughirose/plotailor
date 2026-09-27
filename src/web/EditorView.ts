@@ -7,6 +7,8 @@ import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../c
 import { StyleDiscomfortDetector, type StyleDiagnostic } from '../core/editor/StyleDiscomfortDetector.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
+import { ForeshadowingEngine, type ForeshadowingJumpTarget } from '../core/editor/ForeshadowingEngine.js';
+import { ForeshadowingProgressPanel } from '../core/editor/ForeshadowingProgressPanel.js';
 
 export class EditorView {
   private container: HTMLElement;
@@ -14,6 +16,7 @@ export class EditorView {
   private styleDetector: StyleDiscomfortDetector;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
+  private foreshadowingEngine: ForeshadowingEngine;
   private rawText: string;
   private isVerticalMode: boolean = false;
   private isComposing: boolean = false;
@@ -23,6 +26,8 @@ export class EditorView {
     this.linter = new LoreLinterEngine();
     this.styleDetector = new StyleDiscomfortDetector();
     this.popEngine = new PoPAuditEngine('author-session-01');
+    this.foreshadowingEngine = new ForeshadowingEngine();
+    this.foreshadowingEngine.parse('第1章\n@plant(f01, "誓いの指輪")');
 
     // Setup fictional calendar
     this.celestialEngine = new CelestialCalendarEngine(
@@ -169,6 +174,11 @@ export class EditorView {
             <div class="tree-group">
               <div class="tree-title">文体違和感・過剰敬語検知</div>
               <div id="style-results-container"></div>
+            </div>
+
+            <!-- Foreshadowing Progress Panel -->
+            <div id="foreshadowing-panel-container">
+              ${new ForeshadowingProgressPanel(this.foreshadowingEngine).renderHtml()}
             </div>
 
             <!-- Cognitive Fog State -->
@@ -437,5 +447,13 @@ export class EditorView {
       `
       )
       .join('');
+  }
+
+  public jumpToTarget(target: { charOffset?: number; lineNumber?: number; [key: string]: any }): void {
+    const rawTextarea = this.container.querySelector('#editor-raw') as HTMLTextAreaElement;
+    if (rawTextarea && target.charOffset !== undefined) {
+      rawTextarea.focus();
+      rawTextarea.setSelectionRange(target.charOffset, target.charOffset);
+    }
   }
 }

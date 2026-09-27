@@ -1,12 +1,9 @@
-export type PASCase = string;
+export class BiaffinePASHead {
+  constructor(public options?: unknown) {}
+}
 
-export const JAPANESE_PAS_CASES: PASCase[] = [
+export const JAPANESE_PAS_CASES = [
   'ガ', 'ガ２', 'ヲ', 'ニ', 'ト', 'デ', 'カラ', 'ヨリ', 'ヘ', 'マデ'
 ];
 
-export class BiaffinePASHead {
-  constructor(_options?: any) {}
-  analyze(_text: string): any {
-    return {};
-  }
-}
+export type PASCase = string;

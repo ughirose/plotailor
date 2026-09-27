@@ -23,17 +23,39 @@ import { EllipsisDashLinterEngine, type EllipsisDashDiagnostic } from '../editor
 import { PassiveVoiceChecker, type PassiveVoiceDiagnostic } from '../nlp/PassiveVoiceChecker.js';
 import { SentenceEndingCadenceCalculator, type CadenceAnalysisResult } from '../nlp/SentenceEndingCadenceCalculator.js';
 import { ParagraphIndenter } from '../editor/ParagraphIndenter.js';
+import { SceneOutliner, type SceneNode } from '../editor/SceneOutliner.js';
+import { TaigenRhythmEngine, type RhythmAnalysisResult } from '../nlp/TaigenRhythmEngine.js';
+import { RubySyntaxParser, type RubyFormatStyle, type NormalizationOptions } from '../editor/RubySyntaxParser.js';
+import { EmotionalArcAnalyzer, type EmotionalArcResult } from '../nlp/EmotionalArcAnalyzer.js';
+import { EmotionalArcChart } from '../nlp/EmotionalArcChart.js';
+import { ExclamationSpacingFormatter, type ExclamationDiagnostic, type FormatExclamationResult } from '../editor/ExclamationSpacingFormatter.js';
+import { ForeshadowingEngine, type ForeshadowingJumpTarget } from '../editor/ForeshadowingEngine.js';
+import { ForeshadowingProgressPanel } from '../editor/ForeshadowingProgressPanel.js';
+import { KanjiHirakuDictionaryEngine, type HirakuDiagnostic } from '../editor/KanjiHirakuDictionary.js';
+import { PovConsistencyAnalyzer, type PovAnalysisResult } from '../editor/PovConsistencyAnalyzer.js';
+import {
+  CharacterHeatmapEngine,
+  type CharacterTermDef,
+  type HeatmapAnalysisResult,
+} from '../editor/CharacterHeatmap.js';
 
 export interface WorkspaceState {
   currentDocumentId: string;
   rawText: string;
   isComposing: boolean;
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
-  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance' | 'revision-history';
+  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance' | 'revision-history' | 'scene-outliner' | 'emotional-arc' | 'foreshadowing' | 'character-heatmap' | string;
   diagnostics: LoreDiagnostic[];
   ellipsisDashDiagnostics: EllipsisDashDiagnostic[];
   passiveDiagnostics: PassiveVoiceDiagnostic[];
   cadenceResult: CadenceAnalysisResult | null;
+  scenes: SceneNode[];
+  rhythmResult: RhythmAnalysisResult | null;
+  emotionalArc: EmotionalArcResult | null;
+  exclamationDiagnostics: ExclamationDiagnostic[];
+  hirakuDiagnostics: HirakuDiagnostic[];
+  povResult: PovAnalysisResult | null;
+  heatmapResult: HeatmapAnalysisResult | null;
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -51,6 +73,13 @@ export class ThreePaneWorkspace {
   private ellipsisLinter: EllipsisDashLinterEngine;
   private passiveChecker: PassiveVoiceChecker;
   private cadenceCalculator: SentenceEndingCadenceCalculator;
+  private emotionalArcAnalyzer: EmotionalArcAnalyzer;
+  private exclamationFormatter: ExclamationSpacingFormatter;
+  private foreshadowingEngine: ForeshadowingEngine;
+  private hirakuEngine: KanjiHirakuDictionaryEngine;
+  private povAnalyzer: PovConsistencyAnalyzer;
+  private heatmapEngine: CharacterHeatmapEngine;
+  private characterTargets: CharacterTermDef[];
   private state: WorkspaceState;
 
   constructor(options?: {
@@ -58,6 +87,7 @@ export class ThreePaneWorkspace {
     regulations?: TermRegulation[];
     worker?: WorkerInstance;
     passiveVoiceThreshold?: number;
+    knownCharacters?: string[];
   }) {
     this.ontologyEngine = new WorldOntologyEngine();
     this.popEngine = new PoPAuditEngine('three-pane-session');
@@ -69,6 +99,16 @@ export class ThreePaneWorkspace {
       threshold: options?.passiveVoiceThreshold ?? 3,
     });
     this.cadenceCalculator = new SentenceEndingCadenceCalculator();
+    this.emotionalArcAnalyzer = new EmotionalArcAnalyzer();
+    this.exclamationFormatter = new ExclamationSpacingFormatter();
+    this.foreshadowingEngine = new ForeshadowingEngine();
+    this.hirakuEngine = new KanjiHirakuDictionaryEngine();
+    this.povAnalyzer = new PovConsistencyAnalyzer({ knownCharacters: options?.knownCharacters });
+    this.heatmapEngine = new CharacterHeatmapEngine();
+    this.characterTargets = [
+      { id: 'char-valerius', name: 'ヴァレリウス', aliases: ['ヴァレリウス将軍'] },
+      { id: 'char-arthur', name: 'アーサー' },
+    ];
     this.rawStorage = new OPFSStorage();
     this.storage = new MobileResilientStorage(this.rawStorage);
 
@@ -81,6 +121,10 @@ export class ThreePaneWorkspace {
 
     const initialText = options?.initialText ?? '';
     const { map } = AozoraParser.parse(initialText);
+    if (initialText) {
+      this.foreshadowingEngine.parseManuscript(initialText);
+    }
+
     this.state = {
       currentDocumentId: docId,
       rawText: initialText,
@@ -91,6 +135,13 @@ export class ThreePaneWorkspace {
       ellipsisDashDiagnostics: initialText ? this.ellipsisLinter.lint(initialText, { displayMap: map }) : [],
       passiveDiagnostics: initialText ? this.passiveChecker.check(initialText, { displayMap: map }) : [],
       cadenceResult: initialText ? this.cadenceCalculator.analyze(initialText) : null,
+      scenes: initialText ? SceneOutliner.analyzeScenes(initialText) : [],
+      rhythmResult: initialText ? TaigenRhythmEngine.analyze(initialText) : null,
+      emotionalArc: initialText ? this.emotionalArcAnalyzer.analyze(initialText) : null,
+      exclamationDiagnostics: initialText ? this.exclamationFormatter.lint(initialText) : [],
+      hirakuDiagnostics: initialText ? this.hirakuEngine.lint(initialText) : [],
+      povResult: initialText ? this.povAnalyzer.analyze(initialText) : null,
+      heatmapResult: initialText ? this.heatmapEngine.analyze(initialText, this.characterTargets) : null,
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -116,6 +167,18 @@ export class ThreePaneWorkspace {
     return this.revisionManager;
   }
 
+  public normalizeRuby(options?: NormalizationOptions): string {
+    const normalized = RubySyntaxParser.normalize(this.state.rawText, options);
+    this.onTextChange(normalized);
+    return normalized;
+  }
+
+  public convertRubyFormat(targetStyle: RubyFormatStyle): string {
+    const converted = RubySyntaxParser.convertFormat(this.state.rawText, targetStyle);
+    this.onTextChange(converted);
+    return converted;
+  }
+
   /**
    * Handle text edits from the central CodeMirror 6 editor.
    * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, and avoids interrupting author.
@@ -134,6 +197,14 @@ export class ThreePaneWorkspace {
     this.state.ellipsisDashDiagnostics = this.ellipsisLinter.lint(newText, { isComposing, displayMap: map });
     this.state.passiveDiagnostics = this.passiveChecker.check(newText, { isComposing, displayMap: map });
     this.state.cadenceResult = this.cadenceCalculator.analyze(newText);
+    this.state.scenes = SceneOutliner.analyzeScenes(newText);
+    this.state.rhythmResult = isComposing ? null : TaigenRhythmEngine.analyze(newText);
+    this.foreshadowingEngine.parseManuscript(newText);
+    this.state.exclamationDiagnostics = this.exclamationFormatter.lint(newText);
+    this.state.hirakuDiagnostics = this.hirakuEngine.lint(newText);
+    this.state.povResult = isComposing ? null : this.povAnalyzer.analyze(newText);
+    this.state.emotionalArc = this.emotionalArcAnalyzer.analyze(newText);
+    this.state.heatmapResult = this.heatmapEngine.analyze(newText, this.characterTargets);
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -168,13 +239,40 @@ export class ThreePaneWorkspace {
     return toggled;
   }
 
+  public getForeshadowingEngine(): ForeshadowingEngine {
+    return this.foreshadowingEngine;
+  }
+
+  public jumpToForeshadowing(id: string): ForeshadowingJumpTarget | null {
+    return this.foreshadowingEngine.jumpToForeshadowing(id);
+  }
+
+  public getPovAnalyzer(): PovConsistencyAnalyzer {
+    return this.povAnalyzer;
+  }
+
+  public formatExclamationSpacing(): FormatExclamationResult {
+    const result = this.exclamationFormatter.format(this.state.rawText);
+    this.onTextChange(result.formattedText);
+    return result;
+  }
+
+  public setCharacterTargets(targets: CharacterTermDef[]): void {
+    this.characterTargets = targets;
+    this.state.heatmapResult = this.heatmapEngine.analyze(this.state.rawText, this.characterTargets);
+  }
+
   /**
    * Safe atomic save to OPFS in background without stalling the UI.
    * Also creates a generation snapshot in RevisionHistoryManager.
    */
-  public async autoSave(): Promise<boolean> {
+  public async autoSave(options?: { autoFormatExclamationSpacing?: boolean }): Promise<boolean> {
     if (this.state.isComposing || this.state.isSaving) {
       return false; // Skip saving while author is actively converting IME
+    }
+
+    if (options?.autoFormatExclamationSpacing) {
+      this.formatExclamationSpacing();
     }
 
     this.state.isSaving = true;
@@ -228,10 +326,44 @@ export class ThreePaneWorkspace {
       rightPaneHtml = `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`;
     } else if (this.state.activeRightTab === 'revision-history') {
       rightPaneHtml = this.revisionManager.renderDockViewHtml();
+    } else if (this.state.activeRightTab === 'scene-outliner') {
+      const outliner = new SceneOutliner();
+      rightPaneHtml = outliner.renderRightDockTree(this.state.scenes);
+    } else if (this.state.activeRightTab === 'emotional-arc') {
+      rightPaneHtml = this.state.emotionalArc
+        ? new EmotionalArcChart(this.state.emotionalArc).renderHtmlContainer()
+        : '<div class="emotional-arc-empty">データなし</div>';
+    } else if (this.state.activeRightTab === 'foreshadowing') {
+      rightPaneHtml = new ForeshadowingProgressPanel(this.foreshadowingEngine).renderHtml();
+    } else if (this.state.activeRightTab === 'character-heatmap') {
+      const result = this.state.heatmapResult;
+      const matrixSvg = result ? this.heatmapEngine.renderSvgHeatmapMatrix(result) : '';
+      const sparklinesHtml = (result?.series ?? [])
+        .map(
+          (s) => `
+        <div class="character-sparkline-row">
+          <span>${s.target.name}</span>
+          <div class="character-sparkline">${this.heatmapEngine.renderSvgSparkline(s)}</div>
+        </div>
+      `
+        )
+        .join('');
+
+      rightPaneHtml = `
+        <div class="character-heatmap-dock">
+          <h4>📊 登場人物・用語 出現頻度ヒートマップ</h4>
+          <div class="heatmap-matrix-svg">${matrixSvg}</div>
+          <div class="sparklines-container">${sparklinesHtml}</div>
+        </div>
+      `;
     } else {
       const oddCount = this.state.ellipsisDashDiagnostics?.length ?? 0;
       const passiveCount = this.state.passiveDiagnostics?.length ?? 0;
-      rightPaneHtml = `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span> / <span>偶数対警告: ${oddCount}件</span> / <span>受動態過多: ${passiveCount}件</span></div>`;
+      const hirakuCount = this.state.hirakuDiagnostics?.length ?? 0;
+      const taigenDomeCount = this.state.rhythmResult?.summary.consecutiveTaigenDomeMatches ?? 0;
+      const duplicateSubjectCount = this.state.rhythmResult?.summary.duplicateSubjectMatches ?? 0;
+      const povBadge = this.state.povResult?.badge.badgeHtml ?? '';
+      rightPaneHtml = `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span> / <span>偶数対警告: ${oddCount}件</span> / <span>受動態過多: ${passiveCount}件</span> / <span>ひらくべき漢字: ${hirakuCount}件</span> / <span>体言止め連続警告: ${taigenDomeCount}件</span> / <span>主語重複警告: ${duplicateSubjectCount}件</span>${povBadge ? ` / ${povBadge}` : ''}</div>`;
     }
 
     return {

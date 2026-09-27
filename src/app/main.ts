@@ -2118,7 +2118,7 @@ export class PlotailorApp {
 }
 
 // Initialize on DOM load if running in browser
-if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+if (typeof window !== 'undefined' && typeof document !== 'undefined' && document.getElementById('editor-body')) {
   if (document.readyState === 'loading') {
     window.addEventListener('DOMContentLoaded', () => {
       (window as any).plotailorApp = new PlotailorApp();

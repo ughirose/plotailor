@@ -1,12 +1,20 @@
 export interface StateDeltaEvent {
-  [key: string]: any;
+  id?: string;
+  type?: string;
+  payload?: unknown;
 }
 
 export interface SubgraphSlice {
   id: string;
-  [key: string]: any;
+  rootNodeId?: string;
+  depth?: number;
+  nodes?: Record<string, unknown>;
+  edges?: Array<{ id: string; source: string; target: string; relation: string }>;
+  version?: number;
 }
 
 export interface NarrativeContext {
-  [key: string]: any;
+  characterIds?: string[];
+  activePlots?: string[];
+  locationId?: string;
 }
