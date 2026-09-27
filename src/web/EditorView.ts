@@ -4,12 +4,14 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import { EllipsisDashLinterEngine, type EllipsisDashDiagnostic } from '../core/editor/EllipsisDashLinter.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
+  private ellipsisDashLinter: EllipsisDashLinterEngine;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private rawText: string;
@@ -19,6 +21,7 @@ export class EditorView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.linter = new LoreLinterEngine();
+    this.ellipsisDashLinter = new EllipsisDashLinterEngine();
     this.popEngine = new PoPAuditEngine('author-session-01');
 
     // Setup fictional calendar
@@ -162,6 +165,12 @@ export class EditorView {
               <div id="linter-results-container"></div>
             </div>
 
+            <!-- Parity Diagnostics -->
+            <div class="tree-group">
+              <div class="tree-title">三点リーダー・ダッシュ偶数対リント</div>
+              <div id="parity-results-container"></div>
+            </div>
+
             <!-- Cognitive Fog State -->
             <div class="tree-group">
               <div class="tree-title">認知フォグ因果律判定</div>
@@ -277,9 +286,10 @@ export class EditorView {
       wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
     }
 
-    // 3. Run Lore Linter
+    // 3. Run Lore Linter & Ellipsis/Dash Parity Linter
     const diagnostics = this.linter.lint(this.rawText);
-    this.renderDiagnostics(diagnostics);
+    const parityDiagnostics = this.ellipsisDashLinter.lint(this.rawText);
+    this.renderDiagnostics(diagnostics, parityDiagnostics);
 
     // 4. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
@@ -300,53 +310,99 @@ export class EditorView {
     if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
   }
 
-  private renderDiagnostics(diagnostics: LoreDiagnostic[]): void {
+  private renderDiagnostics(diagnostics: LoreDiagnostic[], parityDiagnostics: EllipsisDashDiagnostic[] = []): void {
     const container = this.container.querySelector('#linter-results-container');
-    if (!container) return;
+    if (container) {
+      if (diagnostics.length === 0) {
+        container.innerHTML = `
+          <div style="font-size: 0.8rem; color: #10b981; padding: 0.5rem 0;">
+            ✨ 用語不整合・表記揺れなし
+          </div>
+        `;
+      } else {
+        container.innerHTML = diagnostics
+          .map(
+            (d) => `
+            <div class="diagnostic-card">
+              <div class="diagnostic-header">
+                <span>⚠️ 表記揺れ検知: 「${d.wrongTerm}」</span>
+                <span style="font-size: 0.7rem; color: var(--text-dim);">${d.category}</span>
+              </div>
+              <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.4rem;">
+                ${d.message}
+              </p>
+              <button class="tool-btn quickfix-btn" data-wrong="${d.wrongTerm}" data-canon="${d.canonical}" style="font-size: 0.75rem; background: rgba(99, 102, 241, 0.2);">
+                正称「${d.canonical}」に自動置換
+              </button>
+            </div>
+          `
+          )
+          .join('');
 
-    if (diagnostics.length === 0) {
-      container.innerHTML = `
-        <div style="font-size: 0.8rem; color: #10b981; padding: 0.5rem 0;">
-          ✨ 用語不整合・表記揺れなし
-        </div>
-      `;
-      return;
+        // QuickFix handlers
+        container.querySelectorAll('.quickfix-btn').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            const target = e.currentTarget as HTMLElement;
+            const wrong = target.dataset.wrong;
+            const canon = target.dataset.canon;
+            if (wrong && canon) {
+              const rawTextarea = this.container.querySelector('#editor-raw') as HTMLTextAreaElement;
+              if (rawTextarea) {
+                rawTextarea.value = rawTextarea.value.replaceAll(wrong, canon);
+                this.updateEditorState();
+              }
+            }
+          });
+        });
+      }
     }
 
-    container.innerHTML = diagnostics
-      .map(
-        (d, idx) => `
-        <div class="diagnostic-card">
-          <div class="diagnostic-header">
-            <span>⚠️ 表記揺れ検知: 「${d.wrongTerm}」</span>
-            <span style="font-size: 0.7rem; color: var(--text-dim);">${d.category}</span>
+    const parityContainer = this.container.querySelector('#parity-results-container');
+    if (parityContainer) {
+      if (parityDiagnostics.length === 0) {
+        parityContainer.innerHTML = `
+          <div style="font-size: 0.8rem; color: #10b981; padding: 0.5rem 0;">
+            ✨ 三点リーダー・ダッシュの偶数対違反なし
           </div>
-          <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.4rem;">
-            ${d.message}
-          </p>
-          <button class="tool-btn quickfix-btn" data-wrong="${d.wrongTerm}" data-canon="${d.canonical}" style="font-size: 0.75rem; background: rgba(99, 102, 241, 0.2);">
-            正称「${d.canonical}」に自動置換
-          </button>
-        </div>
-      `
-      )
-      .join('');
+        `;
+      } else {
+        parityContainer.innerHTML = parityDiagnostics
+          .map(
+            (pd, idx) => `
+            <div class="diagnostic-card">
+              <div class="diagnostic-header">
+                <span>⚠️ 偶数対違反: 「${pd.found}」(${pd.count}個)</span>
+                <span style="font-size: 0.7rem; color: var(--text-dim);">${pd.type}</span>
+              </div>
+              <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.4rem;">
+                ${pd.message}
+              </p>
+              <button class="tool-btn parity-quickfix-btn" data-idx="${idx}" style="font-size: 0.75rem; background: rgba(245, 158, 11, 0.2);">
+                偶数対「${pd.replacement}」に自動補正
+              </button>
+            </div>
+          `
+          )
+          .join('');
 
-    // QuickFix handlers
-    container.querySelectorAll('.quickfix-btn').forEach((btn) => {
-      btn.addEventListener('click', (e) => {
-        const target = e.currentTarget as HTMLElement;
-        const wrong = target.dataset.wrong;
-        const canon = target.dataset.canon;
-        if (wrong && canon) {
-          const rawTextarea = this.container.querySelector('#editor-raw') as HTMLTextAreaElement;
-          if (rawTextarea) {
-            rawTextarea.value = rawTextarea.value.replaceAll(wrong, canon);
-            this.updateEditorState();
-          }
-        }
-      });
-    });
+        parityContainer.querySelectorAll('.parity-quickfix-btn').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            const target = e.currentTarget as HTMLElement;
+            const idxStr = target.dataset.idx;
+            if (idxStr !== undefined) {
+              const diag = parityDiagnostics[parseInt(idxStr, 10)];
+              if (diag) {
+                const rawTextarea = this.container.querySelector('#editor-raw') as HTMLTextAreaElement;
+                if (rawTextarea) {
+                  rawTextarea.value = this.ellipsisDashLinter.applyQuickFix(rawTextarea.value, diag);
+                  this.updateEditorState();
+                }
+              }
+            }
+          });
+        });
+      }
+    }
   }
 
   private renderPoPChain(): void {
