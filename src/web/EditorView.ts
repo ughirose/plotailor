@@ -5,6 +5,7 @@
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
+import { CharacterHeatmapEngine, type CharacterTermDef } from '../core/editor/CharacterHeatmap.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
@@ -12,6 +13,8 @@ export class EditorView {
   private linter: LoreLinterEngine;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
+  private heatmapEngine: CharacterHeatmapEngine;
+  private characterTargets: CharacterTermDef[];
   private rawText: string;
   private isVerticalMode: boolean = false;
   private isComposing: boolean = false;
@@ -20,6 +23,14 @@ export class EditorView {
     this.container = container;
     this.linter = new LoreLinterEngine();
     this.popEngine = new PoPAuditEngine('author-session-01');
+    this.heatmapEngine = new CharacterHeatmapEngine();
+
+    this.characterTargets = [
+      { id: 'c1', name: 'ヴァレリウス将軍', aliases: ['ヴァレリウス'], color: '#cfa85c' },
+      { id: 'c2', name: 'アーサー', color: '#6366f1' },
+      { id: 'c3', name: '紫電の剣', color: '#10b981' },
+      { id: 'c4', name: '近衛軍', color: '#ec4899' },
+    ];
 
     // Setup fictional calendar
     this.celestialEngine = new CelestialCalendarEngine(
@@ -152,10 +163,16 @@ export class EditorView {
         <!-- 3. RIGHT PANE: Real-time Consistency & PoP Audit -->
         <aside class="pane pane-right">
           <div class="pane-header">
-            <span>🛡️ 整合性監査 ＆ PoP証明</span>
+            <span>🛡️ 整合性監査 ＆ 出現頻度ヒートマップ</span>
             <span class="status-dot"></span>
           </div>
           <div class="pane-content">
+            <!-- Character Frequency Heatmap & Sparklines -->
+            <div class="tree-group">
+              <div class="tree-title">登場人物・設定用語 出現頻度ヒートマップ</div>
+              <div id="heatmap-dock-container"></div>
+            </div>
+
             <!-- Lore Diagnostics -->
             <div class="tree-group">
               <div class="tree-title">設定語句リント (Aho-Corasick)</div>
@@ -277,11 +294,14 @@ export class EditorView {
       wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
     }
 
-    // 3. Run Lore Linter
+    // 3. Render Heatmap Dock
+    this.renderHeatmapDock();
+
+    // 4. Run Lore Linter
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
 
-    // 4. Record PoP Edit Event
+    // 5. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
       id: `evt-${Date.now()}`,
       eventType: 'TEXT_INSERT',
@@ -290,7 +310,7 @@ export class EditorView {
     });
     this.renderPoPChain();
 
-    // 5. Update Moon Phase
+    // 6. Update Moon Phase
     const t = 368450; // Current scalar day
     const lunaPhase = this.celestialEngine.getMoonPhase('sat_luna', t);
     const selenePhase = this.celestialEngine.getMoonPhase('sat_selene', t);
@@ -298,6 +318,34 @@ export class EditorView {
     const seleneEl = this.container.querySelector('#moon-phase-selene');
     if (lunaEl) lunaEl.textContent = `${(lunaPhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
     if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
+  }
+
+  private renderHeatmapDock(): void {
+    const container = this.container.querySelector('#heatmap-dock-container');
+    if (!container) return;
+
+    const result = this.heatmapEngine.analyze(this.rawText, this.characterTargets);
+    if (!result || result.series.length === 0) {
+      container.innerHTML = `<div style="font-size: 0.8rem; color: var(--text-muted);">データなし</div>`;
+      return;
+    }
+
+    const itemsHtml = result.series
+      .map((s) => {
+        const svg = this.heatmapEngine.renderSvgSparkline(s, { width: 160, height: 26 });
+        return `
+          <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-subtle); border-radius: 6px; padding: 0.4rem 0.6rem; margin-bottom: 0.4rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; margin-bottom: 0.2rem;">
+              <span style="font-weight: 600; color: ${s.target.color || 'var(--text-primary)'};">${s.target.name}</span>
+              <span style="font-size: 0.7rem; color: var(--text-dim);">計${s.totalCount}回</span>
+            </div>
+            ${svg}
+          </div>
+        `;
+      })
+      .join('');
+
+    container.innerHTML = itemsHtml;
   }
 
   private renderDiagnostics(diagnostics: LoreDiagnostic[]): void {
