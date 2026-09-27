@@ -18,14 +18,17 @@ import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
 import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
 import { OPFSStorage } from '../storage/OPFSStorage.js';
 import { WorkerHotSwapManager, type WorkerInstance } from '../runtime/WorkerHotSwapManager.js';
+import { EmotionalArcAnalyzer, type EmotionalArcResult } from '../nlp/EmotionalArcAnalyzer.js';
+import { EmotionalArcChart } from '../nlp/EmotionalArcChart.js';
 
 export interface WorkspaceState {
   currentDocumentId: string;
   rawText: string;
   isComposing: boolean;
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
-  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
+  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance' | 'emotional-arc';
   diagnostics: LoreDiagnostic[];
+  emotionalArc: EmotionalArcResult;
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -36,6 +39,7 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private emotionalAnalyzer: EmotionalArcAnalyzer;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
@@ -50,19 +54,22 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.emotionalAnalyzer = new EmotionalArcAnalyzer();
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
       this.hotSwapManager = new WorkerHotSwapManager(options.worker);
     }
 
+    const initialText = options?.initialText ?? '';
     this.state = {
       currentDocumentId: `doc-${Date.now()}`,
-      rawText: options?.initialText ?? '',
+      rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
       diagnostics: [],
+      emotionalArc: this.emotionalAnalyzer.analyze(initialText),
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -80,6 +87,10 @@ export class ThreePaneWorkspace {
     return this.hotSwapManager;
   }
 
+  public getEmotionalAnalyzer(): EmotionalArcAnalyzer {
+    return this.emotionalAnalyzer;
+  }
+
   /**
    * Handle text edits from the central CodeMirror 6 editor.
    * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, and avoids interrupting author.
@@ -95,6 +106,9 @@ export class ThreePaneWorkspace {
     // Run Lore Linter (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+
+    // Analyze Emotional Arc
+    this.state.emotionalArc = this.emotionalAnalyzer.analyze(newText);
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -151,7 +165,16 @@ export class ThreePaneWorkspace {
     rightPane: { activeTab: string; contentHtml: string };
   } {
     const parsedHtml = this.viewport.renderContent(this.state.rawText);
-    const auditViewModel = this.auditView.render();
+    const chart = new EmotionalArcChart(this.state.emotionalArc);
+
+    let rightContent = '';
+    if (this.state.activeRightTab === 'pop-audit') {
+      rightContent = `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`;
+    } else if (this.state.activeRightTab === 'emotional-arc') {
+      rightContent = chart.renderHtmlContainer();
+    } else {
+      rightContent = `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>${chart.renderHtmlContainer()}`;
+    }
 
     return {
       leftPane: {
@@ -165,10 +188,7 @@ export class ThreePaneWorkspace {
       },
       rightPane: {
         activeTab: this.state.activeRightTab,
-        contentHtml:
-          this.state.activeRightTab === 'pop-audit'
-            ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+        contentHtml: rightContent,
       },
     };
   }
