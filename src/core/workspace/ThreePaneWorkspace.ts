@@ -18,6 +18,7 @@ import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
 import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
 import { OPFSStorage } from '../storage/OPFSStorage.js';
 import { WorkerHotSwapManager, type WorkerInstance } from '../runtime/WorkerHotSwapManager.js';
+import { ParagraphIndenter, type IndentationDiagnostic, type ParagraphIndentOptions } from '../editor/ParagraphIndenter.js';
 
 export interface WorkspaceState {
   currentDocumentId: string;
@@ -140,6 +141,40 @@ export class ThreePaneWorkspace {
 
   public setRightTab(tab: WorkspaceState['activeRightTab']): void {
     this.state.activeRightTab = tab;
+  }
+
+  /**
+   * Detects paragraphs missing full-width indentation.
+   */
+  public getUnindentedParagraphs(options?: ParagraphIndentOptions): IndentationDiagnostic[] {
+    return ParagraphIndenter.detectUnindentedLines(this.state.rawText, options);
+  }
+
+  /**
+   * Applies full-width paragraph indentation to all unindented prose lines in workspace.
+   */
+  public applyParagraphIndentation(options?: ParagraphIndentOptions): string {
+    const formatted = ParagraphIndenter.applyIndent(this.state.rawText, options);
+    this.onTextChange(formatted, this.state.isComposing);
+    return formatted;
+  }
+
+  /**
+   * Removes full-width paragraph indentation from workspace.
+   */
+  public removeParagraphIndentation(options?: ParagraphIndentOptions): string {
+    const formatted = ParagraphIndenter.removeIndent(this.state.rawText, options);
+    this.onTextChange(formatted, this.state.isComposing);
+    return formatted;
+  }
+
+  /**
+   * Toggles paragraph indentation in workspace.
+   */
+  public toggleParagraphIndentation(options?: ParagraphIndentOptions): string {
+    const formatted = ParagraphIndenter.toggleIndent(this.state.rawText, options);
+    this.onTextChange(formatted, this.state.isComposing);
+    return formatted;
   }
 
   /**
