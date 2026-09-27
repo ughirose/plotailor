@@ -4,12 +4,14 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import { KanjiHiraganaRatioEngine } from '../core/editor/KanjiHiraganaRatioEngine.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
+  private ratioEngine: KanjiHiraganaRatioEngine;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private rawText: string;
@@ -19,6 +21,7 @@ export class EditorView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.linter = new LoreLinterEngine();
+    this.ratioEngine = new KanjiHiraganaRatioEngine();
     this.popEngine = new PoPAuditEngine('author-session-01');
 
     // Setup fictional calendar
@@ -156,6 +159,12 @@ export class EditorView {
             <span class="status-dot"></span>
           </div>
           <div class="pane-content">
+            <!-- Kanji & Hiragana Ratio Checker -->
+            <div class="tree-group">
+              <div class="tree-title">漢字・ひらがな黄金比率チェッカー</div>
+              <div id="ratio-checker-container"></div>
+            </div>
+
             <!-- Lore Diagnostics -->
             <div class="tree-group">
               <div class="tree-title">設定語句リント (Aho-Corasick)</div>
@@ -277,7 +286,11 @@ export class EditorView {
       wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
     }
 
-    // 3. Run Lore Linter
+    // 3. Run Kanji & Hiragana Golden Ratio Checker
+    const ratioAnalysis = this.ratioEngine.analyze(this.rawText);
+    this.renderRatioAnalysis(ratioAnalysis);
+
+    // 4. Run Lore Linter
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
 
@@ -298,6 +311,47 @@ export class EditorView {
     const seleneEl = this.container.querySelector('#moon-phase-selene');
     if (lunaEl) lunaEl.textContent = `${(lunaPhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
     if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
+  }
+
+  private renderRatioAnalysis(analysis: import('../core/editor/KanjiHiraganaRatioEngine.js').CharacterRatioAnalysis): void {
+    const container = this.container.querySelector('#ratio-checker-container');
+    if (!container) return;
+
+    const { ratios, counts, evaluation } = analysis;
+    const isOptimal = evaluation.isGoldenRatio;
+    const statusColor = isOptimal ? '#10b981' : '#f59e0b';
+    const badgeText = isOptimal ? '✨ 黄金比率' : '⚠️ 比率調整推奨';
+
+    container.innerHTML = `
+      <div class="diagnostic-card" style="border-left: 3px solid ${statusColor};">
+        <div class="diagnostic-header">
+          <span style="font-weight: 600; color: ${statusColor};">${badgeText}</span>
+          <span style="font-size: 0.75rem; color: var(--text-dim);">計 ${counts.total} 字</span>
+        </div>
+
+        <!-- Ratio Bar -->
+        <div style="display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: #374151; margin: 0.5rem 0;">
+          <div title="ひらがな ${ratios.hiraganaRatio}%" style="width: ${ratios.hiraganaRatio}%; background: #3b82f6;"></div>
+          <div title="漢字 ${ratios.kanjiRatio}%" style="width: ${ratios.kanjiRatio}%; background: #ec4899;"></div>
+          <div title="カタカナ ${ratios.katakanaRatio}%" style="width: ${ratios.katakanaRatio}%; background: #10b981;"></div>
+          <div title="英数字 ${ratios.alphanumericRatio}%" style="width: ${ratios.alphanumericRatio}%; background: #f59e0b;"></div>
+          <div title="記号 ${ratios.symbolsRatio}%" style="width: ${ratios.symbolsRatio}%; background: #6b7280;"></div>
+        </div>
+
+        <!-- Detailed Percentages -->
+        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.3rem; font-size: 0.75rem; color: var(--text-muted);">
+          <div>ひらがな: <strong style="color: #60a5fa;">${ratios.hiraganaRatio}%</strong> (目標 60-70%)</div>
+          <div>漢字: <strong style="color: #f472b6;">${ratios.kanjiRatio}%</strong> (目標 25-35%)</div>
+          <div>カタカナ: ${ratios.katakanaRatio}%</div>
+          <div>記号・英数: ${(ratios.symbolsRatio + ratios.alphanumericRatio).toFixed(1)}%</div>
+        </div>
+
+        <!-- Feedback Messages -->
+        <div style="margin-top: 0.5rem; font-size: 0.75rem; line-height: 1.4; color: var(--text-muted);">
+          ${evaluation.messages.map(msg => `<div style="margin-top: 0.2rem;">${msg}</div>`).join('')}
+        </div>
+      </div>
+    `;
   }
 
   private renderDiagnostics(diagnostics: LoreDiagnostic[]): void {
