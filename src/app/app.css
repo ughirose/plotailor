@@ -619,26 +619,37 @@ html, body {
   word-break: break-word !important;
 }
 
-/* Ruby and Bouten Typography (Clean inline-ruby without gaps) */
-ruby, .cm-ruby {
-  display: inline-ruby !important;
-  ruby-align: center;
-  ruby-position: over;
-  ruby-overhang: auto;
+/* ==========================================================================
+   Ruby and Bouten Typography (Strict Zero-Gap Japanese Literary Typesetting)
+   ========================================================================== */
+
+/* Base container for CodeMirror in-place ruby widget */
+.cm-ruby {
+  display: inline-block !important;
+  position: relative !important;
   cursor: pointer;
-  line-height: inherit;
-  vertical-align: baseline;
+  line-height: inherit !important;
+  vertical-align: baseline !important;
   margin: 0 !important;
   padding: 0 !important;
   letter-spacing: normal !important;
+  border-radius: 2px;
+  transition: background-color 0.15s ease;
 }
 
-rb, .cm-ruby rb, .cm-ruby-base {
-  display: ruby-base !important;
+.cm-ruby:hover {
+  background-color: rgba(207, 168, 92, 0.12);
+}
+
+/* Parent base text: occupies EXACT text dimensions without any browser padding */
+.cm-ruby-base,
+.cm-ruby rb {
+  display: inline !important;
   margin: 0 !important;
   padding: 0 !important;
-  letter-spacing: inherit;
-  line-height: inherit;
+  letter-spacing: inherit !important;
+  line-height: inherit !important;
+  font-family: inherit !important;
 }
 
 .cm-ruby-off {
@@ -646,49 +657,71 @@ rb, .cm-ruby rb, .cm-ruby-base {
   line-height: inherit !important;
 }
 
-rt, .cm-ruby rt, .cm-ruby-text {
-  display: ruby-text !important;
-  font-size: 0.5em !important;
-  color: var(--color-gold) !important;
-  letter-spacing: 0 !important;
+/* ==========================================================================
+   Vertical-RL Ruby Typesetting (Right-side absolute overhang, ZERO gap)
+   ========================================================================== */
+.vertical-rl .cm-ruby,
+.cm-vertical-rl .cm-ruby,
+.pane-center.vertical-rl .cm-ruby {
+  writing-mode: vertical-rl !important;
+  -webkit-writing-mode: vertical-rl !important;
   margin: 0 !important;
   padding: 0 !important;
-  user-select: none !important;
-  font-family: var(--font-serif) !important;
+}
+
+.vertical-rl .cm-ruby-text,
+.vertical-rl .cm-ruby rt,
+.cm-vertical-rl .cm-ruby-text,
+.cm-vertical-rl .cm-ruby rt,
+.pane-center.vertical-rl .cm-ruby-text,
+.pane-center.vertical-rl .cm-ruby rt {
+  display: block !important;
+  position: absolute !important;
+  top: 50% !important;
+  right: -0.6em !important; /* Position flush along the right column line */
+  left: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) !important;
+  font-size: 0.52em !important;
+  color: var(--color-gold) !important;
+  letter-spacing: 0 !important;
   line-height: 1 !important;
   text-align: center !important;
   white-space: nowrap !important;
+  user-select: none !important;
+  pointer-events: none !important;
+  font-family: var(--font-serif) !important;
+  z-index: 3 !important;
 }
 
-.pane-center.theme-night ruby rt,
-.pane-center.theme-night .cm-ruby rt,
-.pane-center.theme-night .cm-ruby-text {
-  color: var(--accent-gold-light) !important;
-}
-
-.pane-center.vertical-rl ruby,
-.pane-center.vertical-rl .cm-ruby,
-.cm-vertical-rl ruby,
-.cm-vertical-rl .cm-ruby {
-  ruby-align: center;
-  ruby-position: over;
-  writing-mode: vertical-rl !important;
-  -webkit-writing-mode: vertical-rl !important;
-}
-
-.pane-center.vertical-rl rt,
-.pane-center.vertical-rl .cm-ruby rt,
-.pane-center.vertical-rl .cm-ruby-text,
-.cm-vertical-rl rt,
-.cm-vertical-rl .cm-ruby rt,
-.cm-vertical-rl .cm-ruby-text {
-  font-size: 0.55em !important;
+/* ==========================================================================
+   Horizontal (LTR) Ruby Typesetting (Top-side absolute overhang, ZERO gap)
+   ========================================================================== */
+.pane-center:not(.vertical-rl) .cm-ruby-text,
+.pane-center:not(.vertical-rl) .cm-ruby rt {
+  display: block !important;
+  position: absolute !important;
+  left: 50% !important;
+  bottom: 100% !important;
+  top: auto !important;
+  right: auto !important;
+  transform: translateX(-50%) !important;
+  font-size: 0.52em !important;
   color: var(--color-gold) !important;
   letter-spacing: 0 !important;
-  user-select: none !important;
-  font-family: var(--font-serif) !important;
   line-height: 1 !important;
   text-align: center !important;
+  white-space: nowrap !important;
+  user-select: none !important;
+  pointer-events: none !important;
+  font-family: var(--font-serif) !important;
+  z-index: 3 !important;
+}
+
+/* Night theme accent adjustment */
+.pane-center.theme-night .cm-ruby-text,
+.pane-center.theme-night .cm-ruby rt {
+  color: var(--accent-gold-light) !important;
 }
 
 .bouten {

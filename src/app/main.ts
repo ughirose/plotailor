@@ -182,6 +182,7 @@ export class PlotailorApp {
     this.renderRightPane();
     this.updateStats();
     this.updateMultiLayerDecorations();
+    this.applyOrientation();
     this.initProjectVFS();
     this.applyFontPreferences();
   }
@@ -261,11 +262,15 @@ export class PlotailorApp {
       }
     } catch {}
 
-    // 6. Theme preference
+    // 6. Theme and orientation preference
     try {
       const savedTheme = localStorage.getItem('plotailor_theme');
       if (savedTheme !== null) {
         this.isNightTheme = savedTheme === 'night';
+      }
+      const savedVertical = localStorage.getItem('plotailor_vertical');
+      if (savedVertical !== null) {
+        this.isVertical = savedVertical === 'true';
       }
     } catch {}
 
@@ -320,6 +325,7 @@ export class PlotailorApp {
       localStorage.setItem('plotailor_ruby_mode', this.rubyMode);
       localStorage.setItem('plotailor_ruby_decorated', (this.rubyMode === 'normal').toString());
       localStorage.setItem('plotailor_theme', this.isNightTheme ? 'night' : 'washi');
+      localStorage.setItem('plotailor_vertical', this.isVertical.toString());
     } catch {}
     this.saveToVFS();
   }
@@ -1376,8 +1382,7 @@ export class PlotailorApp {
     if (speedEl) speedEl.textContent = speed.toString();
   }
 
-  private toggleOrientation() {
-    this.isVertical = !this.isVertical;
+  private applyOrientation() {
     const center = document.getElementById('paneCenter');
     const btn = document.getElementById('btnToggleOrientation');
     const wrapper = document.getElementById('canvasWrapper');
@@ -1409,6 +1414,13 @@ export class PlotailorApp {
         });
       }
     }
+  }
+
+  private toggleOrientation() {
+    this.isVertical = !this.isVertical;
+    this.applyOrientation();
+    this.saveToStorage();
+    this.showToast(`執筆方向を「${this.isVertical ? '縦書き' : '横書き'}」に切り替えました`);
   }
 
   private toggleWrap() {
