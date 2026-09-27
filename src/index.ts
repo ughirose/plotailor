@@ -126,6 +126,8 @@ export * from './core/ipc/NarrativeRpcProtocol.js';
 export * from './core/ipc/NarrativeEngine.js';
 export * from './core/ipc/NarrativeBridge.js';
 export * from './core/editor/AozoraParser.js';
+export * from './core/editor/RubySyntaxParser.js';
+export * from './core/editor/RubyShortcutExtension.js';
 export * from './core/editor/ScrollNormalizer.js';
 export * from './core/editor/VerticalViewport.js';
 export * from './core/editor/LoreLinter.js';

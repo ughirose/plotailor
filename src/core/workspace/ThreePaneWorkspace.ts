@@ -13,6 +13,7 @@ import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
+import { RubySyntaxParser, type NormalizeOptions, type RubyFormat } from '../editor/RubySyntaxParser.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
 import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
@@ -140,6 +141,24 @@ export class ThreePaneWorkspace {
 
   public setRightTab(tab: WorkspaceState['activeRightTab']): void {
     this.state.activeRightTab = tab;
+  }
+
+  /**
+   * Normalizes ruby syntax in the current workspace document.
+   */
+  public normalizeRuby(options?: NormalizeOptions): string {
+    const normalized = RubySyntaxParser.normalizeRuby(this.state.rawText, options);
+    this.onTextChange(normalized, false);
+    return normalized;
+  }
+
+  /**
+   * Converts the document ruby syntax format between Aozora, Kakuyomu, and Narou conventions.
+   */
+  public convertRubyFormat(targetFormat: RubyFormat): string {
+    const converted = RubySyntaxParser.convertFormat(this.state.rawText, targetFormat);
+    this.onTextChange(converted, false);
+    return converted;
   }
 
   /**
