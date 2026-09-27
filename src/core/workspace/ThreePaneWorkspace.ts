@@ -12,6 +12,7 @@ import type { SubgraphSlice } from '@schema';
 import { WorldOntologyEngine } from '@core';
 import { VerticalViewport } from '../editor/VerticalViewport.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../editor/LoreLinter.js';
+import { SentenceEndingCadenceCalculator, type SentenceCadenceResult } from '../nlp/SentenceEndingCadenceCalculator.js';
 import { AozoraParser } from '../editor/AozoraParser.js';
 import { PoPAuditEngine } from '../pop/PoPAuditEngine.js';
 import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
@@ -24,8 +25,9 @@ export interface WorkspaceState {
   rawText: string;
   isComposing: boolean;
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
-  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
+  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'cadence-inspector' | 'appearance';
   diagnostics: LoreDiagnostic[];
+  cadenceResult: SentenceCadenceResult;
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -36,6 +38,7 @@ export class ThreePaneWorkspace {
   private auditView: ThreePaneAuditView;
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
+  private cadenceCalculator: SentenceEndingCadenceCalculator;
   private storage: MobileResilientStorage;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
@@ -50,19 +53,22 @@ export class ThreePaneWorkspace {
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
+    this.cadenceCalculator = new SentenceEndingCadenceCalculator();
     this.storage = new MobileResilientStorage(new OPFSStorage());
 
     if (options?.worker) {
       this.hotSwapManager = new WorkerHotSwapManager(options.worker);
     }
 
+    const initialText = options?.initialText ?? '';
     this.state = {
       currentDocumentId: `doc-${Date.now()}`,
-      rawText: options?.initialText ?? '',
+      rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
       diagnostics: [],
+      cadenceResult: this.cadenceCalculator.analyze(initialText),
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -80,6 +86,10 @@ export class ThreePaneWorkspace {
     return this.hotSwapManager;
   }
 
+  public getCadenceCalculator(): SentenceEndingCadenceCalculator {
+    return this.cadenceCalculator;
+  }
+
   /**
    * Handle text edits from the central CodeMirror 6 editor.
    * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, and avoids interrupting author.
@@ -95,6 +105,9 @@ export class ThreePaneWorkspace {
     // Run Lore Linter (bypassed if composing with Japanese IME)
     const { map } = AozoraParser.parse(newText);
     this.state.diagnostics = this.linter.lint(newText, { isComposing, displayMap: map });
+
+    // Run Sentence Ending Cadence Calculator
+    this.state.cadenceResult = this.cadenceCalculator.analyze(newText);
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -151,7 +164,15 @@ export class ThreePaneWorkspace {
     rightPane: { activeTab: string; contentHtml: string };
   } {
     const parsedHtml = this.viewport.renderContent(this.state.rawText);
-    const auditViewModel = this.auditView.render();
+
+    let rightContent = '';
+    if (this.state.activeRightTab === 'pop-audit') {
+      rightContent = `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`;
+    } else if (this.state.activeRightTab === 'cadence-inspector') {
+      rightContent = `<div class="cadence-dock"><span>文末単調度ペナルティ: ${this.state.cadenceResult.monotonyPenalty} (連続検出: ${this.state.cadenceResult.runs.length}件)</span></div>`;
+    } else {
+      rightContent = `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件 / 文末スコア: ${this.state.cadenceResult.cadenceScore}点</span></div>`;
+    }
 
     return {
       leftPane: {
@@ -165,10 +186,7 @@ export class ThreePaneWorkspace {
       },
       rightPane: {
         activeTab: this.state.activeRightTab,
-        contentHtml:
-          this.state.activeRightTab === 'pop-audit'
-            ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+        contentHtml: rightContent,
       },
     };
   }
