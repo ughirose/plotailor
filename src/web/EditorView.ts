@@ -4,6 +4,7 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import { ParagraphIndenter } from '../core/editor/ParagraphIndenter.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
@@ -127,6 +128,12 @@ export class EditorView {
               <button class="tool-btn" id="btn-insert-bouten">
                 <span>︙</span> 傍点挿入
               </button>
+              <button class="tool-btn" id="btn-apply-indent">
+                <span>　</span> 字下げ一括適用
+              </button>
+              <button class="tool-btn" id="btn-remove-indent">
+                <span>⌫</span> 字下げ解除
+              </button>
             </div>
             <div class="toolbar-group">
               <span id="ime-indicator" style="font-size: 0.75rem; color: #10b981;">● IME: 待機</span>
@@ -194,6 +201,8 @@ export class EditorView {
     const btnToggleVertical = this.container.querySelector('#btn-toggle-vertical');
     const btnInsertRuby = this.container.querySelector('#btn-insert-ruby');
     const btnInsertBouten = this.container.querySelector('#btn-insert-bouten');
+    const btnApplyIndent = this.container.querySelector('#btn-apply-indent');
+    const btnRemoveIndent = this.container.querySelector('#btn-remove-indent');
     const imeIndicator = this.container.querySelector('#ime-indicator') as HTMLElement;
 
     // Input events with Japanese IME guard
@@ -243,6 +252,18 @@ export class EditorView {
 
     btnInsertBouten?.addEventListener('click', () => {
       this.insertAtCursor('《《傍点文字》》');
+    });
+
+    btnApplyIndent?.addEventListener('click', () => {
+      if (!rawTextarea) return;
+      rawTextarea.value = ParagraphIndenter.applyIndent(rawTextarea.value);
+      this.updateEditorState();
+    });
+
+    btnRemoveIndent?.addEventListener('click', () => {
+      if (!rawTextarea) return;
+      rawTextarea.value = ParagraphIndenter.removeIndent(rawTextarea.value);
+      this.updateEditorState();
     });
   }
 
