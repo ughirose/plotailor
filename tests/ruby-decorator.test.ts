@@ -324,3 +324,39 @@ describe('Instant Mode Switching with setRubyDisplayMode StateEffect', () => {
   });
 });
 
+describe('Compound word and zero-gap ruby regression', () => {
+  it('correctly matches full compound words as baseText without short fragmentation', () => {
+    const text = 'その第一衛星《セレネ》が輝き、総督閣下《そうとくかっか》が微笑んだ。';
+    const matches = AozoraParser.parse(text);
+
+    expect(matches).toHaveLength(2);
+    expect(matches[0]).toMatchObject({
+      type: 'ruby',
+      baseText: '第一衛星',
+      rubyText: 'セレネ',
+    });
+    expect(matches[1]).toMatchObject({
+      type: 'ruby',
+      baseText: '総督閣下',
+      rubyText: 'そうとくかっか',
+    });
+  });
+
+  it('renders RubyWidget with correct classes and titles for editing', () => {
+    const widget = new RubyWidget('第一衛星', 'セレネ', 2, 11);
+    const dom = widget.toDOM();
+
+    expect(dom.tagName.toLowerCase()).toBe('ruby');
+    expect(dom.classList.contains('cm-ruby')).toBe(true);
+    expect(dom.title).toContain('セレネ');
+
+    const rb = dom.querySelector('.cm-ruby-base');
+    expect(rb).not.toBeNull();
+    expect(rb?.textContent).toBe('第一衛星');
+
+    const rt = dom.querySelector('.cm-ruby-text');
+    expect(rt).not.toBeNull();
+    expect(rt?.textContent).toBe('セレネ');
+  });
+});
+

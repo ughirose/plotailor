@@ -79,7 +79,7 @@ export class AozoraParser {
 
     // 4. Implicit ruby: 漢字/語句《るび》, 語句<<るび>>, 語句＜＜るび＞＞
     // Supports Kanji, Katakana, Alpha-numeric words (e.g. 二重満月, 総督, 第一衛星)
-    const implicitRubyRegex = /([一-龠々〆ヵヶ\u3400-\u4dbf\uf900-\ufaff\u30a0-\u30ffA-Za-z0-9]+?)(?:《|<<|＜＜)([^\n《》<>＜＞]+?)(?:》|>>|＞＞)/g;
+    const implicitRubyRegex = /([一-龠々〆ヵヶ\u3400-\u4dbf\uf900-\ufaff\u30a0-\u30ffA-Za-z0-9]+)(?:《|<<|＜＜)([^\n《》<>＜＞]+?)(?:》|>>|＞＞)/g;
 
     const occupiedRanges: [number, number][] = [];
 
@@ -382,14 +382,20 @@ export function parseAndBuildDecorations(
  */
 export const rubyTheme = EditorView.theme({
   '.cm-ruby, ruby': {
-    rubyAlign: 'center',
-    rubyPosition: 'over',
+    display: 'inline',
+    position: 'relative',
+    rubyAlign: 'start',
     cursor: 'pointer',
     lineHeight: 'inherit',
     verticalAlign: 'baseline',
+    margin: '0',
+    padding: '0',
   },
   '.cm-ruby .cm-ruby-base, .cm-ruby rb, rb': {
-    rubyAlign: 'center',
+    display: 'inline',
+    margin: '0',
+    padding: '0',
+    letterSpacing: 'inherit',
     lineHeight: 'inherit',
   },
   '.cm-ruby .cm-ruby-text, .cm-ruby rt, rt': {
@@ -400,6 +406,7 @@ export const rubyTheme = EditorView.theme({
     fontFamily: 'var(--font-serif, inherit)',
     lineHeight: '1',
     textAlign: 'center',
+    whiteSpace: 'nowrap',
   },
   '.cm-ruby-off': {
     display: 'inline',
@@ -416,10 +423,11 @@ export const rubyTheme = EditorView.theme({
     WebkitWritingMode: 'vertical-rl',
   },
   '&.cm-vertical-rl .cm-ruby, .vertical-rl & .cm-ruby, .pane-center.vertical-rl .cm-ruby': {
-    rubyAlign: 'center',
-    rubyPosition: 'over',
+    display: 'inline',
     writingMode: 'vertical-rl',
     WebkitWritingMode: 'vertical-rl',
+    margin: '0',
+    padding: '0',
   },
   '&.cm-vertical-rl .cm-ruby .cm-ruby-text, .vertical-rl & .cm-ruby .cm-ruby-text, .pane-center.vertical-rl .cm-ruby .cm-ruby-text': {
     fontSize: '0.55em',
@@ -429,6 +437,7 @@ export const rubyTheme = EditorView.theme({
     fontFamily: 'var(--font-serif, inherit)',
     lineHeight: '1',
     textAlign: 'center',
+    whiteSpace: 'nowrap',
   },
 });
 
