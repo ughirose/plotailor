@@ -3,6 +3,7 @@
  */
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
+import { RubySyntaxParser, type RubyFormat } from '../core/editor/RubySyntaxParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
@@ -121,9 +122,17 @@ export class EditorView {
               <button class="tool-btn" id="btn-toggle-vertical">
                 <span>📜</span> 縦書きプレビュー切替
               </button>
-              <button class="tool-btn" id="btn-insert-ruby">
-                <span>ふ</span> ルビ挿入
+              <button class="tool-btn" id="btn-insert-ruby" title="ルビタグ挿入 (Ctrl+R)">
+                <span>ふ</span> ルビ (Ctrl+R)
               </button>
+              <button class="tool-btn" id="btn-normalize-ruby" title="ルビ自動補完・正規化">
+                <span>✨</span> ルビ正規化
+              </button>
+              <select id="ruby-format-select" class="tool-btn" style="background: var(--bg-tertiary, #1e1e2e); color: var(--text-main, #e2e8f0); border: 1px solid var(--border-color, #334155); font-size: 0.75rem; border-radius: 4px; padding: 0.2rem 0.4rem;">
+                <option value="aozora">青空文庫形式 (｜漢字《ルビ》)</option>
+                <option value="kakuyomu">カクヨム形式 (|漢字《ルビ》)</option>
+                <option value="narou">なろう形式 (｜漢字《ルビ》)</option>
+              </select>
               <button class="tool-btn" id="btn-insert-bouten">
                 <span>︙</span> 傍点挿入
               </button>
@@ -236,14 +245,57 @@ export class EditorView {
       this.updateEditorState();
     });
 
+    const btnNormalizeRuby = this.container.querySelector('#btn-normalize-ruby');
+    const rubyFormatSelect = this.container.querySelector('#ruby-format-select') as HTMLSelectElement;
+
     // Helper insert buttons
     btnInsertRuby?.addEventListener('click', () => {
-      this.insertAtCursor('｜漢字《かんじ》');
+      this.handleRubyInsertShortcut();
+    });
+
+    btnNormalizeRuby?.addEventListener('click', () => {
+      const format = (rubyFormatSelect?.value || 'aozora') as RubyFormat;
+      this.rawText = RubySyntaxParser.convertFormat(this.rawText, format);
+      if (rawTextarea) {
+        rawTextarea.value = this.rawText;
+      }
+      this.updateEditorState();
+    });
+
+    rubyFormatSelect?.addEventListener('change', () => {
+      const format = (rubyFormatSelect.value || 'aozora') as RubyFormat;
+      this.rawText = RubySyntaxParser.convertFormat(this.rawText, format);
+      if (rawTextarea) {
+        rawTextarea.value = this.rawText;
+      }
+      this.updateEditorState();
     });
 
     btnInsertBouten?.addEventListener('click', () => {
       this.insertAtCursor('《《傍点文字》》');
     });
+  }
+
+  private handleRubyInsertShortcut(): void {
+    const rawTextarea = this.container.querySelector('#editor-raw') as HTMLTextAreaElement;
+    if (!rawTextarea) return;
+    const start = rawTextarea.selectionStart;
+    const end = rawTextarea.selectionEnd;
+    const val = rawTextarea.value;
+
+    if (start !== end) {
+      const selected = val.substring(start, end);
+      const insertText = `｜${selected}《》`;
+      rawTextarea.value = val.substring(0, start) + insertText + val.substring(end);
+      const cursorInside = start + selected.length + 2;
+      rawTextarea.selectionStart = rawTextarea.selectionEnd = cursorInside;
+    } else {
+      const auto = RubySyntaxParser.autoCompleteRuby(val, start);
+      rawTextarea.value = auto.text;
+      rawTextarea.selectionStart = rawTextarea.selectionEnd = auto.newCursorOffset;
+    }
+    rawTextarea.focus();
+    this.updateEditorState();
   }
 
   private insertAtCursor(text: string): void {
