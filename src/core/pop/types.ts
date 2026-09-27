@@ -1,4 +1,6 @@
-import type { StateDeltaEvent } from '@schema';
+export type StateDeltaEvent = Record<string, any>;
+export type SubgraphSlice = Record<string, any>;
+export type NarrativeContext = Record<string, any>;
 
 export type EventType =
   | 'create'

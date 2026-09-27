@@ -4,12 +4,14 @@
 
 import { AozoraParser } from '../core/editor/AozoraParser.js';
 import { LoreLinterEngine, type LoreDiagnostic, type TermRegulation } from '../core/editor/LoreLinter.js';
+import { ParticleRepetitionLinterEngine, type ParticleDiagnostic } from '../core/editor/ParticleRepetitionLinter.js';
 import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 
 export class EditorView {
   private container: HTMLElement;
   private linter: LoreLinterEngine;
+  private particleLinter: ParticleRepetitionLinterEngine;
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private rawText: string;
@@ -19,6 +21,7 @@ export class EditorView {
   constructor(container: HTMLElement) {
     this.container = container;
     this.linter = new LoreLinterEngine();
+    this.particleLinter = new ParticleRepetitionLinterEngine();
     this.popEngine = new PoPAuditEngine('author-session-01');
 
     // Setup fictional calendar
@@ -162,6 +165,12 @@ export class EditorView {
               <div id="linter-results-container"></div>
             </div>
 
+            <!-- Particle Repetition Diagnostics -->
+            <div class="tree-group">
+              <div class="tree-title">助詞連続重複警告 (3回以上)</div>
+              <div id="particle-linter-results-container"></div>
+            </div>
+
             <!-- Cognitive Fog State -->
             <div class="tree-group">
               <div class="tree-title">認知フォグ因果律判定</div>
@@ -277,9 +286,11 @@ export class EditorView {
       wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
     }
 
-    // 3. Run Lore Linter
+    // 3. Run Lore Linter & Particle Repetition Linter
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
+    const particleDiagnostics = this.particleLinter.lint(this.rawText);
+    this.renderParticleDiagnostics(particleDiagnostics);
 
     // 4. Record PoP Edit Event
     const event = this.popEngine.recordEvent({
@@ -298,6 +309,35 @@ export class EditorView {
     const seleneEl = this.container.querySelector('#moon-phase-selene');
     if (lunaEl) lunaEl.textContent = `${(lunaPhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
     if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
+  }
+
+  private renderParticleDiagnostics(diagnostics: ParticleDiagnostic[]): void {
+    const container = this.container.querySelector('#particle-linter-results-container');
+    if (!container) return;
+
+    if (diagnostics.length === 0) {
+      container.innerHTML = `
+        <div style="font-size: 0.8rem; color: #10b981; padding: 0.5rem 0;">
+          ✨ 助詞の3回以上連続重複なし
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = diagnostics
+      .map(
+        (d) => `
+        <div class="diagnostic-card" style="border-left: 3px solid #f59e0b;">
+          <div class="diagnostic-header">
+            <span style="color: #f59e0b;">⚠️ 助詞「${d.particle}」${d.count}回重複</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.4rem;">
+            ${d.message}
+          </p>
+        </div>
+      `
+      )
+      .join('');
   }
 
   private renderDiagnostics(diagnostics: LoreDiagnostic[]): void {
