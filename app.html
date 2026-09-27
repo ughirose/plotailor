@@ -66,13 +66,20 @@
         </div>
       </aside>
 
+      <!-- Left Resizer Splitter -->
+      <div class="pane-resizer" id="resizerLeft" title="ドラッグして左ペイン幅を調整"></div>
+
       <!-- Center Pane: Writing Canvas -->
       <section class="pane-center" id="paneCenter">
         <div class="editor-toolbar">
-          <div style="display: flex; gap: 12px; align-items: center;">
+          <div style="display: flex; gap: 8px; align-items: center;">
             <span style="font-weight: 500;" id="activeChapterTitle">第一章 双月の巡る夜に</span>
-            <span style="color: var(--color-text-dim);">—</span>
-            <span style="font-size: 11px; color: var(--color-text-dim);">ルビ打鍵: 《るび》, &lt;&lt;るび&gt;&gt; | 傍点: &lt;&lt;&lt;&lt;傍点&gt;&gt;&gt;&gt;</span>
+            <span style="color: var(--color-text-dim);">|</span>
+            <!-- Quick Format Buttons -->
+            <button class="ide-btn" id="btnQuickRuby" title="選択テキストをルビ化 (Ctrl+R)" style="padding: 2px 7px; font-size: 11px; height: 22px;">ふ ルビ</button>
+            <button class="ide-btn" id="btnQuickBouten" title="選択テキストに傍点を付与" style="padding: 2px 7px; font-size: 11px; height: 22px;">︙ 傍点</button>
+            <button class="ide-btn" id="btnQuickBold" title="選択テキストを太字化" style="padding: 2px 7px; font-size: 11px; height: 22px; font-weight: bold;">B 太字</button>
+            <button class="ide-btn" id="btnQuickIndent" title="段落字下げを挿入" style="padding: 2px 7px; font-size: 11px; height: 22px;">⇥ 字下げ</button>
           </div>
           <div style="display: flex; gap: 8px; align-items: center;">
             <button class="ide-btn" id="btnToolbarUndo" title="元に戻す (Ctrl+Z)" style="padding: 2px 10px; font-size: 12px; height: 24px; min-width: auto;">↩ 戻す (Ctrl+Z)</button>
@@ -86,12 +93,15 @@
         </div>
       </section>
 
+      <!-- Right Resizer Splitter -->
+      <div class="pane-resizer" id="resizerRight" title="ドラッグして右ペイン幅を調整"></div>
+
       <!-- Right Pane: Lore & Foreshadowing Inspector & PoP Audit Dock -->
       <aside class="pane-right" id="paneRight">
         <div class="pane-tabs">
           <button class="pane-tab-btn active" data-dock-tab="lore">伏線・設定</button>
           <button class="pane-tab-btn" data-dock-tab="linter">推敲・文体</button>
-          <button class="pane-tab-btn" data-dock-tab="causality">因果DAG</button>
+          <button class="pane-tab-btn" data-dock-tab="causality">因果相関図</button>
           <button class="pane-tab-btn" data-dock-tab="pop">PoP創作証明</button>
         </div>
         <div class="dock-content" id="dockContent">
@@ -147,13 +157,13 @@
   <div class="history-modal-backdrop" id="projectModal" style="display: none;">
     <div class="history-modal-dialog" style="max-width: 600px;">
       <div class="history-modal-header">
-        <h3><span>📚</span> 作品・プロジェクト管理 (VFS)</h3>
+        <h3><span>📚</span> 作品・ファイル管理</h3>
         <button class="history-modal-close" id="btnCloseProjectModal">&times;</button>
       </div>
       <div class="history-modal-body">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
           <p style="font-size: 12px; color: var(--color-text-dim); margin: 0;">
-            仮想ファイルシステム（VFS）に保存された作品一覧です。
+            端末内ストレージ（OPFS）に安全に保存された作品一覧です。
           </p>
           <button class="ide-btn btn-primary" id="btnCreateNewProject" style="font-size: 12px; padding: 4px 10px;">＋ 新規作品を作成</button>
         </div>

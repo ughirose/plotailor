@@ -308,21 +308,46 @@ html, body {
   position: relative;
 }
 
+/* Pane Resizer / Splitter Bar */
+.pane-resizer {
+  width: 5px;
+  cursor: col-resize;
+  background-color: var(--color-border-subtle);
+  position: relative;
+  z-index: 20;
+  transition: background-color 0.15s ease;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.pane-resizer:hover,
+.pane-resizer.is-dragging {
+  background-color: var(--color-gold);
+  box-shadow: 0 0 8px rgba(207, 168, 92, 0.4);
+}
+
 /* Pane 1: Left Navigation & Lore Sidebar */
 .pane-left {
   width: 260px;
+  min-width: 160px;
+  max-width: 500px;
   background-color: var(--color-bg-sidebar);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 0.2s ease;
+  transition: width 0.05s ease;
 }
 
 .pane-tabs {
   display: flex;
   background-color: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.pane-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .pane-tab-btn {
@@ -334,6 +359,7 @@ html, body {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
+  white-space: nowrap;
   border-bottom: 2px solid transparent;
   transition: all 0.15s;
 }
@@ -651,13 +677,15 @@ rt, .cm-ruby rt, .cm-ruby-text {
 
 /* Pane 3: Right Inspector & Lore Dock */
 .pane-right {
-  width: 300px;
+  width: 320px;
+  min-width: 220px;
+  max-width: 600px;
   background-color: var(--color-bg-panel);
   border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: width 0.2s ease;
+  transition: width 0.05s ease;
 }
 
 .dock-content {

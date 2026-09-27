@@ -9,6 +9,7 @@ import { history, defaultKeymap, historyKeymap, undo, redo, undoDepth, redoDepth
 import { rubyDecorationExtension, setRubyDisplayMode, type RubyDisplayMode } from '../core/editor/RubyDecorationExtension.js';
 import { cm6ImeGuard } from '../core/editor/cm6ImeGuard.js';
 import { verticalWritingExtension } from '../core/editor/VerticalWritingExtension.js';
+import { wrapSelectionWithRuby } from '../core/editor/RubyShortcutExtension.js';
 import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
 import { narrativeLinterExtension } from '../core/editor/CodeMirrorNarrativeExtension.js';
 import { NarrativeInspectorDock } from '../ui/NarrativeInspectorDock.js';
@@ -482,8 +483,15 @@ export class PlotailorApp {
           this.toggleFullscreen(false);
         }
         this.closeExportModal();
+        this.closeProjectModal?.();
+        this.closeLoreModal?.();
+        const historyModal = document.getElementById('historyModal');
+        if (historyModal) historyModal.style.display = 'none';
       }
     });
+
+    this.initPaneResizers();
+    this.initQuickFormatButtons();
 
     const btnExport = document.getElementById('btnExportAozora');
     btnExport?.addEventListener('click', () => this.openExportModal());
@@ -2114,6 +2122,118 @@ export class PlotailorApp {
 
   public getNarrativeDock(): NarrativeInspectorDock {
     return this.narrativeDock;
+  }
+
+  private initPaneResizers(): void {
+    const paneLeft = document.getElementById('paneLeft');
+    const paneRight = document.getElementById('paneRight');
+    const resizerLeft = document.getElementById('resizerLeft');
+    const resizerRight = document.getElementById('resizerRight');
+
+    if (resizerLeft && paneLeft) {
+      let isDragging = false;
+      resizerLeft.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        resizerLeft.classList.add('is-dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMouseMove = (ev: MouseEvent) => {
+          if (!isDragging) return;
+          const newWidth = Math.max(160, Math.min(500, ev.clientX));
+          paneLeft.style.width = `${newWidth}px`;
+        };
+
+        const onMouseUp = () => {
+          isDragging = false;
+          resizerLeft.classList.remove('is-dragging');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
+    }
+
+    if (resizerRight && paneRight) {
+      let isDragging = false;
+      resizerRight.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        resizerRight.classList.add('is-dragging');
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const onMouseMove = (ev: MouseEvent) => {
+          if (!isDragging) return;
+          const newWidth = Math.max(200, Math.min(600, window.innerWidth - ev.clientX));
+          paneRight.style.width = `${newWidth}px`;
+        };
+
+        const onMouseUp = () => {
+          isDragging = false;
+          resizerRight.classList.remove('is-dragging');
+          document.body.style.cursor = '';
+          document.body.style.userSelect = '';
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+        };
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
+    }
+  }
+
+  private initQuickFormatButtons(): void {
+    document.getElementById('btnQuickRuby')?.addEventListener('click', () => {
+      if (this.cmEditor) {
+        wrapSelectionWithRuby(this.cmEditor);
+        this.cmEditor.focus();
+      }
+    });
+
+    document.getElementById('btnQuickBouten')?.addEventListener('click', () => {
+      if (this.cmEditor) {
+        const state = this.cmEditor.state;
+        const sel = state.selection.main;
+        const selectedText = state.sliceDoc(sel.from, sel.to) || '';
+        if (selectedText) {
+          this.cmEditor.dispatch({
+            changes: { from: sel.from, to: sel.to, insert: `《《${selectedText}》》` },
+            selection: { anchor: sel.from + selectedText.length + 4 },
+          });
+        } else {
+          this.cmEditor.dispatch({
+            changes: { from: sel.from, to: sel.to, insert: `《《》》` },
+            selection: { anchor: sel.from + 2 },
+          });
+        }
+        this.cmEditor.focus();
+      }
+    });
+
+    document.getElementById('btnQuickBold')?.addEventListener('click', () => {
+      if (this.cmEditor) {
+        const state = this.cmEditor.state;
+        const sel = state.selection.main;
+        const selectedText = state.sliceDoc(sel.from, sel.to) || '';
+        this.cmEditor.dispatch({
+          changes: { from: sel.from, to: sel.to, insert: `**${selectedText}**` },
+          selection: { anchor: sel.from + (selectedText ? selectedText.length + 4 : 2) },
+        });
+        this.cmEditor.focus();
+      }
+    });
+
+    document.getElementById('btnQuickIndent')?.addEventListener('click', () => {
+      if (this.cmEditor) {
+        this.cmEditor.dispatch(this.cmEditor.state.replaceSelection('　'));
+        this.cmEditor.focus();
+      }
+    });
   }
 }
 

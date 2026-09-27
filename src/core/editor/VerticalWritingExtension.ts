@@ -271,6 +271,78 @@ const verticalMouseHandler = EditorView.domEventHandlers({
   },
 });
 
+/**
+ * Event handler for mouse wheel scroll in vertical writing mode.
+ * Converts vertical wheel deltaY into horizontal scrollLeft so users can navigate long manuscripts.
+ */
+const verticalWheelHandler = EditorView.domEventHandlers({
+  wheel(event: WheelEvent, view: EditorView) {
+    if (!isVerticalMode(view)) return false;
+    if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+      event.preventDefault();
+      view.scrollDOM.scrollLeft -= event.deltaY;
+      return true;
+    }
+    return false;
+  },
+});
+
+/**
+ * Keymap handler to trap Tab and Shift-Tab inside the editor,
+ * preventing focus loss to side panes and inserting full-width space for Japanese novel indent.
+ */
+import { keymap } from '@codemirror/view';
+
+export const tabIndentKeymap = keymap.of([
+  {
+    key: 'Tab',
+    run: (view: EditorView) => {
+      view.dispatch(view.state.replaceSelection('　'));
+      return true;
+    },
+    shift: (view: EditorView) => {
+      const sel = view.state.selection.main;
+      const line = view.state.doc.lineAt(sel.from);
+      if (line.text.startsWith('　') || line.text.startsWith(' ') || line.text.startsWith('\t')) {
+        view.dispatch({
+          changes: { from: line.from, to: line.from + 1, insert: '' },
+        });
+        return true;
+      }
+      return false;
+    },
+  },
+]);
+
+/**
+ * Ensures visible horizontal scrollbar and styling in vertical-rl mode.
+ */
+export const verticalScrollTheme = EditorView.theme({
+  '&.cm-vertical-rl, .vertical-rl &': {
+    overflowX: 'auto !important',
+    overflowY: 'hidden !important',
+  },
+  '&.cm-vertical-rl .cm-scroller, .vertical-rl & .cm-scroller': {
+    overflowX: 'auto !important',
+    overflowY: 'hidden !important',
+    scrollbarWidth: 'thin',
+    scrollbarColor: 'var(--accent-gold, #cfa85c) transparent',
+  },
+  '&.cm-vertical-rl .cm-scroller::-webkit-scrollbar, .vertical-rl & .cm-scroller::-webkit-scrollbar': {
+    height: '8px',
+  },
+  '&.cm-vertical-rl .cm-scroller::-webkit-scrollbar-thumb, .vertical-rl & .cm-scroller::-webkit-scrollbar-thumb': {
+    background: 'var(--accent-gold, #cfa85c)',
+    borderRadius: '4px',
+  },
+});
+
 export function verticalWritingExtension(): Extension {
-  return [verticalWritingPlugin, verticalMouseHandler];
+  return [
+    verticalWritingPlugin,
+    verticalMouseHandler,
+    verticalWheelHandler,
+    tabIndentKeymap,
+    verticalScrollTheme,
+  ];
 }
