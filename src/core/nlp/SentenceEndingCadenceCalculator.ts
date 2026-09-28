@@ -43,14 +43,14 @@ export interface SentenceCadenceResult {
 }
 
 export interface SentenceCadenceOptions {
-  /** Threshold for triggering monotony detection (default: 4) */
+  /** Threshold for triggering monotony detection (default: 3, per spec §3 same-ending detection) */
   threshold?: number;
   /** Whether to exclude dialogue sentences in 「...」 from monotony calculation (default: false) */
   ignoreDialogue?: boolean;
 }
 
 export class SentenceEndingCadenceCalculator {
-  private static readonly DEFAULT_THRESHOLD = 4;
+  private static readonly DEFAULT_THRESHOLD = 3;
 
   /**
    * Strip Aozora Bunko markup before sentence processing.

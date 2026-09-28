@@ -359,7 +359,9 @@ export class PlotailorApp {
           if (update.docChanged) {
             this.cadenceMachine.recordKeystroke();
             this.handleEditorChange();
-            this.updateMultiLayerDecorations();
+            if (!update.view.composing) {
+              this.updateMultiLayerDecorations();
+            }
             this.checkShelvedCandidates();
           }
           if (update.selectionSet || update.docChanged) {

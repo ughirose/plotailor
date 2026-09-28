@@ -57,8 +57,8 @@ describe('SentenceEndingCadenceCalculator', () => {
     });
   });
 
-  describe('Monotony detection threshold (4 consecutive past-tense endings)', () => {
-    it('does not trigger penalty or warning when consecutive count is less than 4', () => {
+  describe('Monotony detection threshold (3 consecutive past-tense endings per spec §3)', () => {
+    it('detects exactly 3 consecutive past-tense endings at spec threshold', () => {
       const text = `
         彼はおもむろに立ち上がった。
         剣を抜いた。
@@ -68,10 +68,10 @@ describe('SentenceEndingCadenceCalculator', () => {
       const result = calculator.analyze(text);
 
       expect(result.maxConsecutivePastTense).toBe(3);
-      expect(result.runs.length).toBe(0);
-      expect(result.monotonyPenalty).toBe(0);
-      expect(result.cadenceScore).toBe(100);
-      expect(result.advice[0].level).toBe('info');
+      expect(result.runs.length).toBe(1);
+      expect(result.monotonyPenalty).toBeGreaterThan(0);
+      expect(result.cadenceScore).toBeLessThan(100);
+      expect(result.advice[0].level).toBe('warning');
     });
 
     it('detects exactly 4 consecutive past-tense sentence endings and calculates penalty score', () => {
