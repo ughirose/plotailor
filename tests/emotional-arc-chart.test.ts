@@ -185,8 +185,8 @@ describe('ThreePaneWorkspace Integration', () => {
     workspace.onTextChange('決戦の時が来た！剣を構え、爆発と激突の中で勝利を掴め！');
 
     const updatedState = workspace.getState();
-    expect(updatedState.emotionalArc.scenes.length).toBeGreaterThan(0);
-    expect(updatedState.emotionalArc.summary.peakTensionScore).toBeGreaterThan(0);
+    expect(updatedState.emotionalArc!.scenes.length).toBeGreaterThan(0);
+    expect(updatedState.emotionalArc!.summary.peakTensionScore).toBeGreaterThan(0);
   });
 
   it('renders right pane content with emotional arc chart without modal dialogs', () => {

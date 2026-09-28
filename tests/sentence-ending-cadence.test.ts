@@ -184,9 +184,9 @@ describe('SentenceEndingCadenceCalculator', () => {
       workspace.onTextChange(text);
       const state = workspace.getState();
 
-      expect(state.cadenceResult.maxConsecutivePastTense).toBe(4);
-      expect(state.cadenceResult.monotonyPenalty).toBe(25);
-      expect(state.cadenceResult.cadenceScore).toBe(75);
+      expect(state.cadenceResult!.maxConsecutivePastTense).toBe(4);
+      expect(state.cadenceResult!.monotonyPenalty).toBe(25);
+      expect(state.cadenceResult!.cadenceScore).toBe(75);
     });
   });
 });

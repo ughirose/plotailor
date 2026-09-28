@@ -21,14 +21,14 @@ import { RevisionHistoryManager } from '../storage/RevisionHistoryManager.js';
 import { WorkerHotSwapManager, type WorkerInstance } from '../runtime/WorkerHotSwapManager.js';
 import { EllipsisDashLinterEngine, type EllipsisDashDiagnostic } from '../editor/EllipsisDashLinter.js';
 import { PassiveVoiceChecker, type PassiveVoiceDiagnostic } from '../nlp/PassiveVoiceChecker.js';
-import { SentenceEndingCadenceCalculator, type CadenceAnalysisResult } from '../nlp/SentenceEndingCadenceCalculator.js';
+import { SentenceEndingCadenceCalculator, type SentenceCadenceResult } from '../nlp/SentenceEndingCadenceCalculator.js';
 import { ParagraphIndenter } from '../editor/ParagraphIndenter.js';
 import { SceneOutliner, type SceneNode } from '../editor/SceneOutliner.js';
 import { TaigenRhythmEngine, type RhythmAnalysisResult } from '../nlp/TaigenRhythmEngine.js';
-import { RubySyntaxParser, type RubyFormatStyle, type NormalizationOptions } from '../editor/RubySyntaxParser.js';
+import { RubySyntaxParser, type RubyFormat, type NormalizeOptions } from '../editor/RubySyntaxParser.js';
 import { EmotionalArcAnalyzer, type EmotionalArcResult } from '../nlp/EmotionalArcAnalyzer.js';
 import { EmotionalArcChart } from '../nlp/EmotionalArcChart.js';
-import { ExclamationSpacingFormatter, type ExclamationDiagnostic, type FormatExclamationResult } from '../editor/ExclamationSpacingFormatter.js';
+import { ExclamationSpacingFormatter, type ExclamationSpacingDiagnostic } from '../editor/ExclamationSpacingFormatter.js';
 import { ForeshadowingEngine, type ForeshadowingJumpTarget } from '../editor/ForeshadowingEngine.js';
 import { ForeshadowingProgressPanel } from '../editor/ForeshadowingProgressPanel.js';
 import { KanjiHirakuDictionaryEngine, type HirakuDiagnostic } from '../editor/KanjiHirakuDictionary.js';
@@ -48,11 +48,11 @@ export interface WorkspaceState {
   diagnostics: LoreDiagnostic[];
   ellipsisDashDiagnostics: EllipsisDashDiagnostic[];
   passiveDiagnostics: PassiveVoiceDiagnostic[];
-  cadenceResult: CadenceAnalysisResult | null;
+  cadenceResult: SentenceCadenceResult | null;
   scenes: SceneNode[];
   rhythmResult: RhythmAnalysisResult | null;
   emotionalArc: EmotionalArcResult | null;
-  exclamationDiagnostics: ExclamationDiagnostic[];
+  exclamationDiagnostics: ExclamationSpacingDiagnostic[];
   hirakuDiagnostics: HirakuDiagnostic[];
   povResult: PovAnalysisResult | null;
   heatmapResult: HeatmapAnalysisResult | null;
@@ -167,13 +167,13 @@ export class ThreePaneWorkspace {
     return this.revisionManager;
   }
 
-  public normalizeRuby(options?: NormalizationOptions): string {
+  public normalizeRuby(options?: NormalizeOptions): string {
     const normalized = RubySyntaxParser.normalize(this.state.rawText, options);
     this.onTextChange(normalized);
     return normalized;
   }
 
-  public convertRubyFormat(targetStyle: RubyFormatStyle): string {
+  public convertRubyFormat(targetStyle: RubyFormat): string {
     const converted = RubySyntaxParser.convertFormat(this.state.rawText, targetStyle);
     this.onTextChange(converted);
     return converted;
@@ -251,7 +251,7 @@ export class ThreePaneWorkspace {
     return this.povAnalyzer;
   }
 
-  public formatExclamationSpacing(): FormatExclamationResult {
+  public formatExclamationSpacing(): { formattedText: string; fixesApplied: number } {
     const result = this.exclamationFormatter.format(this.state.rawText);
     this.onTextChange(result.formattedText);
     return result;

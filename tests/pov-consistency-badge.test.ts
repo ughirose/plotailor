@@ -153,8 +153,8 @@ describe('ThreePaneWorkspace Integration with PovConsistencyAnalyzer', () => {
     });
 
     const initialState = workspace.getState();
-    expect(initialState.povResult.focalCharacter).toBe('ヴァレリウス');
-    expect(initialState.povResult.hasDrift).toBe(false);
+    expect(initialState.povResult!.focalCharacter).toBe('ヴァレリウス');
+    expect(initialState.povResult!.hasDrift).toBe(false);
 
     // Change text to introduce POV drift
     workspace.onTextChange(
@@ -162,8 +162,8 @@ describe('ThreePaneWorkspace Integration with PovConsistencyAnalyzer', () => {
     );
 
     const updatedState = workspace.getState();
-    expect(updatedState.povResult.hasDrift).toBe(true);
-    expect(updatedState.povResult.driftCharacters).toContain('アーサー');
+    expect(updatedState.povResult!.hasDrift).toBe(true);
+    expect(updatedState.povResult!.driftCharacters).toContain('アーサー');
 
     const model = workspace.renderWorkspaceModel();
     expect(model.rightPane.contentHtml).toContain('pov-badge');
