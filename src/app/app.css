@@ -1958,4 +1958,102 @@ body.theme-washi .history-modal-dialog {
   color: #2c251e !important;
 }
 
+/* ===== Inline Dialog (replaces window.confirm/prompt/alert) ===== */
+.inline-dialog-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+  backdrop-filter: blur(2px);
+}
 
+.inline-dialog-box {
+  background: var(--bg-secondary, #1a1d24);
+  border: 1px solid var(--color-gold, #c9a84c);
+  border-radius: 8px;
+  padding: 20px 24px;
+  min-width: 320px;
+  max-width: 480px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.inline-dialog-message {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary, #e8e2d6);
+}
+
+.inline-dialog-detail {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-secondary, #8a8578);
+  line-height: 1.5;
+}
+
+.inline-dialog-input {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  background: var(--bg-primary, #0e1117);
+  border: 1px solid var(--border-color, #2d3139);
+  border-radius: 4px;
+  color: var(--text-primary, #e8e2d6);
+  font-size: 14px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.inline-dialog-input:focus {
+  outline: none;
+  border-color: var(--color-gold, #c9a84c);
+}
+
+.inline-dialog-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.inline-dialog-btn {
+  padding: 6px 16px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.inline-dialog-btn--cancel {
+  background: transparent;
+  border-color: var(--border-color, #2d3139);
+  color: var(--text-secondary, #8a8578);
+}
+
+.inline-dialog-btn--cancel:hover {
+  border-color: var(--text-secondary, #8a8578);
+}
+
+.inline-dialog-btn--confirm {
+  background: var(--color-gold, #c9a84c);
+  color: #0e1117;
+  font-weight: 600;
+}
+
+.inline-dialog-btn--confirm:hover {
+  background: #dbb85c;
+}
+
+.inline-dialog-btn--destructive {
+  background: var(--color-danger, #d35);
+  color: #fff;
+  font-weight: 600;
+}
+
+.inline-dialog-btn--destructive:hover {
+  background: #e44;
+}

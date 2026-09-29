@@ -4,6 +4,7 @@
  */
 
 import { EditorView, keymap } from '@codemirror/view';
+import { showInlineConfirm, showInlinePrompt, showInlineAlert } from './InlineDialog.js';
 import { EditorState, Compartment } from '@codemirror/state';
 import { history, defaultKeymap, historyKeymap, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
 import { rubyDecorationExtension, setRubyDisplayMode, type RubyDisplayMode } from '../core/editor/RubyDecorationExtension.js';
@@ -643,10 +644,15 @@ export class PlotailorApp {
     });
 
     const btnDelLore = document.getElementById('btnDeleteLoreEntity');
-    btnDelLore?.addEventListener('click', () => {
+    btnDelLore?.addEventListener('click', async () => {
       const idInput = document.getElementById('loreEntityId') as HTMLInputElement | null;
       if (idInput && idInput.value) {
-        if (window.confirm('この設定項目を削除してもよろしいですか？')) {
+        const confirmed = await showInlineConfirm({
+          message: 'この設定項目を削除してもよろしいですか？',
+          destructive: true,
+          confirmText: '削除',
+        });
+        if (confirmed) {
           this.deleteLore(idInput.value);
         }
       }
@@ -1159,7 +1165,11 @@ export class PlotailorApp {
   }
 
   private async createNewProjectPrompt() {
-    const title = window.prompt('新規作品のタイトルを入力してください:', `長編小説_${new Date().toISOString().slice(0, 10)}`);
+    const title = await showInlinePrompt({
+      message: '新規作品のタイトルを入力してください:',
+      defaultValue: `長編小説_${new Date().toISOString().slice(0, 10)}`,
+      placeholder: '作品タイトル',
+    });
     if (!title || !title.trim()) return;
 
     try {
@@ -1180,7 +1190,7 @@ export class PlotailorApp {
       this.closeProjectModal();
       this.showToast(`✨ 新規作品「${newProj.title}」を作成し、執筆を開始しました`);
     } catch (err) {
-      window.alert(`作品の作成に失敗しました: ${err}`);
+      await showInlineAlert({ message: `作品の作成に失敗しました: ${err}` });
     }
   }
 
@@ -1267,7 +1277,13 @@ export class PlotailorApp {
     const targetCh = this.chapters.find((c) => c.id === chapterId);
     if (!targetCh) return;
 
-    if (!window.confirm(`章「${targetCh.title}」を削除してもよろしいですか？\n本文と履歴スナップショットは破棄されます。`)) {
+    const confirmed = await showInlineConfirm({
+      message: `章「${targetCh.title}」を削除してもよろしいですか？`,
+      detail: '本文と履歴スナップショットは破棄されます。',
+      destructive: true,
+      confirmText: '削除',
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -2193,11 +2209,18 @@ export class PlotailorApp {
 
       // Delete buttons
       container.querySelectorAll('.btn-delete-lore').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
           e.stopPropagation();
           const id = (e.currentTarget as HTMLElement).dataset.id;
-          if (id && window.confirm('この設定項目を削除してもよろしいですか？')) {
-            this.deleteLore(id);
+          if (id) {
+            const confirmed = await showInlineConfirm({
+              message: 'この設定項目を削除してもよろしいですか？',
+              destructive: true,
+              confirmText: '削除',
+            });
+            if (confirmed) {
+              this.deleteLore(id);
+            }
           }
         });
       });
