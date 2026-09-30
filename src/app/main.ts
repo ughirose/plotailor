@@ -2395,7 +2395,7 @@ export class PlotailorApp {
       const listItems = snapshots.length === 0
         ? '<div style="color: var(--color-text-dim); font-size: 12px; padding: 8px;">まだ履歴がありません。</div>'
         : snapshots.slice().reverse().map((snap: any, idx: number) => {
-            const time = new Date(snap.timestamp).toLocaleTimeString('ja-JP');
+            const time = new Date(snap.time).toLocaleTimeString('ja-JP');
             const charCount = (snap.text || '').replace(/\s+/g, '').length;
             return `<div class="history-entry" data-snap-idx="${snapshots.length - 1 - idx}" style="padding: 6px 8px; border-bottom: 1px solid var(--color-border); cursor: pointer; font-size: 12px; transition: background 0.15s;">
               <div style="display: flex; justify-content: space-between;">
@@ -2430,7 +2430,7 @@ export class PlotailorApp {
             this.cmEditor.dispatch({
               changes: { from: 0, to: this.cmEditor.state.doc.length, insert: snap.text },
             });
-            this.showToast(`🕒 履歴 ${new Date(snap.timestamp).toLocaleTimeString('ja-JP')} へロールバックしました`);
+            this.showToast(`🕒 履歴 ${new Date(snap.time).toLocaleTimeString('ja-JP')} へロールバックしました`);
           }
         });
         entry.addEventListener('mouseenter', () => {
