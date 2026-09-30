@@ -46,7 +46,41 @@ export interface RubySagariSpan {
   displayTo: number;
 }
 
-export type AozoraSpan = TextSpan | RubySpan | BoutenSpan | RubySagariSpan;
+export interface TcySpan {
+  type: 'tcy';
+  text: string;
+  rawFrom: number;
+  rawTo: number;
+  displayFrom: number;
+  displayTo: number;
+}
+
+export interface WarichuSpan {
+  type: 'warichu';
+  text: string;
+  rawFrom: number;
+  rawTo: number;
+  displayFrom: number;
+  displayTo: number;
+}
+
+export interface CommentSpan {
+  type: 'comment';
+  comment: string;
+  rawFrom: number;
+  rawTo: number;
+  displayFrom: number;
+  displayTo: number;
+}
+
+export type AozoraSpan =
+  | TextSpan
+  | RubySpan
+  | BoutenSpan
+  | RubySagariSpan
+  | TcySpan
+  | WarichuSpan
+  | CommentSpan;
 
 export interface OffsetMapping {
   rawFrom: number;
@@ -107,13 +141,17 @@ export class AozoraParser {
   private static readonly BOUTEN_RE = /《《([^》\r\n]+)》》/g;
   private static readonly BOUTEN_ALT_RE = /(?:［＃「([^」\r\n]+)」に傍点］|[［\[]＃傍点[］\]]([^\n［］\[\]]+?)[［\[]＃傍点終わり[］\]])/g;
   private static readonly RUBY_SAGARI_RE = /〔([^〕\r\n]+)〕/g;
+  private static readonly TCY_RE = /(?:［＃「([^」\r\n]+)」は縦中横］|[［\[]＃縦中横[］\]]([^\n［］\[\]]+?)[［\[]＃縦中横終わり[］\]])/g;
+  private static readonly WARICHU_RE = /(?:［＃「([^」\r\n]+)」は割り注］|[［\[]＃割り注[］\]]([^\n［］\[\]]+?)[［\[]＃割り注終わり[］\]]|〔割り注：?([^〕\r\n]+)〕)/g;
+  private static readonly COMMENT_LINE_RE = /\/\/(.*)$/gm;
+  private static readonly COMMENT_BLOCK_RE = /%%([^%\r\n]+)%%/g;
 
   /**
    * Parse text into structured semantic spans with exact raw/display offsets.
    */
   static parse(rawText: string): { spans: AozoraSpan[]; map: SourceToDisplayMap } {
     const rawMatches: {
-      type: 'ruby' | 'bouten' | 'ruby-sagari';
+      type: 'ruby' | 'bouten' | 'ruby-sagari' | 'tcy' | 'warichu' | 'comment';
       rawFrom: number;
       rawTo: number;
       text: string;
@@ -183,7 +221,23 @@ export class AozoraParser {
       }
     }
 
-    // 5. Ruby Sagari 〔...〕
+    // 5. Warichu (割り注) ［＃「...」は割り注］ or ［＃割り注］...［＃割り注終わり］ or 〔割り注：...〕
+    const warichuRe = new RegExp(this.WARICHU_RE);
+    while ((match = warichuRe.exec(rawText)) !== null) {
+      const start = match.index;
+      const end = match.index + match[0].length;
+      const overlaps = rawMatches.some((m) => Math.max(start, m.rawFrom) < Math.min(end, m.rawTo));
+      if (!overlaps) {
+        rawMatches.push({
+          type: 'warichu',
+          rawFrom: start,
+          rawTo: end,
+          text: match[1] || match[2] || match[3] || '',
+        });
+      }
+    }
+
+    // 6. Ruby Sagari 〔...〕
     const rubySagariRe = new RegExp(this.RUBY_SAGARI_RE);
     while ((match = rubySagariRe.exec(rawText)) !== null) {
       const start = match.index;
@@ -192,6 +246,54 @@ export class AozoraParser {
       if (!overlaps) {
         rawMatches.push({
           type: 'ruby-sagari',
+          rawFrom: start,
+          rawTo: end,
+          text: match[1],
+        });
+      }
+    }
+
+    // 7. TCY (縦中横) ［＃縦中横］...［＃縦中横終わり］ or ［＃「...」は縦中横］
+    const tcyRe = new RegExp(this.TCY_RE);
+    while ((match = tcyRe.exec(rawText)) !== null) {
+      const start = match.index;
+      const end = match.index + match[0].length;
+      const overlaps = rawMatches.some((m) => Math.max(start, m.rawFrom) < Math.min(end, m.rawTo));
+      if (!overlaps) {
+        rawMatches.push({
+          type: 'tcy',
+          rawFrom: start,
+          rawTo: end,
+          text: match[1] || match[2] || '',
+        });
+      }
+    }
+
+    // 8. Comment Block %%...%%
+    const commentBlockRe = new RegExp(this.COMMENT_BLOCK_RE);
+    while ((match = commentBlockRe.exec(rawText)) !== null) {
+      const start = match.index;
+      const end = match.index + match[0].length;
+      const overlaps = rawMatches.some((m) => Math.max(start, m.rawFrom) < Math.min(end, m.rawTo));
+      if (!overlaps) {
+        rawMatches.push({
+          type: 'comment',
+          rawFrom: start,
+          rawTo: end,
+          text: match[1],
+        });
+      }
+    }
+
+    // 9. Comment Line //...
+    const commentLineRe = new RegExp(this.COMMENT_LINE_RE);
+    while ((match = commentLineRe.exec(rawText)) !== null) {
+      const start = match.index;
+      const end = match.index + match[0].length;
+      const overlaps = rawMatches.some((m) => Math.max(start, m.rawFrom) < Math.min(end, m.rawTo));
+      if (!overlaps) {
+        rawMatches.push({
+          type: 'comment',
           rawFrom: start,
           rawTo: end,
           text: match[1],
@@ -222,7 +324,9 @@ export class AozoraParser {
         currentDisplay += len;
       }
 
-      const displayText = m.text;
+      // Hidden comments do not take display width
+      const isComment = m.type === 'comment';
+      const displayText = isComment ? '' : m.text;
       const displayLen = displayText.length;
       const displayStart = currentDisplay;
       const displayEnd = currentDisplay + displayLen;
@@ -250,6 +354,33 @@ export class AozoraParser {
         spans.push({
           type: 'ruby-sagari',
           text: m.text,
+          rawFrom: m.rawFrom,
+          rawTo: m.rawTo,
+          displayFrom: displayStart,
+          displayTo: displayEnd,
+        });
+      } else if (m.type === 'tcy') {
+        spans.push({
+          type: 'tcy',
+          text: m.text,
+          rawFrom: m.rawFrom,
+          rawTo: m.rawTo,
+          displayFrom: displayStart,
+          displayTo: displayEnd,
+        });
+      } else if (m.type === 'warichu') {
+        spans.push({
+          type: 'warichu',
+          text: m.text,
+          rawFrom: m.rawFrom,
+          rawTo: m.rawTo,
+          displayFrom: displayStart,
+          displayTo: displayEnd,
+        });
+      } else if (m.type === 'comment') {
+        spans.push({
+          type: 'comment',
+          comment: m.text,
           rawFrom: m.rawFrom,
           rawTo: m.rawTo,
           displayFrom: displayStart,
