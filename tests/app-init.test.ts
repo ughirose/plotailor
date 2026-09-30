@@ -98,13 +98,11 @@ describe('PlotailorApp DOM Initialization & Data Integrity', () => {
 
     const settingsModal = document.getElementById('settingsModal');
     const exportModal = document.getElementById('exportModal');
-    const helpModal = document.getElementById('helpModal');
     const loreModal = document.getElementById('loreModal');
 
     // Confirm modals are siblings, not nested within loreModal
     expect(loreModal?.contains(settingsModal!)).toBe(false);
     expect(loreModal?.contains(exportModal!)).toBe(false);
-    expect(loreModal?.contains(helpModal!)).toBe(false);
 
     // 1. Settings modal
     const menuOpenSettings = document.getElementById('menuOpenSettings');
@@ -120,12 +118,11 @@ describe('PlotailorApp DOM Initialization & Data Integrity', () => {
     document.getElementById('btnCloseExportModal')?.click();
     expect(exportModal?.style.display).toBe('none');
 
-    // 3. Help modal
+    // 3. Help dock tab (Constitution compliant: docked in right pane, no blocking modal)
     const btnHeaderHelp = document.getElementById('btnHeaderHelp');
     btnHeaderHelp?.click();
-    expect(helpModal?.style.display).toBe('flex');
-    document.getElementById('btnCloseHelpModal')?.click();
-    expect(helpModal?.style.display).toBe('none');
+    const dockContent = document.getElementById('dockContent');
+    expect(dockContent?.innerHTML).toContain('操作ガイド ＆ ショートカット');
   });
 
   it('toggles ruby mode without throwing errors and updates menu label', async () => {
@@ -143,16 +140,15 @@ describe('PlotailorApp DOM Initialization & Data Integrity', () => {
   });
 
   it('creates clean new project without residual sample data and supports multi-project switching and refresh', async () => {
+    const InlineDialog = await import('../src/app/InlineDialog.js');
+    vi.spyOn(InlineDialog, 'showInlinePrompt').mockResolvedValue('完全新規の異世界奇譚');
+
     const { PlotailorApp } = await import('../src/app/main.js');
     const app = new PlotailorApp();
 
     // 1. Initial default project check
     const titleEl = document.getElementById('workTitleText');
     expect(titleEl?.textContent).toBe('星辰の境界線');
-
-    // Mock window.prompt for new project
-    const originalPrompt = window.prompt;
-    window.prompt = vi.fn().mockReturnValue('完全新規の異世界奇譚');
 
     // 2. Create new project
     await (app as any).createNewProjectPrompt();
@@ -198,6 +194,6 @@ describe('PlotailorApp DOM Initialization & Data Integrity', () => {
     expect(refreshedTitleEl?.textContent).toBe('完全新規の異世界奇譚');
 
     // Cleanup mock
-    window.prompt = originalPrompt;
+    vi.restoreAllMocks();
   });
 });

@@ -477,13 +477,14 @@ export class PlotailorApp {
     document.getElementById('btnHeaderUndo')?.addEventListener('click', handleUndo);
     document.getElementById('btnHeaderRedo')?.addEventListener('click', handleRedo);
 
-    // History Modal Open/Close Handlers
-    document.getElementById('historyDepthBadge')?.addEventListener('click', () => this.openHistoryModal());
-    document.getElementById('btnCloseHistoryModal')?.addEventListener('click', () => this.closeHistoryModal());
-    document.getElementById('historyModal')?.addEventListener('click', (e) => {
-      if ((e.target as HTMLElement).id === 'historyModal') {
-        this.closeHistoryModal();
+    // History: switch to right-pane dock tab instead of modal
+    document.getElementById('historyDepthBadge')?.addEventListener('click', () => {
+      this.activeRightTab = 'history';
+      const paneRight = document.getElementById('paneRight');
+      if (paneRight && paneRight.style.display === 'none') {
+        paneRight.style.display = '';
       }
+      this.renderRightPane();
     });
 
     // Global Alt+P Promote Shelved Lore Shortcut
@@ -552,12 +553,8 @@ export class PlotailorApp {
         this.closeExportModal();
         this.closeProjectModal?.();
         this.closeLoreModal?.();
-        const historyModal = document.getElementById('historyModal');
-        if (historyModal) historyModal.style.display = 'none';
         const settingsModal = document.getElementById('settingsModal');
         if (settingsModal) settingsModal.style.display = 'none';
-        const helpModal = document.getElementById('helpModal');
-        if (helpModal) helpModal.style.display = 'none';
       }
     });
 
@@ -944,46 +941,17 @@ export class PlotailorApp {
   }
 
   public openHistoryModal() {
-    const modal = document.getElementById('historyModal');
-    const container = document.getElementById('historyListContainer');
-    if (!modal || !container) return;
-
-    const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
-    if (snapshots.length === 0) {
-      container.innerHTML = '<div style="font-size: 13px; color: var(--color-text-dim); text-align: center; padding: 24px;">まだ履歴スナップショットはありません。本文を入力すると自動的に記録されます。</div>';
-    } else {
-      container.innerHTML = snapshots.slice(-40).reverse().map((snap, idx) => {
-        const dateStr = new Date(snap.time).toLocaleTimeString();
-        const preview = snap.text.slice(0, 60).replace(/\n/g, ' ') || '（空文書）';
-        return `
-          <div class="history-item" data-snap-index="${snapshots.length - 1 - idx}">
-            <div class="history-item-info">
-              <div class="history-item-time">${dateStr} (${snap.length} 文字)</div>
-              <div class="history-item-preview">${preview}</div>
-            </div>
-            <button class="history-item-btn">この時点に復元</button>
-          </div>
-        `;
-      }).join('');
-
-      container.querySelectorAll('.history-item').forEach((item) => {
-        item.addEventListener('click', (e) => {
-          const idxStr = (e.currentTarget as HTMLElement).dataset.snapIndex;
-          if (idxStr !== undefined) {
-            const idx = parseInt(idxStr, 10);
-            this.rollbackToSnapshot(idx);
-            this.closeHistoryModal();
-          }
-        });
-      });
+    // Redirected to right-pane dock tab
+    this.activeRightTab = 'history';
+    const paneRight = document.getElementById('paneRight');
+    if (paneRight && paneRight.style.display === 'none') {
+      paneRight.style.display = '';
     }
-
-    modal.style.display = 'flex';
+    this.renderRightPane();
   }
 
   public closeHistoryModal() {
-    const modal = document.getElementById('historyModal');
-    if (modal) modal.style.display = 'none';
+    // No-op: history is now an inline dock tab, not a modal
   }
 
   private rollbackToSnapshot(index: number) {
@@ -1643,8 +1611,12 @@ export class PlotailorApp {
 
     document.getElementById('menuOpenHelp')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
-      const modal = document.getElementById('helpModal');
-      if (modal) modal.style.display = 'flex';
+      this.activeRightTab = 'help';
+      const paneRight = document.getElementById('paneRight');
+      if (paneRight && paneRight.style.display === 'none') {
+        paneRight.style.display = '';
+      }
+      this.renderRightPane();
     });
   }
 
@@ -1744,18 +1716,14 @@ export class PlotailorApp {
   }
 
   private initHelpModal(): void {
-    const modal = document.getElementById('helpModal');
-    const openHelp = () => {
-      if (modal) modal.style.display = 'flex';
-    };
-
-    document.getElementById('btnHeaderHelp')?.addEventListener('click', openHelp);
-    document.getElementById('btnCloseHelpModal')?.addEventListener('click', () => {
-      if (modal) modal.style.display = 'none';
-    });
-
-    modal?.addEventListener('click', (e) => {
-      if (e.target === modal) modal.style.display = 'none';
+    // Help is now a right-pane dock tab; button opens it inline
+    document.getElementById('btnHeaderHelp')?.addEventListener('click', () => {
+      this.activeRightTab = 'help';
+      const paneRight = document.getElementById('paneRight');
+      if (paneRight && paneRight.style.display === 'none') {
+        paneRight.style.display = '';
+      }
+      this.renderRightPane();
     });
   }
 
@@ -2421,6 +2389,92 @@ export class PlotailorApp {
       document.getElementById('btnIssuePoP')?.addEventListener('click', () => {
         this.showToast('📜 PoP創作証明書（SHA-256 Merkle連鎖）を発行・保存しました');
       });
+    } else if (this.activeRightTab === 'history') {
+      // Inline history dock (replaces #historyModal)
+      const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
+      const listItems = snapshots.length === 0
+        ? '<div style="color: var(--color-text-dim); font-size: 12px; padding: 8px;">まだ履歴がありません。</div>'
+        : snapshots.slice().reverse().map((snap: any, idx: number) => {
+            const time = new Date(snap.timestamp).toLocaleTimeString('ja-JP');
+            const charCount = (snap.text || '').replace(/\s+/g, '').length;
+            return `<div class="history-entry" data-snap-idx="${snapshots.length - 1 - idx}" style="padding: 6px 8px; border-bottom: 1px solid var(--color-border); cursor: pointer; font-size: 12px; transition: background 0.15s;">
+              <div style="display: flex; justify-content: space-between;">
+                <span style="color: var(--color-gold);">${time}</span>
+                <span style="color: var(--color-text-dim);">${charCount}字</span>
+              </div>
+            </div>`;
+          }).join('');
+
+      container.innerHTML = `
+        <div class="dock-card">
+          <div class="dock-card-header">
+            <span class="dock-card-title">🕒 編集履歴・ロールバック</span>
+            <span style="font-size: 11px; color: var(--color-text-dim);">最大500件</span>
+          </div>
+          <div class="dock-card-body" style="padding: 0;">
+            <p style="font-size: 11px; color: var(--color-text-dim); padding: 8px; margin: 0; border-bottom: 1px solid var(--color-border);">
+              過去の編集ポイントをクリックすると、その時点の本文へロールバックします。
+            </p>
+            <div style="max-height: 400px; overflow-y: auto;">
+              ${listItems}
+            </div>
+          </div>
+        </div>
+      `;
+
+      container.querySelectorAll('.history-entry').forEach((entry) => {
+        entry.addEventListener('click', () => {
+          const snapIdx = parseInt((entry as HTMLElement).dataset.snapIdx || '0', 10);
+          const snap = snapshots[snapIdx];
+          if (snap && this.cmEditor) {
+            this.cmEditor.dispatch({
+              changes: { from: 0, to: this.cmEditor.state.doc.length, insert: snap.text },
+            });
+            this.showToast(`🕒 履歴 ${new Date(snap.timestamp).toLocaleTimeString('ja-JP')} へロールバックしました`);
+          }
+        });
+        entry.addEventListener('mouseenter', () => {
+          (entry as HTMLElement).style.background = 'rgba(207,168,92,0.1)';
+        });
+        entry.addEventListener('mouseleave', () => {
+          (entry as HTMLElement).style.background = '';
+        });
+      });
+    } else if (this.activeRightTab === 'help') {
+      // Inline help dock (replaces #helpModal)
+      const shortcuts = [
+        ['元に戻す / やり直す', 'Ctrl + Z / Ctrl + Y'],
+        ['選択テキストをルビ化', 'Ctrl + R'],
+        ['全画面集中執筆モード', 'F11 / Escで解除'],
+        ['左ペイン（目次）開閉', 'Ctrl + B'],
+        ['段落字下げ / 逆字下げ', 'Tab / Shift + Tab'],
+        ['縦書き段落移動', '← / →'],
+        ['縦書き文字移動', '↑ / ↓'],
+        ['パレット / ESC', 'Esc'],
+      ];
+      const rows = shortcuts.map(([fn, key]) =>
+        `<tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+          <td style="padding: 4px 8px;">${fn}</td>
+          <td style="text-align: right; padding: 4px 8px; font-family: var(--font-mono); color: var(--color-accent);">${key}</td>
+        </tr>`
+      ).join('');
+
+      container.innerHTML = `
+        <div class="dock-card">
+          <div class="dock-card-header">
+            <span class="dock-card-title">📖 操作ガイド ＆ ショートカット</span>
+          </div>
+          <div class="dock-card-body" style="padding: 0;">
+            <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+              <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+                <th style="text-align: left; color: var(--color-gold); padding: 4px 8px;">機能</th>
+                <th style="text-align: right; color: var(--color-gold); padding: 4px 8px;">キー / 操作</th>
+              </tr>
+              ${rows}
+            </table>
+          </div>
+        </div>
+      `;
     }
   }
 
