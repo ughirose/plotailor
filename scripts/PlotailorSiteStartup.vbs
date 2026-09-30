@@ -1,2 +1,5 @@
+Set fso = CreateObject("Scripting.FileSystemObject")
+scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+psScript = fso.BuildPath(scriptDir, "watchdog_site.ps1")
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""C:\Users\user\.gemini\antigravity\scratch\worldcraft-workspace\plotailor\scripts\watchdog_site.ps1""", 0, False
+WshShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File """ & psScript & """", 0, False

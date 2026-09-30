@@ -1,20 +1,24 @@
 @echo off
-chcp 65001 > nul
-set "SCRIPTPATH=C:\Users\user\.gemini\antigravity\scratch\worldcraft-workspace\plotailor\scripts\watchdog_site.ps1"
+setlocal
+cd /d "%~dp0"
 
 echo ======================================================
-echo  Plotailor ä½œå®¶å‘ã‘ã‚µã‚¤ãƒˆ ï¼† è‡ªå‹•æ­»æ´»ç›£è¦–ãƒ©ãƒ³ãƒãƒ£ãƒ¼
+echo  Plotailor ì‰ÆŒü‚¯ƒTƒCƒg • Ž©“®Ž€ŠˆŠÄŽ‹ƒ‰ƒ“ƒ`ƒƒ[
 echo ======================================================
 echo.
-echo ãƒãƒƒã‚¯ã‚°ãƒ©ã‚¦ãƒ³ãƒ‰ã§æ­»æ´»ç›£è¦–ãƒ»è‡ªå‹•å†èµ·å‹•ã‚µãƒ¼ãƒ“ã‚¹ã‚’èµ·å‹•ã—ã¾ã™...
+echo ƒoƒbƒNƒOƒ‰ƒEƒ“ƒh‚ÅŽ€ŠˆŠÄŽ‹EŽ©“®Ä‹N“®ƒT[ƒrƒX‚ð‹N“®‚µ‚Ü‚·...
 
-powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%SCRIPTPATH%"
+wscript.exe "%~dp0PlotailorSiteStartup.vbs"
 
 echo.
-echo [èµ·å‹•å®Œäº†]
-echo LAN URL: http://192.168.1.200:8080/
+echo ƒT[ƒo[‚Ì‹N“®‚ðŠm”F’†...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$retry=0; while($retry -lt 20){ $c = New-Object System.Net.Sockets.TcpClient; try { $a = $c.BeginConnect('127.0.0.1', 8080, $null, $null); if($a.AsyncWaitHandle.WaitOne(300, $false)){ $c.EndConnect($a); $c.Close(); break } } catch{} try{$c.Close()}catch{}; Start-Sleep -Milliseconds 200; $retry++ }"
+
+echo.
+echo [‹N“®Š®—¹]
 echo Local:   http://localhost:8080/
 echo.
-echo ãƒ–ãƒ©ã‚¦ã‚¶ã§é–‹ãã¾ã™...
+echo ƒuƒ‰ƒEƒU‚ÅŠJ‚«‚Ü‚·...
 start http://localhost:8080/
+ping 127.0.0.1 -n 3 > nul
 exit

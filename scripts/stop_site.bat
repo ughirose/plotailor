@@ -1,9 +1,11 @@
 @echo off
-chcp 65001 > nul
-echo Plotailor ã‚µã‚¤ãƒˆã‚µãƒ¼ãƒãƒ¼ãŠã‚ˆã³æ­»æ´»ç›£è¦–ãƒ—ãƒ­ã‚»ã‚¹ã‚’åœæ­¢ä¸­...
+setlocal
+cd /d "%~dp0"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Get-Process -Name powershell -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -like '*watchdog_site.ps1*' } | Stop-Process -Force -ErrorAction SilentlyContinue; $p = Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach($pidToKill in $p){ Stop-Process -Id $pidToKill -Force -ErrorAction SilentlyContinue }"
+echo Plotailor ƒTƒCƒgƒT[ƒo[‚¨‚æ‚ÑŽ€ŠˆŠÄŽ‹ƒvƒƒZƒX‚ð’âŽ~’†...
 
-echo åœæ­¢ã—ã¾ã—ãŸã€‚
-timeout /t 2 > nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$procs = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*watchdog_site.ps1*' -or $_.CommandLine -like '*http.server*8080*' }; foreach($p in $procs){ Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }"
+
+echo ’âŽ~‚µ‚Ü‚µ‚½B
+ping 127.0.0.1 -n 3 > nul
 exit

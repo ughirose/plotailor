@@ -2,14 +2,18 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="0; url=/">
-  <title>Plotailor - リダイレクト中</title>
+  <title>Plotailor - トップページへ移動</title>
   <script>
-    window.location.replace('/');
+    if (window.location.pathname.includes('/site')) {
+      window.location.replace('/');
+    }
   </script>
 </head>
 <body style="background:#0e1117;color:#faf7ee;font-family:sans-serif;padding:2rem;text-align:center;">
-  <p>Plotailor 統合執筆画面へ移動しています...</p>
-  <p><a href="/" style="color:#cfa85c;">自動で移動しない場合はこちらをクリックしてください</a></p>
+  <h2>Plotailor</h2>
+  <p>作家向け専用執筆環境</p>
+  <p><a href="/" style="color:#cfa85c;text-decoration:underline;">トップページ（LP）へ移動する</a></p>
+  <p><a href="/app.html" style="color:#cfa85c;text-decoration:underline;">執筆室を開く</a></p>
+  <p><a href="help.html" style="color:#cfa85c;text-decoration:underline;">操作ガイドを開く</a></p>
 </body>
 </html>
