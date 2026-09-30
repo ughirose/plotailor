@@ -198,6 +198,18 @@
       </aside>
     </main>
 
+    <!-- Bottom Dock Container (Spec §2: Dual-track timeline & Lint Roller) -->
+    <div class="ide-bottom-dock" id="ideBottomDock" style="display: none;">
+      <div class="bottom-dock-header">
+        <div class="bottom-dock-tabs">
+          <button class="pane-tab-btn active" data-bottom-tab="timeline">タイムライン</button>
+          <button class="pane-tab-btn" data-bottom-tab="lint-roller">Lint Roller 診断</button>
+        </div>
+        <button class="ide-btn" id="btnCloseBottomDock" style="padding: 1px 6px; font-size: 11px;">✕</button>
+      </div>
+      <div class="bottom-dock-content" id="bottomDockContent"></div>
+    </div>
+
     <!-- Bottom Status Bar -->
     <footer class="ide-footer">
       <div class="ide-footer-left">
@@ -209,6 +221,7 @@
         <span>|</span>
         <span>速度: <strong id="typingSpeed">0</strong> 字/分</span>
       </div>
+      <div class="ide-footer-center" id="footerToastArea"></div>
       <div class="ide-footer-right">
         <span id="saveStatusIndicator" style="color: var(--color-text-dim); transition: color 0.2s ease;">自動保存: 待機</span>
         <span>|</span>

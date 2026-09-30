@@ -1874,29 +1874,24 @@ export class PlotailorApp {
     this.copyTextToClipboard(normalized, '✅ 現在の章（青空記法）をコピーしました');
   }
 
+  private toastTimer: any = null;
   private showToast(msg: string) {
-    const toast = document.createElement('div');
-    toast.textContent = msg;
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: rgba(14, 17, 23, 0.95);
-      border: 1px solid var(--color-gold);
-      color: var(--color-gold);
-      padding: 8px 18px;
-      border-radius: 20px;
-      font-size: 13px;
-      z-index: 10000;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-      transition: opacity 0.3s;
-    `;
-    document.body.appendChild(toast);
-    setTimeout(() => {
-      toast.style.opacity = '0';
-      setTimeout(() => toast.remove(), 300);
-    }, 2000);
+    const footerToast = document.getElementById('footerToastArea');
+    if (footerToast) {
+      footerToast.textContent = msg;
+      footerToast.classList.add('toast-visible');
+      if (this.toastTimer) {
+        clearTimeout(this.toastTimer);
+      }
+      this.toastTimer = setTimeout(() => {
+        footerToast.classList.remove('toast-visible');
+        this.toastTimer = setTimeout(() => {
+          if (!footerToast.classList.contains('toast-visible')) {
+            footerToast.textContent = '';
+          }
+        }, 300);
+      }, 3000);
+    }
   }
 
   private renderLeftPane() {
