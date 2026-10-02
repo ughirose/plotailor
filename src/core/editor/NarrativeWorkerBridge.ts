@@ -79,20 +79,11 @@ export class NarrativeWorkerBridge {
     const startTime = performance.now();
 
     try {
-      // Calculate 128-char sliding window if cursor position is provided
-      let slidingWindow: { from: number; to: number } | undefined;
-      if (typeof req.cursorPos === 'number') {
-        const half = Math.floor(this.slidingWindowSize / 2);
-        const from = Math.max(0, req.cursorPos - half);
-        const to = Math.min(req.text.length, req.cursorPos + half);
-        slidingWindow = { from, to };
-      }
-
-      // Execute non-blocking analysis
+      // Execute non-blocking analysis across the full document so all warnings are preserved
       const result = await new Promise<NarrativeAnalysisResult>((r) => {
         // Yield to microtask queue to ensure UI paint is never held up
         queueMicrotask(() => {
-          const res = this.engine.analyzeDocument(req.text, { slidingWindow });
+          const res = this.engine.analyzeDocument(req.text);
           r(res);
         });
       });

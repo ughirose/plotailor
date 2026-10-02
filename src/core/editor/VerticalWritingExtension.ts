@@ -58,11 +58,19 @@ export function getVerticalPosAtCoords(
       }
     }
 
-    if (targetNode && view.dom.contains(targetNode)) {
+    if (targetNode && view.dom.contains(targetNode) && targetNode !== view.contentDOM && targetNode !== view.dom) {
       try {
-        const docPos = view.posAtDOM(targetNode, targetOffset);
-        if (typeof docPos === 'number') {
-          return docPos;
+        const el = targetNode instanceof Element ? targetNode : targetNode.parentElement;
+        if (el) {
+          const bRect = el.getBoundingClientRect();
+          // Verify that targetNode is actually within plausible distance of coords.x and coords.y
+          const xTolerance = Math.max(36, (bRect.width || 24) * 1.5);
+          if (coords.x >= bRect.left - xTolerance && coords.x <= bRect.right + xTolerance) {
+            const docPos = view.posAtDOM(targetNode, targetOffset);
+            if (typeof docPos === 'number') {
+              return docPos;
+            }
+          }
         }
       } catch {
         // Fallback to geometric calculation if posAtDOM throws
@@ -88,6 +96,23 @@ export function getVerticalPosAtCoords(
   }
 
   if (lineBoxes.length === 0) return 0;
+
+  // Check if click is beyond the leftmost column (past end of document in vertical-rl)
+  let minLeft = Infinity;
+  let maxRight = -Infinity;
+  for (const b of lineBoxes) {
+    if (b.rect.left < minLeft) minLeft = b.rect.left;
+    if (b.rect.right > maxRight) maxRight = b.rect.right;
+  }
+
+  if (coords.x < minLeft) {
+    // Clicked in empty space to the left of the last column: jump to end of document
+    return view.state.doc.length;
+  }
+  if (coords.x > maxRight) {
+    // Clicked to the right of the first column: jump to beginning of document
+    return 0;
+  }
 
   // Find column matching X coordinate
   let best = lineBoxes[0];
@@ -243,28 +268,64 @@ class VerticalWritingPlugin {
 
 export const verticalWritingPlugin = ViewPlugin.fromClass(VerticalWritingPlugin);
 
+let activeDragAnchor: number | null = null;
+let dragMoveListener: ((e: MouseEvent) => void) | null = null;
+let dragUpListener: (() => void) | null = null;
+
+function cleanupDragListeners() {
+  if (typeof window !== 'undefined') {
+    if (dragMoveListener) window.removeEventListener('mousemove', dragMoveListener);
+    if (dragUpListener) window.removeEventListener('mouseup', dragUpListener);
+  }
+  activeDragAnchor = null;
+  dragMoveListener = null;
+  dragUpListener = null;
+}
+
 /**
- * Event handler for mouse/pointer clicks in vertical writing mode.
- * Accurately sets selection anchor to prevent coordinate misalignment.
+ * Event handler for mouse/pointer clicks and drag selection in vertical writing mode.
+ * Accurately sets selection anchor and tracks mouse drag without horizontal coordinate misalignment.
  */
 const verticalMouseHandler = EditorView.domEventHandlers({
   mousedown(event: MouseEvent, view: EditorView) {
-    if (!isVerticalMode(view)) return false;
+    if (!isVerticalMode(view) || event.button !== 0) return false;
     const coords = { x: event.clientX, y: event.clientY };
     const pos = getVerticalPosAtCoords(view, coords);
     if (pos !== null) {
-      if (event.shiftKey) {
-        view.dispatch({
-          selection: { anchor: view.state.selection.main.anchor, head: pos },
-          userEvent: 'select.pointer',
-        });
-      } else {
-        view.dispatch({
-          selection: { anchor: pos },
-          userEvent: 'select.pointer',
-        });
-      }
+      const anchor = event.shiftKey ? view.state.selection.main.anchor : pos;
+      view.dispatch({
+        selection: { anchor, head: pos },
+        userEvent: 'select.pointer',
+      });
       view.focus();
+
+      cleanupDragListeners();
+      activeDragAnchor = anchor;
+
+      if (typeof window !== 'undefined') {
+        dragMoveListener = (moveEvent: MouseEvent) => {
+          if (activeDragAnchor === null) return;
+          if ((moveEvent.buttons & 1) === 0) {
+            cleanupDragListeners();
+            return;
+          }
+          const movePos = getVerticalPosAtCoords(view, { x: moveEvent.clientX, y: moveEvent.clientY });
+          if (movePos !== null) {
+            view.dispatch({
+              selection: { anchor: activeDragAnchor, head: movePos },
+              userEvent: 'select.pointer',
+            });
+          }
+        };
+
+        dragUpListener = () => {
+          cleanupDragListeners();
+        };
+
+        window.addEventListener('mousemove', dragMoveListener);
+        window.addEventListener('mouseup', dragUpListener);
+      }
+
       return true;
     }
     return false;

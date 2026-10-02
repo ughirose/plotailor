@@ -37,11 +37,11 @@
       </div>
 
       <div class="ide-header-right">
-        <button class="ide-btn" id="btnToggleLeftPane" title="左ペインの開閉 (Ctrl+B)">◨ 目次</button>
-        <button class="ide-btn" id="btnToggleOrientation" title="縦書き／横書きの切り替え">縦書き</button>
-        <button class="ide-btn" id="btnToggleTheme" title="和紙色／夜間色の切り替え">🌙 夜間色</button>
-        <button class="ide-btn" id="btnFullscreen" title="集中執筆全画面モード (F11)">⛶ 全画面</button>
-        <button class="ide-btn" id="btnToggleRightPane" title="右ペイン（伏線・推敲インスペクタ）の開閉">◧ 伏線</button>
+        <button class="ide-btn" id="btnToggleLeftPane" title="原稿目次・設定ペインの開閉 (Ctrl+B)"><span class="pane-icon">◨</span> <span class="btn-label">原稿目次</span></button>
+        <button class="ide-btn" id="btnToggleOrientation" title="縦書き／横書きの切り替え"><span class="btn-label">縦書き</span></button>
+        <button class="ide-btn" id="btnToggleTheme" title="和紙色／夜間色の切り替え">🌙 <span class="btn-label">夜間色</span></button>
+        <button class="ide-btn" id="btnFullscreen" title="集中執筆全画面モード (F11)">⛶ <span class="btn-label">全画面</span></button>
+        <button class="ide-btn" id="btnToggleRightPane" title="検査・推敲ペインの開閉 (Ctrl+J)"><span class="pane-icon">◧</span> <span class="btn-label">検査・推敲</span></button>
         
         <!-- Quick Help Shortcut Button -->
         <button class="ide-btn" id="btnHeaderHelp" title="操作ガイド・ショートカット一覧 (?)" style="padding: 2px 9px; font-weight: bold; font-size: 13px;">?</button>
@@ -52,6 +52,21 @@
             ☰
           </button>
           <div class="header-dropdown-menu" id="hamburgerDropdown" style="display: none;">
+            <div class="dropdown-item" id="menuToggleThemeMobile">
+              <span>🌓</span>
+              <div>
+                <strong>配色テーマ切替</strong>
+                <small>和紙調（昼）／夜間色（ダーク）</small>
+              </div>
+            </div>
+            <div class="dropdown-item" id="menuToggleFullscreenMobile">
+              <span>⛶</span>
+              <div>
+                <strong>全画面集中モード</strong>
+                <small>F11 / Escで復帰</small>
+              </div>
+            </div>
+            <div class="dropdown-divider"></div>
             <div class="dropdown-item" id="menuOpenSettings">
               <span>⚙️</span>
               <div>
@@ -107,7 +122,7 @@
       <!-- Left Pane: Chapter Outline & Lore Navigation -->
       <aside class="pane-left" id="paneLeft">
         <div class="pane-top-bar" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--color-border); background: rgba(0,0,0,0.15);">
-          <span style="font-size: 11px; font-weight: 600; color: var(--color-gold); letter-spacing: 0.05em;">NAVI / 設定</span>
+          <span style="font-size: 11px; font-weight: 600; color: var(--color-gold); letter-spacing: 0.05em;">原稿構成・設定</span>
           <button class="pane-collapse-btn" id="btnCollapseLeft" title="左ペインを折りたたむ (◀)" style="background: none; border: none; color: var(--color-text-dim); cursor: pointer; font-size: 12px; padding: 2px 6px;">◀</button>
         </div>
         <div class="pane-tabs">
@@ -126,19 +141,19 @@
       <!-- Center Pane: Writing Canvas -->
       <section class="pane-center" id="paneCenter">
         <div class="editor-toolbar">
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <span style="font-weight: 500;" id="activeChapterTitle">第一章 双月の巡る夜に</span>
-            <span style="color: var(--color-text-dim);">|</span>
+          <div class="toolbar-left-group" style="display: flex; gap: 6px; align-items: center;">
+            <span class="toolbar-chapter-title" style="font-weight: 500;" id="activeChapterTitle">第一章 双月の巡る夜に</span>
+            <span class="toolbar-sep" style="color: var(--color-text-dim);">|</span>
             <!-- Quick Format Buttons -->
             <button class="ide-btn" id="btnQuickRuby" title="選択テキストをルビ化 (Ctrl+R)" style="padding: 2px 7px; font-size: 11px; height: 22px;">ふ ルビ</button>
             <button class="ide-btn" id="btnQuickBouten" title="選択テキストに傍点を付与" style="padding: 2px 7px; font-size: 11px; height: 22px;">︙ 傍点</button>
             <button class="ide-btn" id="btnQuickBold" title="選択テキストを太字化" style="padding: 2px 7px; font-size: 11px; height: 22px; font-weight: bold;">B 太字</button>
-            <button class="ide-btn" id="btnQuickIndent" title="段落字下げを挿入" style="padding: 2px 7px; font-size: 11px; height: 22px;">⇥ 字下げ</button>
+            <button class="ide-btn" id="btnQuickIndent" title="段落字下げを挿入" style="padding: 2px 7px; font-size: 11px; height: 22px;"><span id="btnIndentIcon">⇥</span> <span class="btn-label">字下げ</span></button>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button class="ide-btn" id="btnToolbarUndo" title="元に戻す (Ctrl+Z)" style="padding: 2px 10px; font-size: 12px; height: 24px; min-width: auto;">↩ 戻す (Ctrl+Z)</button>
-            <button class="ide-btn" id="btnToolbarRedo" title="やり直す (Ctrl+Y / Ctrl+Shift+Z)" style="padding: 2px 10px; font-size: 12px; height: 24px; min-width: auto;">↪ やり直す (Ctrl+Y)</button>
-            <button class="ide-btn history-badge-btn" id="historyDepthBadge" style="font-size: 11px; color: var(--color-gold); padding: 2px 8px; height: 24px; cursor: pointer;" title="クリックで直近の編集履歴一覧（ロールバック）を開く">履歴: 0 / 500 ▾</button>
+          <div class="toolbar-right-group" style="display: flex; gap: 6px; align-items: center;">
+            <button class="ide-btn" id="btnToolbarUndo" title="元に戻す (Ctrl+Z)" style="padding: 2px 8px; font-size: 11px; height: 24px; min-width: auto;">↩ <span class="btn-label">戻す</span></button>
+            <button class="ide-btn" id="btnToolbarRedo" title="やり直す (Ctrl+Y / Ctrl+Shift+Z)" style="padding: 2px 8px; font-size: 11px; height: 24px; min-width: auto;">↪ <span class="btn-label">やり直す</span></button>
+            <button class="ide-btn history-badge-btn" id="historyDepthBadge" style="font-size: 11px; color: var(--color-gold); padding: 2px 8px; height: 24px; cursor: pointer;" title="クリックで編集履歴・ロールバック比較モーダルを開く">履歴: 0 / 500 ▾</button>
           </div>
         </div>
 
@@ -156,7 +171,7 @@
           <!-- Collapse Button Placed at LEFT as requested -->
           <button class="pane-collapse-btn" id="btnCollapseRight" title="右ペインを折りたたむ (▶)" style="background: none; border: none; color: var(--color-text-dim); cursor: pointer; font-size: 12px; padding: 2px 6px;">▶</button>
           <div style="display: flex; align-items: center; gap: 6px;">
-            <span style="font-size: 11px; font-weight: 600; color: var(--color-gold); letter-spacing: 0.05em;">INSPECTOR</span>
+            <span style="font-size: 11px; font-weight: 600; color: var(--color-gold); letter-spacing: 0.05em;">検査・推敲</span>
             <button class="ide-btn" id="btnToggleLegendCard" title="装飾ハイライト凡例の表示/非表示" style="padding: 1px 6px; font-size: 10px; height: 18px; border-color: rgba(207,168,92,0.4);">凡例 ▾</button>
           </div>
         </div>
@@ -185,12 +200,9 @@
         </div>
 
         <div class="pane-tabs">
-          <button class="pane-tab-btn active" data-dock-tab="lore">伏線・設定</button>
+          <button class="pane-tab-btn active" data-dock-tab="lore">設定・伏線</button>
           <button class="pane-tab-btn" data-dock-tab="linter">推敲・文体</button>
           <button class="pane-tab-btn" data-dock-tab="causality">因果相関図</button>
-          <button class="pane-tab-btn" data-dock-tab="pop">PoP創作証明</button>
-          <button class="pane-tab-btn" data-dock-tab="history">📜 履歴</button>
-          <button class="pane-tab-btn" data-dock-tab="help">❓ ヘルプ</button>
         </div>
         <div class="dock-content" id="dockContent">
           <!-- Populated by JavaScript -->
@@ -229,15 +241,118 @@
         <span>|</span>
         <span style="color: var(--color-gold); font-size: 11px;" title="OPFS (Origin Private File System) AES-GCM-256 暗号化">🔒 暗号化ローカル保存</span>
         <span>|</span>
-        <span id="popFooterScore" style="color: var(--color-gold); font-size: 11px;" title="創作プロセス証明（打鍵・推敲エントロピー解析）">PoP: HCIS 1.18 ✦</span>
-        <span>|</span>
-        <span>Nano-Wasm: <strong style="color: var(--color-success);">Ready</strong></span>
+        <span>Nano-Wasm: <strong style="color: var(--color-success);" title="Wasm SIMD PAS Head (0.6μs) / SPSC RingBuffer (ゼロコピー)">⚡ SIMD Ready (0.6μs)</strong></span>
       </div>
     </footer>
   </div>
 
 
-  <!-- History is now rendered inline in right pane dock tab -->
+  <!-- History Snapshots Rollback Modal with Full Diff Preview -->
+  <div class="history-modal-backdrop" id="historyModal" style="display: none;">
+    <div class="history-modal-dialog" style="max-width: 900px; width: 90vw; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="history-modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <h3><span>🕒</span> 編集履歴・ロールバック比較（最大500件）</h3>
+          <div style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--color-text-dim);">
+            <span>記録頻度:</span>
+            <select id="historySnapshotFrequencyQuick" class="ide-input" style="padding: 1px 6px; font-size: 11px; height: 22px; cursor: pointer;">
+              <option value="minimal">極小 (大節・60秒単位)</option>
+              <option value="low">ひかえめ (段落・30秒単位)</option>
+              <option value="standard" selected>標準 (25字・15秒単位)</option>
+              <option value="high">こまめ (短文・5秒単位)</option>
+              <option value="custom">カスタム (任意指定)</option>
+            </select>
+          </div>
+          <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--color-text-main); cursor: pointer; user-select: none; margin-left: 4px;" title="変更のない行を非表示にし、追加・削除・変更箇所のみを表示します">
+            <input type="checkbox" id="chkHistoryDiffOnly" style="cursor: pointer;">
+            <span>差分行のみ表示</span>
+          </label>
+        </div>
+        <button class="history-modal-close" id="btnCloseHistoryModal">&times;</button>
+      </div>
+      <div class="history-modal-body" style="padding: 16px; display: flex; gap: 16px; flex: 1; overflow: hidden; min-height: 400px;">
+        <!-- Left: Snapshot List -->
+        <div style="width: 280px; display: flex; flex-direction: column; border-right: 1px solid var(--color-border); padding-right: 12px;">
+          <div style="font-size: 12px; color: var(--color-text-dim); margin-bottom: 8px;">
+            スナップショット一覧
+          </div>
+          <div id="historyListContainer" style="flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;">
+            <!-- Generated dynamically -->
+          </div>
+        </div>
+        <!-- Right: Diff Preview & Action -->
+        <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden;">
+          <div id="historyDiffHeader" style="margin-bottom: 8px; font-size: 12px; color: var(--color-text-dim); display: flex; justify-content: space-between; align-items: center;">
+            <span>差分プレビュー（現在 ⟷ 選択時点）</span>
+            <span id="historyDiffStats"></span>
+          </div>
+          <div id="historyDiffContainer" style="flex: 1; overflow-y: auto; border: 1px solid var(--color-border); border-radius: 6px; padding: 12px; font-family: var(--font-serif); font-size: 13px; line-height: 1.8; white-space: pre-wrap;">
+            履歴を選択すると、現在の本文との差分がここに表示されます。
+          </div>
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px;">
+            <button class="ide-btn" id="btnCancelHistoryRollback">キャンセル</button>
+            <button class="ide-btn btn-primary" id="btnConfirmHistoryRollback" disabled style="opacity: 0.5;">
+              この時点へロールバック
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help & Shortcuts Dedicated Modal -->
+  <div class="history-modal-backdrop" id="helpModal" style="display: none;">
+    <div class="history-modal-dialog" style="max-width: 620px;">
+      <div class="history-modal-header">
+        <h3><span>📖</span> 操作ガイド ＆ キーボードショートカット</h3>
+        <button class="history-modal-close" id="btnCloseHelpModal">&times;</button>
+      </div>
+      <div class="history-modal-body" style="padding: 20px;">
+        <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
+          <tr style="border-bottom: 1px solid var(--color-border); height: 30px;">
+            <th style="text-align: left; color: var(--color-gold);">機能・操作</th>
+            <th style="text-align: right; color: var(--color-gold);">ショートカットキー</th>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>元に戻す / やり直す</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Ctrl + Z / Ctrl + Y</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>選択テキストをルビ化</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Ctrl + R</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>全画面集中執筆モード</td>
+            <td style="text-align: right; font-family: var(--font-mono);">F11 / Escで解除</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>原稿目次ペイン開閉</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Ctrl + B</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>段落字下げ / 逆字下げ</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Tab / Shift + Tab</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>縦書き段落移動</td>
+            <td style="text-align: right; font-family: var(--font-mono);">←（左の段落） / →（右の段落）</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>縦書き文字移動</td>
+            <td style="text-align: right; font-family: var(--font-mono);">↑（1文字上） / ↓（1文字下）</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>未配置設定の再配置</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Alt + P</td>
+          </tr>
+          <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
+            <td>全モーダルを閉じる</td>
+            <td style="text-align: right; font-family: var(--font-mono);">Esc</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
 
   <!-- Project Management Modal -->
   <div class="history-modal-backdrop" id="projectModal" style="display: none;">
@@ -417,6 +532,15 @@
           <input type="checkbox" id="settingRealtimeLinter" checked style="width: 18px; height: 18px; cursor: pointer;">
         </div>
 
+        <!-- 3.5 Vertical Latin Upright -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="font-size: 13px;">縦書き時英数字・アルファベット正立（縦向き）</strong>
+            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">縦書き時に半角英数字を寝かせず（90度回転させず）まっすぐ縦に配置</small>
+          </div>
+          <input type="checkbox" id="settingVerticalUpright" style="width: 18px; height: 18px; cursor: pointer;">
+        </div>
+
         <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 4px 0;">
 
         <!-- 4. Font Size -->
@@ -425,13 +549,20 @@
             <strong style="font-size: 13px;">本文フォントサイズ</strong>
             <small style="display: block; color: var(--color-text-dim); font-size: 11px;">エディタ内の文字サイズを調整</small>
           </div>
-          <select id="settingFontSize" class="ide-input" style="width: 120px;">
-            <option value="14px">小 (14px)</option>
-            <option value="16px" selected>標準 (16px)</option>
-            <option value="18px">中 (18px)</option>
-            <option value="20px">大 (20px)</option>
-            <option value="24px">特大 (24px)</option>
-          </select>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <select id="settingFontSize" class="ide-input" style="width: 110px;">
+              <option value="14px">小 (14px)</option>
+              <option value="16px" selected>標準 (16px)</option>
+              <option value="18px">中 (18px)</option>
+              <option value="20px">大 (20px)</option>
+              <option value="24px">特大 (24px)</option>
+              <option value="custom">カスタム</option>
+            </select>
+            <div id="customFontSizeWrapper" style="display: flex; align-items: center; gap: 2px;">
+              <input type="number" id="settingCustomFontSize" class="ide-input" min="10" max="64" value="16" style="width: 55px; text-align: right; padding: 2px 4px; font-size: 12px;">
+              <span style="font-size: 11px; color: var(--color-text-dim);">px</span>
+            </div>
+          </div>
         </div>
 
         <!-- 5. Font Family -->
@@ -445,6 +576,46 @@
             <option value="gothic">BIZ UDPゴシック</option>
             <option value="system">システム標準</option>
           </select>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 4px 0;">
+
+        <!-- 6. Snapshot Recording Frequency -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">履歴スナップショット記録頻度</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">文章入力時に履歴を残す間隔・文字数の粒度を調整</small>
+            </div>
+            <select id="settingSnapshotFrequency" class="ide-input" style="width: 180px; cursor: pointer;">
+              <option value="minimal">極小 (大節・60秒単位)</option>
+              <option value="low">ひかえめ (段落・30秒単位)</option>
+              <option value="standard" selected>標準 (25字・15秒単位)</option>
+              <option value="high">こまめ (短文・5秒単位)</option>
+              <option value="custom">カスタム (任意指定)</option>
+            </select>
+          </div>
+
+          <!-- Custom Frequency Controls -->
+          <div id="settingCustomSnapshotGroup" style="display: none; padding: 10px; background: rgba(0, 0, 0, 0.03); border: 1px dashed var(--color-border); border-radius: 4px;">
+            <div style="display: flex; gap: 12px; align-items: center;">
+              <div style="flex: 1;">
+                <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 2px;">記録閾値（文字数）:</label>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <input type="number" id="settingSnapshotCustomChars" class="ide-input" min="5" max="2000" value="25" style="width: 100%; font-size: 12px; padding: 3px 6px;">
+                  <span style="font-size: 11px; color: var(--color-text-dim);">字</span>
+                </div>
+              </div>
+              <div style="flex: 1;">
+                <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 2px;">記録閾値（静止秒数）:</label>
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <input type="number" id="settingSnapshotCustomSeconds" class="ide-input" min="2" max="600" value="15" style="width: 100%; font-size: 12px; padding: 3px 6px;">
+                  <span style="font-size: 11px; color: var(--color-text-dim);">秒</span>
+                </div>
+              </div>
+            </div>
+            <small style="font-size: 10px; color: var(--color-text-dim); margin-top: 4px; display: block;">※指定文字数以上の打鍵、または執筆を中断した静止秒数で自動スナップショットを記録します。</small>
+          </div>
         </div>
       </div>
     </div>

@@ -20,6 +20,7 @@ export interface SyntacticLinterItem {
   message: string;
   source: string;
   previewText?: string;
+  snippet?: string;
 }
 
 export interface ZeroPronounCandidate {
@@ -42,6 +43,7 @@ export interface ZeroPronounItem {
   candidates: ZeroPronounCandidate[];
   message: string;
   previewText?: string;
+  snippet?: string;
 }
 
 export interface NarrativeAnalysisResult {
@@ -80,6 +82,94 @@ export class NarrativeLinterEngine {
   }
 
   /**
+   * Extracts a contextual sentence or surrounding snippet for diagnostics display.
+   */
+  public static extractContextSnippet(text: string, from: number, to: number, maxRadius = 32): string {
+    if (!text) return '';
+    // Look backwards for sentence start or newline
+    let start = Math.max(0, from - maxRadius);
+    const prevNewline = text.lastIndexOf('\n', from);
+    if (prevNewline !== -1 && prevNewline >= start) {
+      start = prevNewline + 1;
+    } else {
+      const prevSentenceEnd = Math.max(
+        text.lastIndexOf('。', from),
+        text.lastIndexOf('！', from),
+        text.lastIndexOf('？', from)
+      );
+      if (prevSentenceEnd !== -1 && prevSentenceEnd >= start) {
+        start = prevSentenceEnd + 1;
+      }
+    }
+
+    // Look forwards for sentence end or newline
+    let end = Math.min(text.length, to + maxRadius);
+    const nextNewline = text.indexOf('\n', to);
+    if (nextNewline !== -1 && nextNewline < end) {
+      end = nextNewline;
+    } else {
+      const periods = ['。', '！', '？']
+        .map((p) => text.indexOf(p, to))
+        .filter((idx) => idx !== -1);
+      if (periods.length > 0) {
+        const nextPeriod = Math.min(...periods);
+        if (nextPeriod + 1 <= end) {
+          end = nextPeriod + 1;
+        }
+      }
+    }
+
+    let snippet = text.slice(start, end).trim();
+    if (start > 0 && !text.slice(0, start).endsWith('\n') && !text.slice(0, start).endsWith('。')) {
+      snippet = '…' + snippet;
+    }
+    if (end < text.length && !text.slice(end).startsWith('\n') && !text.slice(0, end).endsWith('。')) {
+      snippet = snippet + '…';
+    }
+    return snippet;
+  }
+
+  /**
+   * Masks Aozora Bunko and Markdown markup (preserving exact character offsets)
+   * so syntactic analyzers (particles, zero-pronouns, style linter) process pure literary text.
+   */
+  public static maskMarkupForSyntax(text: string): string {
+    let masked = text;
+
+    // 1. Bouten 4-angle: <<<<word>>>> or ＜＜＜＜word＞＞＞＞ -> replace delimiter symbols with spaces
+    masked = masked.replace(/(<{4,}|＜{4,})([^\n<>《》＜＞]+?)(>{4,}|＞{4,})/g, (_m, open, content, close) => {
+      return ' '.repeat(open.length) + content + ' '.repeat(close.length);
+    });
+
+    // 2. Bouten double bracket: 《《word》》 -> replace 《《 and 》》 with spaces
+    masked = masked.replace(/《《([^》\n]+?)》》/g, (_m, content) => {
+      return '  ' + content + '  ';
+    });
+
+    // 3. Bouten tag: ［＃傍点］...［＃傍点終わり］
+    masked = masked.replace(/([［\[]＃傍点[］\]])([^\n［］\[\]]+?)([［\[]＃傍点終わり[］\]])/g, (_m, open, content, close) => {
+      return ' '.repeat(open.length) + content + ' '.repeat(close.length);
+    });
+
+    // 4. Markdown bold: **word** -> replace ** with spaces
+    masked = masked.replace(/(\*\*)([^*\n]+?)(\*\*)/g, (_m, open, content, close) => {
+      return ' '.repeat(open.length) + content + ' '.repeat(close.length);
+    });
+
+    // 5. Explicit ruby: ｜親文字《るび》, |親文字<<るび>>
+    masked = masked.replace(/([｜|])([^\n｜|《》<>＜＞]+?)(?:《|<<|＜＜)([^\n《》<>＜＞]+?)(?:》|>>|＞＞)/g, (match, pipe, base) => {
+      return ' '.repeat(pipe.length) + base + ' '.repeat(match.length - pipe.length - base.length);
+    });
+
+    // 6. Implicit ruby: 語句《るび》, 語句<<るび>>
+    masked = masked.replace(/([一-龠々〆ヵヶ\u3400-\u4dbf\uf900-\ufaff\u30a0-\u30ffA-Za-z0-9]+)(?:《|<<|＜＜)([^\n《》<>＜＞]+?)(?:》|>>|＞＞)/g, (match, base) => {
+      return base + ' '.repeat(match.length - base.length);
+    });
+
+    return masked;
+  }
+
+  /**
    * Execute full syntactic and zero-pronoun resolution analysis.
    */
   public analyzeDocument(
@@ -102,9 +192,13 @@ export class NarrativeLinterEngine {
     const targetText = text;
     const window = options?.slidingWindow;
 
+    // Mask Aozora Bunko and Markdown markup (preserving character length/offsets)
+    // so syntactical analysis (particles, clauses, zero-pronouns) is not polluted by markup delimiters.
+    const syntaxCleanText = NarrativeLinterEngine.maskMarkupForSyntax(targetText);
+
     // 1. Syntactic Linter Rules analysis
     const rawSyntacticDiags: SyntacticDiagnostic[] = SyntacticLinterRules.analyze(
-      targetText,
+      syntaxCleanText,
       options?.linterOptions
     );
 
@@ -137,6 +231,7 @@ export class NarrativeLinterEngine {
       }
 
       const previewText = targetText.slice(diag.from, diag.to);
+      const snippet = NarrativeLinterEngine.extractContextSnippet(targetText, diag.from, diag.to);
 
       syntacticItems.push({
         id: `syn-${i}-${diag.from}`,
@@ -149,14 +244,62 @@ export class NarrativeLinterEngine {
         message: diag.message,
         source: diag.source ?? 'narrative-nano',
         previewText,
+        snippet,
       });
     }
 
-    // 2. Zero Pronoun Resolution analysis
-    const zeroPronounItems = this.detectZeroPronouns(targetText, options?.entities, window);
+    // 1.5 Additional Literary Quality checks: consecutive punctuation and character repetition
+    const punctRegex = /([、。，．]){2,}/g;
+    let punctMatch: RegExpExecArray | null;
+    while ((punctMatch = punctRegex.exec(targetText)) !== null) {
+      const from = punctMatch.index;
+      const to = from + punctMatch[0].length;
+      if (window && (to < window.from || from > window.to)) continue;
+      const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, from);
+      syntacticItems.push({
+        id: `syn-punct-${from}`,
+        from,
+        to,
+        line,
+        col,
+        severity: 'error',
+        ruleType: 'consecutive-punctuation',
+        message: `句読点の連続「${punctMatch[0]}」は読者のリズムを阻害します。`,
+        source: 'narrative-linter',
+        previewText: punctMatch[0],
+        snippet: NarrativeLinterEngine.extractContextSnippet(targetText, from, to),
+      });
+    }
 
-    // 3. Overall syntactic score computation
-    const sentences = SyntacticLinterRules.splitSentences(targetText);
+    // Char repetition: target natural language characters (hiragana, katakana, han, letter)
+    // while strictly excluding punctuation, typographical leaders (... / --), and markup symbols (<, >, *, etc.)
+    const charRepeatRegex = /([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}\p{Letter}])\1{3,}/gu;
+    let charMatch: RegExpExecArray | null;
+    while ((charMatch = charRepeatRegex.exec(syntaxCleanText)) !== null) {
+      const from = charMatch.index;
+      const to = from + charMatch[0].length;
+      if (window && (to < window.from || from > window.to)) continue;
+      const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, from);
+      syntacticItems.push({
+        id: `syn-repeat-${from}`,
+        from,
+        to,
+        line,
+        col,
+        severity: 'error',
+        ruleType: 'char-repetition',
+        message: `同一文字の連続「${charMatch[0].slice(0, 8)}」が検出されました。推敲または脱字・連打を確認してください。`,
+        source: 'narrative-linter',
+        previewText: charMatch[0],
+        snippet: NarrativeLinterEngine.extractContextSnippet(targetText, from, to),
+      });
+    }
+
+    // 2. Zero Pronoun Resolution analysis on clean text
+    const zeroPronounItems = this.detectZeroPronouns(syntaxCleanText, options?.entities, window);
+
+    // 3. Overall syntactic score computation on clean text
+    const sentences = SyntacticLinterRules.splitSentences(syntaxCleanText);
     let totalScore = 0;
     let countedSentences = 0;
 
@@ -168,9 +311,13 @@ export class NarrativeLinterEngine {
     }
 
     let avgScore = countedSentences > 0 ? (totalScore / countedSentences) * 100 : 100;
+    // Deduct directly for any detected syntactic issues (particle repetitions, double negations, passive, etc.)
+    if (syntacticItems.length > 0) {
+      avgScore = Math.max(0, avgScore - syntacticItems.length * 8);
+    }
     // Deduct for unresolved zero pronouns
     if (zeroPronounItems.length > 0) {
-      avgScore = Math.max(10, avgScore - zeroPronounItems.length * 5);
+      avgScore = Math.max(0, avgScore - zeroPronounItems.length * 5);
     }
     const finalScore = Math.round(Math.min(100, Math.max(0, avgScore)));
 
@@ -325,6 +472,7 @@ export class NarrativeLinterEngine {
             candidates: candidateList,
             message: `主語（ガ格）抜け検知: 述語「${predicateText}」/ ${candidateMsg}`,
             previewText: predicateText,
+            snippet: s.sentence.trim(),
           });
         }
       }

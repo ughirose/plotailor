@@ -122,11 +122,13 @@ class NarrativeViewPlugin {
     if (this.pendingResult && !this.view.composing) {
       const { decorationSet, result } = this.pendingResult;
       this.pendingResult = null;
+      const sel = this.view.state.selection;
       this.view.dispatch({
         effects: [
           setNarrativeDecorations.of(decorationSet),
           setNarrativeAnalysisResult.of(result),
         ],
+        selection: sel,
       });
       if (this.onAnalysisResult) {
         this.onAnalysisResult(result);
@@ -206,13 +208,13 @@ class NarrativeViewPlugin {
         this.pendingResult = { decorationSet, result };
         return;
       }
-      this.pendingResult = null;
-
+      const sel = this.view.state.selection;
       this.view.dispatch({
         effects: [
           setNarrativeDecorations.of(decorationSet),
           setNarrativeAnalysisResult.of(result),
         ],
+        selection: sel,
       });
 
       // Notify external listeners (e.g., Right Pane Narrative Inspector Dock)

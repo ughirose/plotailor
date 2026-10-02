@@ -118,11 +118,43 @@ describe('PlotailorApp DOM Initialization & Data Integrity', () => {
     document.getElementById('btnCloseExportModal')?.click();
     expect(exportModal?.style.display).toBe('none');
 
-    // 3. Help dock tab (Constitution compliant: docked in right pane, no blocking modal)
+    // 3. Help modal (User Requirement 5: Dedicated modal opened from header '?' button)
     const btnHeaderHelp = document.getElementById('btnHeaderHelp');
+    const helpModal = document.getElementById('helpModal');
     btnHeaderHelp?.click();
-    const dockContent = document.getElementById('dockContent');
-    expect(dockContent?.innerHTML).toContain('操作ガイド ＆ ショートカット');
+    expect(helpModal?.style.display).toBe('flex');
+    document.getElementById('btnCloseHelpModal')?.click();
+    expect(helpModal?.style.display).toBe('none');
+  });
+
+  it('configures snapshot recording frequency and synchronizes across settings and history modals', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    const app = new PlotailorApp();
+
+    expect(app.snapshotFrequency).toBe('standard');
+
+    // Change via setSnapshotFrequency
+    app.setSnapshotFrequency('low', false);
+    expect(app.snapshotFrequency).toBe('low');
+    expect(localStorage.getItem('plotailor_snapshot_frequency')).toBe('low');
+
+    // Verify UI synchronization
+    const selSetting = document.getElementById('settingSnapshotFrequency') as HTMLSelectElement;
+    const selQuick = document.getElementById('historySnapshotFrequencyQuick') as HTMLSelectElement;
+
+    app.openSettingsModal();
+    expect(selSetting?.value).toBe('low');
+
+    app.openHistoryModal();
+    expect(selQuick?.value).toBe('low');
+
+    // Test changing via quick select
+    if (selQuick) {
+      selQuick.value = 'minimal';
+      selQuick.dispatchEvent(new Event('change'));
+      expect(app.snapshotFrequency).toBe('minimal');
+      expect(selSetting?.value).toBe('minimal');
+    }
   });
 
   it('toggles ruby mode without throwing errors and updates menu label', async () => {
@@ -196,4 +228,59 @@ describe('PlotailorApp DOM Initialization & Data Integrity', () => {
     // Cleanup mock
     vi.restoreAllMocks();
   });
+
+  it('supports custom snapshot frequency (chars and seconds) and synchronizes with localStorage and UI', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    const app = new PlotailorApp();
+
+    // 1. Set to custom frequency
+    app.setSnapshotFrequency('custom');
+    expect(app.snapshotFrequency).toBe('custom');
+    expect(localStorage.getItem('plotailor_snapshot_frequency')).toBe('custom');
+
+    const selSetting = document.getElementById('settingSnapshotFrequency') as HTMLSelectElement;
+    const selQuick = document.getElementById('historySnapshotFrequencyQuick') as HTMLSelectElement;
+    expect(selSetting?.value).toBe('custom');
+    expect(selQuick?.value).toBe('custom');
+
+    // 2. Set custom threshold inputs
+    const inpChars = document.getElementById('settingSnapshotCustomChars') as HTMLInputElement;
+    const inpSecs = document.getElementById('settingSnapshotCustomSeconds') as HTMLInputElement;
+    if (inpChars && inpSecs) {
+      inpChars.value = '45';
+      inpChars.dispatchEvent(new Event('input'));
+      inpSecs.value = '20';
+      inpSecs.dispatchEvent(new Event('input'));
+
+      expect(app.snapshotCustomChars).toBe(45);
+      expect(app.snapshotCustomSeconds).toBe(20);
+      expect(localStorage.getItem('plotailor_snapshot_custom_chars')).toBe('45');
+      expect(localStorage.getItem('plotailor_snapshot_custom_seconds')).toBe('20');
+    }
+  });
+
+  it('supports vertical Latin upright toggle and toggles body.vertical-upright class', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    const app = new PlotailorApp();
+    app.setVerticalUpright(true);
+    expect(document.body.classList.contains('vertical-upright')).toBe(true);
+    expect(localStorage.getItem('plotailor_vertical_upright')).toBe('true');
+
+    app.setVerticalUpright(false);
+    expect(document.body.classList.contains('vertical-upright')).toBe(false);
+    expect(localStorage.getItem('plotailor_vertical_upright')).toBe('false');
+  });
+
+  it('supports diff-only toggle in history modal', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    const app = new PlotailorApp();
+    const diffContainer = document.getElementById('historyDiffContainer');
+
+    app.toggleHistoryDiffOnly(true);
+    expect(diffContainer?.classList.contains('history-diff-only-mode')).toBe(true);
+
+    app.toggleHistoryDiffOnly(false);
+    expect(diffContainer?.classList.contains('history-diff-only-mode')).toBe(false);
+  });
 });
+

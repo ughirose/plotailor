@@ -242,8 +242,8 @@ export class LoreInspectorDock {
         if (!isCollapsed) {
           html += `<div class="panel-body">`;
           for (const item of items) {
-            html += `<div class="lore-item ${item.isNearCursor ? 'near-cursor' : ''}" data-term-id="${item.termId}">`;
-            html += `<div class="item-title">${item.canonicalName}</div>`;
+            html += `<div class="lore-item ${item.isNearCursor ? 'near-cursor' : ''}" data-term-id="${item.termId}" data-from="${item.position.from}" data-to="${item.position.to}">`;
+            html += `<div class="item-title" title="クリックで本文該当箇所へジャンプ">${item.canonicalName}</div>`;
             if (item.matchedText !== item.canonicalName) {
               html += `<div class="item-warning">表記ゆれ検出: "${item.matchedText}" -> "${item.canonicalName}"</div>`;
               html += `<button class="btn-quick-replace" data-action="replace" data-term-id="${item.termId}">正式名称に置換</button>`;

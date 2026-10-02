@@ -274,15 +274,24 @@ export function cm6ImeGuard(options: ImeGuardOptions = {}): Extension {
       }
     },
     compositionend(event, view) {
-      const sel = view.state.selection.main;
-      // Single transition back to IDLE to avoid double-dispatch DOM shaking
-      view.dispatch({
-        effects: setCompositionStatus.of({
-          status: 'IDLE',
-          text: event.data || '',
-          range: { from: sel.from, to: sel.to },
-        }),
-      });
+      const scheduleIdle = () => {
+        if ((view as any).isDestroyed) return;
+        const sel = view.state.selection.main;
+        view.dispatch({
+          effects: setCompositionStatus.of({
+            status: 'IDLE',
+            text: event.data || '',
+            range: { from: sel.from, to: sel.to },
+          }),
+        });
+      };
+      if (event.isTrusted) {
+        // In real browser IME sessions, defer dispatch to microtask so CodeMirror's
+        // native beforeinput/input handlers can insert committed text and maintain cursor position accurately.
+        queueMicrotask(scheduleIdle);
+      } else {
+        scheduleIdle();
+      }
     },
     blur(_event, view) {
       // Recovery: If focus is lost during composition, transition safely to IDLE

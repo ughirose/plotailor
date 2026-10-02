@@ -210,6 +210,14 @@ html, body {
   border: 1px solid var(--color-border-subtle);
   font-size: 13px;
   color: var(--color-text-main);
+  writing-mode: horizontal-tb !important;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.work-title-badge #workTitleText {
+  white-space: nowrap;
+  display: inline-block;
 }
 
 .work-title-badge .chapter-select {
@@ -786,23 +794,42 @@ rb {
 }
 
 
-/* Pane 3: Right Inspector & Lore Dock (Spec: 25%) */
+/* Pane 3: Right Inspector & Lore Dock (Optimized width 280px, compact & scrollable) */
 .pane-right {
-  width: 25%;
+  width: 280px;
   min-width: 220px;
-  max-width: 600px;
+  max-width: 380px;
   background-color: var(--color-bg-panel);
   border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  height: 100%;
+  min-height: 0;
   transition: width 0.05s ease;
 }
 
 .dock-content {
   flex: 1;
   overflow-y: auto;
-  padding: 14px;
+  overflow-x: hidden;
+  padding: 12px;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gold) transparent;
+}
+
+.dock-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.dock-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.dock-content::-webkit-scrollbar-thumb {
+  background: var(--color-gold);
+  border-radius: 3px;
 }
 
 .dock-card {
@@ -871,6 +898,10 @@ body.fullscreen-active .pane-center {
   width: 100vw !important;
 }
 
+body.fullscreen-active .editor-toolbar {
+  padding-right: 210px !important;
+}
+
 /* Fullscreen Floating Controls */
 .fullscreen-exit-btn {
   display: none;
@@ -895,19 +926,177 @@ body.fullscreen-active .fullscreen-exit-btn {
   gap: 6px;
 }
 
+body.theme-washi .fullscreen-exit-btn {
+  background-color: rgba(247, 242, 231, 0.9);
+  border-color: #9d7124;
+  color: #9d7124;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
 /* ==========================================================================
-   Mobile Responsive Rules for Full Writing IDE (/app/) (<= 768px)
+   Responsive Rules for Full Writing IDE (/app/)
    ========================================================================== */
 
-@media (max-width: 768px) {
+/* Tablet & Mobile Landscape (<= 1024px) */
+@media (max-width: 1024px) {
   :root {
     --header-height: 44px;
     --footer-height: 24px;
   }
 
   .ide-header {
+    padding: 0 10px;
+    gap: 6px;
+    overflow: visible !important;
+    position: relative;
+    z-index: 600;
+  }
+
+  .ide-header-left {
+    gap: 6px;
+    min-width: 0;
+    flex-shrink: 1;
+    overflow: hidden;
+  }
+
+  .ide-brand img {
+    width: 22px;
+    height: 22px;
+  }
+
+  .ide-header-center {
+    display: none !important;
+  }
+
+  .ide-header-right {
+    gap: 4px;
+    flex-shrink: 0;
+    align-items: center;
+    overflow: visible !important;
+  }
+
+  .header-menu-container {
+    position: relative;
+    z-index: 700;
+  }
+
+  /* Hide desktop-only auxiliary buttons (accessible from hamburger dropdown) */
+  #btnToggleTheme,
+  #btnFullscreen,
+  #btnHeaderHelp {
+    display: none !important;
+  }
+
+  .ide-header .ide-btn {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 3px 8px;
+    font-size: 11px;
+    height: 28px;
+  }
+
+  #btnToggleLeftPane .btn-label,
+  #btnToggleRightPane .btn-label {
+    display: none !important;
+  }
+
+  #btnToggleLeftPane,
+  #btnToggleRightPane {
+    min-width: 32px;
+    justify-content: center;
+  }
+
+  .pane-resizer {
+    display: none !important;
+  }
+
+  .pane-left,
+  .pane-right {
+    display: none !important;
+  }
+
+  .pane-left.drawer-open {
+    display: flex !important;
+    position: fixed !important;
+    top: var(--header-height);
+    bottom: var(--footer-height);
+    left: 0;
+    width: 320px !important;
+    max-width: 85vw !important;
+    z-index: 500;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.7);
+    border-right: 1px solid var(--color-gold);
+    background-color: var(--color-bg-sidebar);
+  }
+
+  .pane-right.drawer-open {
+    display: flex !important;
+    position: fixed !important;
+    top: var(--header-height);
+    bottom: var(--footer-height);
+    right: 0;
+    width: 340px !important;
+    max-width: 85vw !important;
+    z-index: 500;
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.7);
+    border-left: 1px solid var(--color-gold);
+    background-color: var(--color-bg-sidebar);
+  }
+
+  .pane-center {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Toolbar: 1-line horizontal scroll */
+  .toolbar-chapter-title,
+  .toolbar-sep {
+    display: none !important;
+  }
+
+  .editor-toolbar {
+    height: 34px;
     padding: 0 8px;
     gap: 6px;
+    justify-content: flex-start;
+    overflow-x: auto !important;
+    flex-wrap: nowrap !important;
+    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .editor-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .toolbar-left-group,
+  .toolbar-right-group {
+    display: flex;
+    align-items: center;
+    gap: 4px !important;
+    flex-shrink: 0 !important;
+  }
+
+  .editor-toolbar .ide-btn {
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    padding: 2px 7px;
+    font-size: 11px;
+    height: 24px;
+  }
+}
+
+/* Mobile Screens (<= 768px) */
+@media (max-width: 768px) {
+  .ide-header {
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .ide-header-left {
+    gap: 4px;
   }
 
   .ide-brand span {
@@ -915,87 +1104,104 @@ body.fullscreen-active .fullscreen-exit-btn {
   }
 
   .work-title-badge {
-    padding: 2px 6px;
+    padding: 2px 5px;
     font-size: 11px;
-    gap: 4px;
+    gap: 3px;
+    max-width: 100%;
+    flex-shrink: 1;
   }
 
-  .work-title-badge strong {
-    max-width: 60px;
+  .work-title-badge strong#workTitleText {
+    max-width: 65px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    display: inline-block;
   }
 
   .work-title-badge .chapter-select {
     max-width: 75px;
     font-size: 11px;
-  }
-
-  /* Hide center stat chips on mobile header to prevent overflow */
-  .ide-header-center {
-    display: none !important;
+    text-overflow: ellipsis;
   }
 
   .ide-header-right {
     gap: 4px;
   }
 
-  .ide-btn {
-    padding: 4px 6px;
+  /* Hide secondary desktop buttons to prevent header overflow */
+  #btnToggleTheme,
+  #btnFullscreen,
+  #btnHeaderHelp {
+    display: none !important;
+  }
+
+  /* Hide text labels on toggle buttons, keep icons prominent */
+  #btnToggleLeftPane .btn-label,
+  #btnToggleRightPane .btn-label {
+    display: none !important;
+  }
+
+  #btnToggleLeftPane,
+  #btnToggleRightPane {
+    padding: 4px 8px;
+    font-size: 13px;
+    height: 28px;
+    min-width: 32px;
+    justify-content: center;
+  }
+
+  #btnToggleOrientation {
+    padding: 3px 6px;
     font-size: 11px;
-    gap: 2px;
+    height: 28px;
+    white-space: nowrap;
   }
 
-  /* 3-Pane Mobile Drawer Behavior */
-  .pane-left {
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    width: 85% !important;
-    max-width: 300px;
-    z-index: 200;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.7);
-    border-right: 1px solid var(--color-gold);
-    display: none; /* Toggled by JavaScript */
+  #btnHamburgerMenu {
+    padding: 4px 8px;
+    font-size: 14px;
+    height: 28px;
   }
 
-  .pane-right {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    width: 85% !important;
-    max-width: 320px;
-    z-index: 200;
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.7);
-    border-left: 1px solid var(--color-gold);
-    display: none; /* Toggled by JavaScript */
-  }
-
-  .pane-center {
-    width: 100vw !important;
-  }
-
+  /* Editor Toolbar: 1-line horizontal scroll */
   .editor-toolbar {
-    height: 32px;
-    padding: 0 10px;
-    font-size: 11px;
+    height: 34px;
+    padding: 0 8px;
+    gap: 6px;
+    justify-content: flex-start;
   }
 
-  .editor-toolbar span[style*="font-size: 11px"] {
-    display: none; /* Hide shortcut tips on mobile */
+  .toolbar-chapter-title,
+  .toolbar-sep {
+    display: none !important;
+  }
+
+  .toolbar-left-group,
+  .toolbar-right-group {
+    gap: 4px !important;
+  }
+
+  .editor-toolbar .ide-btn {
+    padding: 2px 7px;
+    font-size: 11px;
+    height: 24px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .editor-toolbar .btn-label {
+    font-size: 10.5px;
   }
 
   .editor-body {
-    padding: 20px 16px !important;
+    padding: 16px 12px !important;
     font-size: 15px !important;
     line-height: 1.85 !important;
   }
 
   .pane-center.vertical-rl .editor-body {
-    padding: 16px 14px !important;
+    padding: 12px 10px !important;
     line-height: 2.0 !important;
   }
 
@@ -1005,7 +1211,7 @@ body.fullscreen-active .fullscreen-exit-btn {
   }
 
   .ide-footer-right {
-    display: none !important; /* Hide long engine stubs on mobile */
+    display: none !important;
   }
 }
 
@@ -1457,6 +1663,138 @@ body.fullscreen-active .fullscreen-exit-btn {
   background: rgba(207, 168, 92, 0.15) !important;
 }
 
+/* History Modal High-Contrast & Theme Styling */
+#historyDiffContainer {
+  background: #181b22 !important;
+  color: #e6edf3 !important;
+  border-color: #384250 !important;
+  font-family: var(--font-novel, 'Shippori Mincho', 'Yu Mincho', serif) !important;
+  font-size: 14.5px !important;
+  line-height: 1.8 !important;
+  letter-spacing: 0.03em !important;
+}
+
+body.theme-washi #historyDiffContainer {
+  background: #fbf9f5 !important;
+  color: #2c2824 !important;
+  border-color: #d8ceb8 !important;
+}
+
+.diff-line-unchanged {
+  color: #c9d1d9 !important;
+  opacity: 0.88;
+  padding: 3px 6px;
+  border-radius: 2px;
+}
+
+body.theme-washi .diff-line-unchanged {
+  color: #38342e !important;
+  opacity: 0.92;
+}
+
+.diff-line-added,
+.diff-text-added {
+  color: #1a7f37 !important;
+  font-weight: 500;
+}
+
+.diff-line-added {
+  background: rgba(46, 160, 67, 0.22) !important;
+  border-left: 3px solid #3fb950 !important;
+  padding: 4px 8px !important;
+  border-radius: 2px;
+}
+
+body.theme-washi .diff-line-added,
+body.theme-washi .diff-text-added {
+  color: #136228 !important; /* 深い濃い緑 (和紙テーマ高コントラスト) */
+  font-weight: 600;
+}
+
+body.theme-washi .diff-line-added {
+  background: rgba(46, 160, 67, 0.12) !important;
+  border-left: 3px solid #238636 !important;
+}
+
+.diff-line-deleted,
+.diff-text-deleted {
+  color: #cf222e !important;
+  font-weight: 500;
+}
+
+.diff-line-deleted {
+  background: rgba(248, 81, 73, 0.22) !important;
+  border-left: 3px solid #f85149 !important;
+  padding: 4px 8px !important;
+  border-radius: 2px;
+  text-decoration: line-through;
+}
+
+body.theme-washi .diff-line-deleted,
+body.theme-washi .diff-text-deleted {
+  color: #a40e11 !important; /* 対応する深い濃い赤 (和紙テーマ高コントラスト) */
+  font-weight: 600;
+}
+
+body.theme-washi .diff-line-deleted {
+  background: rgba(248, 81, 73, 0.12) !important;
+  border-left: 3px solid #cf222e !important;
+}
+
+.diff-line-modified {
+  background: rgba(210, 153, 34, 0.18) !important;
+  border-left: 3px solid #d29922 !important;
+  padding: 5px 8px !important;
+  border-radius: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+body.theme-washi .diff-line-modified {
+  background: rgba(210, 153, 34, 0.1) !important;
+  border-left: 3px solid #9a6700 !important;
+}
+
+/* Hide unchanged lines when 'diff only' is active */
+.history-diff-only-mode .diff-line-unchanged {
+  display: none !important;
+}
+
+/* Vertical text Latin upright - apply to cm-line and all child text runs */
+body.vertical-upright .pane-center.vertical-rl .cm-line,
+body.vertical-upright .pane-center.vertical-rl .cm-line *,
+body.vertical-upright .cm-vertical-rl .cm-line,
+body.vertical-upright .cm-vertical-rl .cm-line *,
+body.vertical-upright .vertical-rl .cm-content,
+body.vertical-upright .vertical-rl .cm-line,
+body.vertical-upright .vertical-rl .cm-line *,
+body.vertical-upright .cm-vertical-rl .cm-content {
+  text-orientation: upright !important;
+}
+
+.history-item {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.history-item:hover {
+  background: rgba(255, 255, 255, 0.09) !important;
+}
+
+body.theme-washi .history-item {
+  background: #fbf9f4 !important;
+  border-color: #dcd3b8 !important;
+}
+
+body.theme-washi .history-item:hover {
+  background: #f0ebe0 !important;
+}
+
+body.theme-washi .history-item.active {
+  background: rgba(184, 134, 11, 0.15) !important;
+  border-color: var(--color-gold) !important;
+}
+
 /* Form and Modal Inputs */
 .ide-input {
   background: rgba(0, 0, 0, 0.4);
@@ -1480,7 +1818,38 @@ body.fullscreen-active .fullscreen-exit-btn {
   gap: 4px;
   margin-bottom: 10px;
   overflow-x: auto;
-  padding-bottom: 2px;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-gold) transparent;
+}
+
+.lore-filter-bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.lore-filter-bar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.lore-filter-bar::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 2px;
+}
+
+.lore-filter-bar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-gold);
+}
+
+body.theme-washi .lore-filter-chip {
+  background: #ded5c2;
+  border-color: #c9bea8;
+  color: #5e5446;
+}
+
+body.theme-washi .lore-filter-chip.active {
+  background: #f7f2e7;
+  border-color: #9d7124;
+  color: #9d7124;
 }
 
 .lore-filter-chip {
@@ -1621,31 +1990,22 @@ body.fullscreen-active .fullscreen-exit-btn {
   transition: --cadence-transition 300ms ease;
 }
 
-/* Burst State (<200ms): Mute all annotations and linter noise to opacity 0.05 */
+/* Burst State: Keep text perfectly visible and stable (no DOM layout thrashing) */
 .cadence-burst .cm-lint-warning,
 .cadence-burst .cm-pronoun-missing,
 .cadence-burst .cm-lint-multiple,
 .cadence-burst .cm-decoration-layer0,
 .cadence-burst .cm-decoration-layer1,
 .cadence-burst .cm-decoration-layer2 {
-  opacity: 0.05 !important;
-  transition: opacity 300ms ease-out !important;
+  opacity: 0.85 !important;
 }
 
-/* Short Pause State (400-1000ms): Fade in Layer 2 (POV Violation) only (0.40) */
-.cadence-short-pause .cm-decoration-layer2 {
-  opacity: 0.40 !important;
-  transition: opacity 400ms ease-in-out !important;
-}
+/* Short Pause & Deep Pause States */
+.cadence-short-pause .cm-decoration-layer2,
 .cadence-short-pause .cm-lint-warning,
 .cadence-short-pause .cm-pronoun-missing,
 .cadence-short-pause .cm-decoration-layer0,
-.cadence-short-pause .cm-decoration-layer1 {
-  opacity: 0.05 !important;
-  transition: opacity 400ms ease-in-out !important;
-}
-
-/* Deep Pause State (>1500ms): Fully restore all decorations to 1.0 */
+.cadence-short-pause .cm-decoration-layer1,
 .cadence-deep-pause .cm-lint-warning,
 .cadence-deep-pause .cm-pronoun-missing,
 .cadence-deep-pause .cm-lint-multiple,
@@ -1653,20 +2013,18 @@ body.fullscreen-active .fullscreen-exit-btn {
 .cadence-deep-pause .cm-decoration-layer1,
 .cadence-deep-pause .cm-decoration-layer2 {
   opacity: 1.00 !important;
-  transition: opacity 600ms ease-in !important;
 }
 
 /* ==========================================================================
    Multi-layer Decoration (Z-Index, High Contrast & Legend Hierarchy)
    ========================================================================== */
-/* Layer 0: Physical Anchor / Character Mention (Cyan Dotted border, Z-Index 10) */
+/* Layer 0: Physical Anchor / Character Mention (Cyan Dotted border, text remains readable) */
 .cm-decoration-layer0 {
   border-bottom: 1.5px dotted #38bdf8 !important;
-  color: #7dd3fc !important;
+  color: inherit !important;
   font-weight: 500;
   z-index: 10;
   position: relative;
-  transition: all 0.2s ease;
 }
 .cm-content[style*="vertical-rl"] .cm-decoration-layer0,
 .canvas-wrapper.is-vertical .cm-decoration-layer0,
@@ -1675,21 +2033,20 @@ body.fullscreen-active .fullscreen-exit-btn {
   border-left: 1.5px dotted #38bdf8 !important;
 }
 body.theme-washi .cm-decoration-layer0 {
-  color: #0284c7 !important;
+  color: inherit !important;
   border-color: #0284c7 !important;
 }
 
-/* Layer 1: Foreshadowing / Lore Highlight (Luminous Gold background, Z-Index 20) */
+/* Layer 1: Foreshadowing / Lore Highlight (Subtle gold tint, text remains readable) */
 .cm-decoration-layer1 {
-  background-color: rgba(207, 168, 92, 0.24) !important;
-  color: #f3d692 !important;
+  background-color: rgba(207, 168, 92, 0.16) !important;
+  color: inherit !important;
   font-weight: 600;
   border-bottom: 2px solid var(--color-gold, #cfa85c) !important;
-  border-radius: 3px;
-  padding: 1px 3px;
+  border-radius: 2px;
+  padding: 0 1px;
   z-index: 20;
   position: relative;
-  box-shadow: 0 0 6px rgba(207, 168, 92, 0.2);
 }
 .cm-content[style*="vertical-rl"] .cm-decoration-layer1,
 .canvas-wrapper.is-vertical .cm-decoration-layer1,
@@ -1698,15 +2055,15 @@ body.theme-washi .cm-decoration-layer0 {
   border-left: 2px solid var(--color-gold, #cfa85c) !important;
 }
 body.theme-washi .cm-decoration-layer1 {
-  background-color: rgba(184, 134, 11, 0.18) !important;
-  color: #8c5b05 !important;
+  background-color: rgba(184, 134, 11, 0.12) !important;
+  color: inherit !important;
   border-color: #8c5b05 !important;
 }
 
-/* Layer 2: POV Violation / Strict Alert (High-Visibility Red Wavy, Z-Index 30) */
+/* Layer 2: POV Violation / Strict Alert (High-Visibility Red Wavy) */
 .cm-decoration-layer2 {
-  background-color: rgba(239, 68, 68, 0.18) !important;
-  color: #fca5a5 !important;
+  background-color: rgba(239, 68, 68, 0.15) !important;
+  color: inherit !important;
   font-weight: 600;
   text-decoration: wavy underline #ef4444 2px !important;
   border-radius: 2px;
@@ -1720,7 +2077,7 @@ body.theme-washi .cm-decoration-layer1 {
   border-right: 2px wavy #ef4444 !important;
 }
 body.theme-washi .cm-decoration-layer2 {
-  background-color: rgba(220, 38, 38, 0.15) !important;
+  background-color: rgba(220, 38, 38, 0.12) !important;
   color: #b91c1c !important;
 }
 
@@ -2158,4 +2515,266 @@ body.theme-washi .history-modal-dialog {
 .ide-footer-center.toast-visible {
   opacity: 1;
 }
+
+/* ===== Real-time Lore Inspector Dock Styles ===== */
+.lore-inspector-dock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lore-inspector-dock .dock-header h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-gold);
+  margin: 0 0 4px 0;
+}
+
+.lore-inspector-dock .dock-empty {
+  font-size: 12px;
+  color: var(--color-text-dim);
+  text-align: center;
+  padding: 20px 8px;
+}
+
+.lore-inspector-dock .dock-panel {
+  background: var(--color-bg-card, rgba(22, 27, 34, 0.7));
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.lore-inspector-dock .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border-subtle, rgba(255, 255, 255, 0.05));
+  transition: background 0.15s ease;
+}
+
+.lore-inspector-dock .panel-header:hover {
+  background: rgba(207, 168, 92, 0.1);
+}
+
+.lore-inspector-dock .panel-title {
+  color: var(--color-gold);
+  text-transform: capitalize;
+}
+
+.lore-inspector-dock .panel-toggle-icon {
+  font-size: 13px;
+  color: var(--color-text-dim);
+}
+
+.lore-inspector-dock .panel-body {
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lore-inspector-dock .lore-item {
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.lore-inspector-dock .lore-item:hover {
+  border-color: var(--color-gold);
+  background: rgba(207, 168, 92, 0.08);
+}
+
+.lore-inspector-dock .lore-item.near-cursor {
+  border-left: 3px solid var(--color-gold);
+}
+
+.lore-inspector-dock .item-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.lore-inspector-dock .item-warning {
+  font-size: 11px;
+  color: var(--color-warning, #d29922);
+  margin-top: 4px;
+}
+
+.lore-inspector-dock .item-desc {
+  font-size: 11px;
+  color: var(--color-text-dim);
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.lore-inspector-dock .btn-quick-replace {
+  margin-top: 6px;
+  font-size: 11px;
+  padding: 3px 8px;
+  background: rgba(56, 139, 253, 0.2);
+  border: 1px solid #388bfd;
+  color: #58a6ff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.lore-inspector-dock .btn-quick-replace:hover {
+  background: rgba(56, 139, 253, 0.35);
+}
+
+.lore-inspector-dock .btn-shelve {
+  margin-top: 6px;
+  font-size: 10.5px;
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-dim);
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.lore-inspector-dock .btn-shelve:hover {
+  color: var(--color-danger, #f85149);
+  border-color: var(--color-danger, #f85149);
+}
+
+.lore-inspector-dock .shelved-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 11.5px;
+}
+
+.lore-inspector-dock .btn-unshelve {
+  font-size: 10.5px;
+  padding: 2px 6px;
+  background: rgba(46, 160, 67, 0.2);
+  border: 1px solid #3fb950;
+  color: #7ee787;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.lore-inspector-dock .btn-unshelve:hover {
+  background: rgba(46, 160, 67, 0.35);
+}
+
+body.theme-washi .lore-inspector-dock .dock-panel {
+  background: rgba(247, 245, 239, 0.9);
+  border-color: #d8ceb8;
+}
+
+body.theme-washi .lore-inspector-dock .panel-header {
+  background: rgba(230, 224, 208, 0.6);
+  border-color: #d8ceb8;
+  color: #2c2518;
+}
+
+body.theme-washi .lore-inspector-dock .panel-title {
+  color: #8c6820;
+}
+
+body.theme-washi .lore-inspector-dock .lore-item {
+  background: #fbf9f4;
+  border-color: #d8ceb8;
+}
+
+body.theme-washi .lore-inspector-dock .item-title {
+  color: #2c2518;
+}
+
+body.theme-washi .lore-inspector-dock .btn-quick-replace {
+  background: rgba(14, 116, 144, 0.12) !important;
+  border-color: #0e7490 !important;
+  color: #0e7490 !important;
+}
+
+body.theme-washi .lore-inspector-dock .btn-shelve {
+  background: #f4ede0 !important;
+  border-color: #c9bea8 !important;
+  color: #786c58 !important;
+}
+
+body.theme-washi .lore-inspector-dock .btn-shelve:hover {
+  background: #fee2e2 !important;
+  border-color: #ef4444 !important;
+  color: #b91c1c !important;
+}
+
+body.theme-washi .lore-inspector-dock .btn-unshelve {
+  background: rgba(22, 163, 74, 0.12) !important;
+  border-color: #16a34a !important;
+  color: #15803d !important;
+}
+
+/* ==========================================================================
+   Global Theme-Adaptive Scrollbar Styling (Eliminates Browser White Bars)
+   ========================================================================== */
+.pane-left,
+.pane-right,
+.pane-content,
+.dock-content,
+#paneLeftContent,
+#paneRightContent,
+#loreCardList,
+.history-modal-body,
+#historyListContainer,
+.lore-filter-bar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+body.theme-washi .pane-left,
+body.theme-washi .pane-right,
+body.theme-washi .pane-content,
+body.theme-washi .dock-content,
+body.theme-washi #paneLeftContent,
+body.theme-washi #paneRightContent,
+body.theme-washi #loreCardList,
+body.theme-washi .history-modal-body,
+body.theme-washi #historyListContainer,
+body.theme-washi .lore-filter-bar {
+  scrollbar-color: #c9bea8 transparent !important;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(207, 168, 92, 0.5);
+}
+
+body.theme-washi ::-webkit-scrollbar-thumb {
+  background: #d0c4ad;
+}
+
+body.theme-washi ::-webkit-scrollbar-thumb:hover {
+  background: #a8997e;
+}
+
 

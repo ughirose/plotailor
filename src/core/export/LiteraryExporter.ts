@@ -50,7 +50,10 @@ export function normalizeAozoraMarkup(text: string): string {
 export function convertAozoraToHtml(text: string): string {
   if (!text) return '';
 
-  let html = text
+  // First normalize <<ruby>> and <<<<bouten>>>> to Aozora standard syntax
+  const normalized = normalizeAozoraMarkup(text);
+
+  let html = normalized
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');

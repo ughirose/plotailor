@@ -106,7 +106,7 @@ export class AozoraParser {
       });
     }
 
-    // Scan for double bracket bouten second
+    // Scan for double bracket bouten second (《《傍点文字》》)
     while ((m = boutenDoubleBracketRegex.exec(text)) !== null) {
       addMatch({
         type: 'bouten',
@@ -116,7 +116,7 @@ export class AozoraParser {
       });
     }
 
-    // Scan for tag bouten third
+    // Scan for tag bouten third (［＃傍点］...［＃傍点終わり］)
     while ((m = boutenTagRegex.exec(text)) !== null) {
       addMatch({
         type: 'bouten',
@@ -413,10 +413,23 @@ export const rubyTheme = EditorView.theme({
     lineHeight: 'inherit',
   },
   '.cm-bouten, .bouten-dot': {
+    display: 'inline',
+    lineHeight: 'inherit',
+    verticalAlign: 'baseline',
     textEmphasis: 'sesame',
     WebkitTextEmphasis: 'sesame',
     textEmphasisPosition: 'over right',
     WebkitTextEmphasisPosition: 'over right',
+  },
+  '&.cm-vertical-rl .cm-bouten, .vertical-rl & .cm-bouten, .pane-center.vertical-rl .cm-bouten': {
+    display: 'inline',
+    writingMode: 'vertical-rl',
+    WebkitWritingMode: 'vertical-rl',
+    margin: '0',
+    padding: '0',
+  },
+  '.cm-bold-text': {
+    fontWeight: 'bold',
   },
   '&.cm-vertical-rl .cm-content, .vertical-rl & .cm-content, .pane-center.vertical-rl .cm-content': {
     writingMode: 'vertical-rl',

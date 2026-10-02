@@ -216,14 +216,21 @@ export class CausalDagEngine {
       layers[l].push(n);
     }
 
-    // Calculate node coordinates (X, Y)
+    // Calculate node coordinates (X, Y) with collision avoidance
     const nodeCoords: Map<string, { x: number; y: number; w: number; h: number }> = new Map();
-    const nodeW = 100;
-    const nodeH = 46;
+    const nodeW = 96;
+    const nodeH = 44;
+    const minNodeGap = 16;
+    let maxNodesInLayer = 1;
+    layers.forEach((l) => {
+      if (l.length > maxNodesInLayer) maxNodesInLayer = l.length;
+    });
+
     const paddingX = 20;
     const paddingY = 24;
-    const usableW = Math.max(width - paddingX * 2, 280);
-    const layerHeight = Math.max((height - paddingY * 2 - nodeH) / Math.max(maxLayer, 1), 70);
+    const svgWidth = Math.max(width, maxNodesInLayer * (nodeW + minNodeGap) + paddingX * 2);
+    const usableW = svgWidth - paddingX * 2;
+    const layerHeight = Math.max((height - paddingY * 2 - nodeH) / Math.max(maxLayer, 1), 84);
 
     layers.forEach((layerNodes, lIdx) => {
       const y = paddingY + lIdx * layerHeight;
@@ -239,15 +246,15 @@ export class CausalDagEngine {
     const getColors = (cat: string) => {
       switch (cat) {
         case 'character':
-          return { border: '#388bfd', bg: 'rgba(56, 139, 253, 0.15)', text: '#58a6ff' };
+          return { border: '#388bfd', bg: 'rgba(56, 139, 253, 0.22)', text: '#58a6ff' };
         case 'foreshadowing':
-          return { border: '#a371f7', bg: 'rgba(163, 113, 247, 0.15)', text: '#bc8cff' };
+          return { border: '#a371f7', bg: 'rgba(163, 113, 247, 0.22)', text: '#bc8cff' };
         case 'term':
-          return { border: '#cfa85c', bg: 'rgba(207, 168, 92, 0.15)', text: '#e3b341' };
+          return { border: '#cfa85c', bg: 'rgba(207, 168, 92, 0.22)', text: '#e3b341' };
         case 'location':
-          return { border: '#3fb950', bg: 'rgba(63, 185, 80, 0.15)', text: '#56d364' };
+          return { border: '#3fb950', bg: 'rgba(63, 185, 80, 0.22)', text: '#56d364' };
         default:
-          return { border: '#8b949e', bg: 'rgba(139, 148, 158, 0.15)', text: '#c9d1d9' };
+          return { border: '#8b949e', bg: 'rgba(139, 148, 158, 0.22)', text: '#c9d1d9' };
       }
     };
 
@@ -268,16 +275,16 @@ export class CausalDagEngine {
 
       edgesSvg += `
         <g class="dag-edge" data-from="${edge.fromId}" data-to="${edge.toId}">
-          <path d="${pathD}" fill="none" stroke="rgba(207, 168, 92, 0.55)" stroke-width="1.8" marker-end="url(#arrowhead)" />
+          <path d="${pathD}" fill="none" stroke="rgba(207, 168, 92, 0.6)" stroke-width="1.8" marker-end="url(#arrowhead)" />
           ${edge.label ? `
-            <rect x="${(x1 + x2) / 2 - 24}" y="${midY - 8}" width="48" height="14" rx="3" fill="#161b22" stroke="rgba(207,168,92,0.3)" />
-            <text x="${(x1 + x2) / 2}" y="${midY + 3}" text-anchor="middle" font-size="9" fill="#cfa85c" font-family="sans-serif">${edge.label}</text>
+            <rect x="${(x1 + x2) / 2 - 26}" y="${midY - 8}" width="52" height="15" rx="3" fill="#161b22" stroke="rgba(207,168,92,0.4)" stroke-width="1" />
+            <text x="${(x1 + x2) / 2}" y="${midY + 3.5}" text-anchor="middle" font-size="9" font-weight="600" fill="#cfa85c" font-family="sans-serif">${edge.label}</text>
           ` : ''}
         </g>
       `;
     }
 
-    // Render nodes
+    // Render nodes with solid opaque background preventing edge bleed-through
     let nodesSvg = '';
     for (const node of nodeList) {
       const coord = nodeCoords.get(node.id);
@@ -286,8 +293,11 @@ export class CausalDagEngine {
 
       nodesSvg += `
         <g class="dag-node" data-node-id="${node.id}" style="cursor: pointer;" transform="translate(${coord.x}, ${coord.y})">
-          <rect width="${coord.w}" height="${coord.h}" rx="6" fill="${col.bg}" stroke="${col.border}" stroke-width="1.4" />
-          <text x="8" y="16" font-size="10" font-weight="bold" fill="${col.text}" font-family="sans-serif">${node.label.slice(0, 7)}</text>
+          <!-- Opaque background layer -->
+          <rect width="${coord.w}" height="${coord.h}" rx="6" fill="#161b22" />
+          <!-- Themed tint & border layer -->
+          <rect width="${coord.w}" height="${coord.h}" rx="6" fill="${col.bg}" stroke="${col.border}" stroke-width="1.6" />
+          <text x="8" y="17" font-size="10.5" font-weight="bold" fill="${col.text}" font-family="sans-serif">${node.label.slice(0, 7)}</text>
           <text x="8" y="32" font-size="8.5" fill="#8b949e" font-family="sans-serif">${(node.role || node.category).slice(0, 9)}</text>
         </g>
       `;
@@ -296,7 +306,7 @@ export class CausalDagEngine {
     const svgHeight = Math.max(height, (maxLayer + 1) * layerHeight + paddingY * 2);
 
     return `
-      <svg class="dag-svg-canvas" viewBox="0 0 ${width} ${svgHeight}" width="100%" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">
+      <svg class="dag-svg-canvas" viewBox="0 0 ${svgWidth} ${svgHeight}" width="${svgWidth}px" height="${svgHeight}px" style="min-width: 100%;" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <marker id="arrowhead" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
             <polygon points="0 0, 7 3.5, 0 7" fill="#cfa85c" />

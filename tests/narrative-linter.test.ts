@@ -94,6 +94,41 @@ describe('Narrative Linter & Zero Pronoun Integration', () => {
       const messyRes = engine.analyzeDocument(messy);
       expect(messyRes.syntacticScore).toBeLessThan(70);
     });
+
+    it('does not trigger false positive char-repetition on bouten, ruby, leaders, or markdown markup', () => {
+      // Text containing 4-angle bouten <<<<...>>>>, double-bracket bouten 《《...》》, ruby <<...>>, and markdown bold **...**
+      const text = '千年の古より受け継がれし<<<<星辰の盟約>>>>を巡る《《運命》》の**岐路**。……静寂が訪れる。';
+      const result = engine.analyzeDocument(text);
+
+      const repeatItems = result.syntacticItems.filter(
+        (i) => i.ruleType === 'char-repetition'
+      );
+      expect(repeatItems.length).toBe(0);
+    });
+
+    it('detects genuine character repetition while ignoring markup delimiters', () => {
+      const text = '<<<<星辰の盟約>>>>の光にあああああ、、、、空が裂けた。';
+      const result = engine.analyzeDocument(text);
+
+      const repeatItems = result.syntacticItems.filter(
+        (i) => i.ruleType === 'char-repetition'
+      );
+      // 'あああああ' should be detected, but '<<<<' and '>>>>' must NOT be detected
+      expect(repeatItems.length).toBe(1);
+      expect(repeatItems[0].previewText).toBe('あああああ');
+    });
+
+    it('masks Aozora and Markdown markup while preserving exact character length', () => {
+      const original = '二重満月<<コンジャンクション>>の夜、<<<<星辰の盟約>>>>が**輝く**。';
+      const masked = NarrativeLinterEngine.maskMarkupForSyntax(original);
+
+      expect(masked.length).toBe(original.length);
+      expect(masked).not.toContain('<<<<');
+      expect(masked).not.toContain('>>>>');
+      expect(masked).not.toContain('**');
+      expect(masked).toContain('星辰の盟約');
+      expect(masked).toContain('輝く');
+    });
   });
 
   describe('NarrativeWorkerBridge (SPSC RingBuffer & Sliding Window)', () => {
@@ -292,6 +327,34 @@ describe('Narrative Linter & Zero Pronoun Integration', () => {
       insertBtn.click();
 
       expect(onInsert).toHaveBeenCalledWith(40, 'セレネ');
+    });
+
+    it('renders contextual snippet in syntactic issue cards and dock header', () => {
+      const text = '第一行。\n例えば長文を書くときに履歴がちゃんと保存されるかや、彼が猫が魚が好きだと言った。';
+      const result = engine.analyzeDocument(text);
+
+      const pItem = result.syntacticItems.find((i) => i.ruleType === 'particle-repetition');
+      expect(pItem).toBeDefined();
+      expect(pItem?.snippet).toBeDefined();
+      expect(pItem?.snippet).toContain('好きだと言った');
+
+      const dock = new NarrativeInspectorDock();
+      dock.updateResult(result);
+      const html = dock.renderHTML();
+
+      expect(html).toContain('該当箇所の文脈:');
+      expect(html).toContain('採点基準:');
+      expect(html).not.toContain('⚡ Wasm SIMD PAS Head'); // Moved out of dock card
+    });
+
+    it('does NOT false-positive on particle "と" for adverbs (ひょっとすると) and idioms (として)', () => {
+      const text = '今わかったこととしては、しょうがないとは思うが。これはひょっとすると父親を意味する「とと」でも反応しそう。';
+      const result = engine.analyzeDocument(text);
+
+      const toRepetition = result.syntacticItems.filter(
+        (i) => i.ruleType === 'particle-repetition' && i.message.includes('「と」')
+      );
+      expect(toRepetition.length).toBe(0);
     });
   });
 });

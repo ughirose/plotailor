@@ -55,20 +55,20 @@ export class NarrativeInspectorDock {
       <div class="narrative-inspector-dock" data-testid="narrative-inspector-dock">
         <!-- Top Score & Health Metric -->
         <div class="dock-card dock-score-card">
-          <div class="dock-card-header">
+          <div class="dock-card-header" style="display: flex; justify-content: space-between; align-items: center;">
             <span class="dock-card-title">🖋️ リアルタイム推敲・構文スコア</span>
-            <span class="score-badge" style="color: ${scoreColor}; font-weight: 700; font-size: 16px;">
-              ${score} <small style="font-size: 10px; font-weight: 400;">/ 100 点</small>
+            <span class="score-badge" style="color: ${scoreColor}; font-weight: 700; font-size: 15px; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 3px;">
+              <span>${score}</span>
+              <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">/ 100点</span>
             </span>
           </div>
           <div class="dock-card-body">
             <div class="linter-metric-row">
               <span>構文警告: <strong>${res.syntacticItems.length} 件</strong></span>
-              <span>主語抜け（ゼロ代名詞）: <strong>${res.zeroPronounItems.length} 件</strong></span>
+              <span>主語抜け: <strong>${res.zeroPronounItems.length} 件</strong></span>
             </div>
-            <div class="linter-engine-chips">
-              <span class="engine-chip">⚡ Wasm SIMD PAS Head (0.6μs)</span>
-              <span class="engine-chip">🔒 SPSC RingBuffer (ゼロコピー)</span>
+            <div class="score-criteria-hint" style="font-size: 11px; color: var(--color-text-dim); margin-top: 6px; padding: 4px 8px; background: rgba(0, 0, 0, 0.04); border-radius: 4px; line-height: 1.4;">
+              💡 <strong>採点基準:</strong> 基礎点100点からの減点方式（構文・文体指摘: −8点/件、主語抜け: −5点/件）
             </div>
           </div>
         </div>
@@ -123,7 +123,13 @@ export class NarrativeInspectorDock {
                 <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
               </div>
               <div class="issue-message">${this.escapeHtml(item.message)}</div>
-              ${item.previewText ? `<div class="issue-preview">対象: <code>${this.escapeHtml(item.previewText)}</code></div>` : ''}
+              ${item.snippet ? `
+                <div class="issue-snippet" style="background: rgba(0, 0, 0, 0.05); border-left: 2px solid var(--color-gold); padding: 5px 8px; margin: 6px 0; border-radius: 3px; font-size: 12px; line-height: 1.5; color: var(--color-text-main); font-family: var(--font-novel, 'Shippori Mincho', serif);">
+                  <span style="font-size: 10px; color: var(--color-text-dim); display: block; margin-bottom: 2px;">該当箇所の文脈:</span>
+                  「${this.escapeHtml(item.snippet)}」
+                </div>
+              ` : ''}
+              ${item.previewText ? `<div class="issue-preview">対象語句: <code>${this.escapeHtml(item.previewText)}</code></div>` : ''}
               <div class="issue-jump-hint">➜ エディタへジャンプ</div>
             </div>
           `;
@@ -153,6 +159,12 @@ export class NarrativeInspectorDock {
                 <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
               </div>
               <div class="issue-message">述語: <strong>「${this.escapeHtml(item.predicateText)}」</strong></div>
+              ${item.snippet ? `
+                <div class="issue-snippet" style="background: rgba(0, 0, 0, 0.05); border-left: 2px solid #58a6ff; padding: 5px 8px; margin: 6px 0; border-radius: 3px; font-size: 12px; line-height: 1.5; color: var(--color-text-main); font-family: var(--font-novel, 'Shippori Mincho', serif);">
+                  <span style="font-size: 10px; color: var(--color-text-dim); display: block; margin-bottom: 2px;">該当文:</span>
+                  「${this.escapeHtml(item.snippet)}」
+                </div>
+              ` : ''}
               
               <div class="zp-candidates-box">
                 <div class="zp-candidates-title">文脈からの推定主語候補:</div>

@@ -328,14 +328,16 @@ export class DualTrackTimelineEngine {
   }
 
   /**
-   * Renders the complete timeline as an interactive SVG string.
+   * Renders the complete timeline as an interactive SVG string with high readability.
    */
   public renderSvg(): string {
+    const minWidth = Math.max(560, this.scenes.length * 150 + 120);
+    this.dimensions.width = minWidth;
     const layout = this.computeLayout();
     const { width, height, discourseY, storyY, margin } = this.dimensions;
 
     return `
-      <svg class="dual-track-svg" viewBox="0 0 ${width} ${height}" width="100%" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <svg class="dual-track-svg" viewBox="0 0 ${width} ${height}" width="${width}px" height="${height}px" style="min-width: ${width}px;" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <filter id="glow-cyan" x="-20%" y="-20%" width="140%" height="140%">
             <feGaussianBlur stdDeviation="3" result="blur" />
@@ -350,20 +352,20 @@ export class DualTrackTimelineEngine {
         <!-- Background Tracks -->
         <!-- Discourse Track Line -->
         <g class="track-group">
-          <line x1="${margin.left}" y1="${discourseY}" x2="${width - margin.right}" y2="${discourseY}" stroke="rgba(255,255,255,0.12)" stroke-width="3" stroke-linecap="round" />
-          <text x="${margin.left - 8}" y="${discourseY + 4}" fill="#cfa85c" font-size="11" font-weight="600" text-anchor="end">Sjuzhet (読者体験軸)</text>
+          <line x1="${margin.left}" y1="${discourseY}" x2="${width - margin.right}" y2="${discourseY}" stroke="rgba(207, 168, 92, 0.4)" stroke-width="3" stroke-linecap="round" />
+          <text x="${margin.left}" y="${discourseY - 32}" fill="#cfa85c" font-size="12" font-weight="700" font-family="sans-serif">📖 Sjuzhet (読者体験軸)</text>
         </g>
 
         <!-- Story Track Line -->
         <g class="track-group">
-          <line x1="${margin.left}" y1="${storyY}" x2="${width - margin.right}" y2="${storyY}" stroke="rgba(255,255,255,0.12)" stroke-width="3" stroke-linecap="round" />
-          <text x="${margin.left - 8}" y="${storyY + 4}" fill="#388bfd" font-size="11" font-weight="600" text-anchor="end">Fabula (客観時間軸)</text>
+          <line x1="${margin.left}" y1="${storyY}" x2="${width - margin.right}" y2="${storyY}" stroke="rgba(56, 139, 253, 0.4)" stroke-width="3" stroke-linecap="round" />
+          <text x="${margin.left}" y="${storyY + 36}" fill="#58a6ff" font-size="12" font-weight="700" font-family="sans-serif">⏳ Fabula (客観時間軸)</text>
         </g>
 
         <!-- Connecting Splines -->
         <g class="spline-group">
           ${layout.splines.map((s) => `
-            <path d="${s.svgPath}" fill="none" stroke="${s.color}" stroke-width="${s.type === 'progressive' ? '1.5' : '2.5'}"
+            <path d="${s.svgPath}" fill="none" stroke="${s.color}" stroke-width="${s.type === 'progressive' ? '2' : '3'}"
                   filter="${s.type === 'analepsis' ? 'url(#glow-cyan)' : s.type === 'prolepsis' ? 'url(#glow-purple)' : 'none'}"
                   class="timeline-spline ${s.type}" data-scene="${s.sceneId}">
               <title>${s.description}</title>
@@ -374,7 +376,7 @@ export class DualTrackTimelineEngine {
         <!-- Foreshadowing Arcs -->
         <g class="foreshadowing-arc-group">
           ${layout.foreshadowingArcs.map((arc) => `
-            <path d="${arc.svgPath}" fill="none" stroke="${arc.color}" stroke-width="2"
+            <path d="${arc.svgPath}" fill="none" stroke="${arc.color}" stroke-width="2.2"
                   stroke-dasharray="${arc.isDashed ? '4,4' : 'none'}"
                   class="foreshadowing-arc ${arc.isDangling ? 'dangling-arc' : ''}" data-fid="${arc.foreshadowingId}">
               <title>${arc.isDangling ? '未回収の伏線 (DANGLING)' : '回収済伏線'}</title>
@@ -385,9 +387,11 @@ export class DualTrackTimelineEngine {
         <!-- Discourse Nodes -->
         <g class="discourse-nodes">
           ${layout.discourseNodes.map((n) => `
-            <g class="timeline-node discourse-node" transform="translate(${n.x}, ${n.y})" data-scene-id="${n.id}">
-              <circle r="6" fill="#cfa85c" stroke="#161b22" stroke-width="2" />
-              <text y="-14" fill="#e6edf3" font-size="10" text-anchor="middle">${n.title}</text>
+            <g class="timeline-node discourse-node" transform="translate(${n.x}, ${n.y})" data-scene-id="${n.id}" style="cursor: pointer;">
+              <circle r="7" fill="#cfa85c" stroke="#161b22" stroke-width="2.5" />
+              <!-- Badge pill for title readability -->
+              <rect x="-45" y="-28" width="90" height="18" rx="4" fill="#161b22" stroke="rgba(207,168,92,0.4)" stroke-width="1" />
+              <text y="-16" fill="#e6edf3" font-size="10.5" font-weight="600" text-anchor="middle" font-family="sans-serif">${n.title.slice(0, 7)}</text>
             </g>
           `).join('')}
         </g>
@@ -395,9 +399,11 @@ export class DualTrackTimelineEngine {
         <!-- Story Nodes -->
         <g class="story-nodes">
           ${layout.storyNodes.map((n) => `
-            <g class="timeline-node story-node" transform="translate(${n.x}, ${n.y})" data-scene-id="${n.id}">
-              <circle r="6" fill="#388bfd" stroke="#161b22" stroke-width="2" />
-              <text y="18" fill="#8b949e" font-size="10" text-anchor="middle">Day ${n.scene.storyDayStart}</text>
+            <g class="timeline-node story-node" transform="translate(${n.x}, ${n.y})" data-scene-id="${n.id}" style="cursor: pointer;">
+              <circle r="7" fill="#388bfd" stroke="#161b22" stroke-width="2.5" />
+              <!-- Badge pill for day readability -->
+              <rect x="-35" y="10" width="70" height="18" rx="4" fill="#161b22" stroke="rgba(56,139,253,0.4)" stroke-width="1" />
+              <text y="23" fill="#58a6ff" font-size="10" font-weight="600" text-anchor="middle" font-family="sans-serif">第 ${n.scene.storyDayStart} 日</text>
             </g>
           `).join('')}
         </g>

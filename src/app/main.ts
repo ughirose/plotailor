@@ -40,6 +40,8 @@ import {
   SHELF_THRESHOLD,
 } from '../core/lore/ShelvedLoreLifecycle.js';
 import { LiteraryExporter, normalizeAozoraMarkup } from '../core/export/LiteraryExporter.js';
+import { RevisionDiffSummarizer } from '../core/editor/RevisionDiffSummarizer.js';
+import { markdownBoldExtension } from '../core/editor/MarkdownBoldExtension.js';
 
 interface ChapterData {
   id: string;
@@ -108,10 +110,17 @@ export class PlotailorApp {
   private wrapCompartment = new Compartment();
   private rubyCompartment = new Compartment();
   private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private multiLayerDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private scrollNormalizer = new ScrollNormalizer();
   private chapterStates: Map<string, EditorState> = new Map();
   private chapterSnapshots: Map<string, Array<{ time: number; text: string; length: number }>> = new Map();
+  private selectedHistorySnapshotIndex: number | null = null;
   private lastSnapshotTime = 0;
+  public snapshotFrequency: 'minimal' | 'low' | 'standard' | 'high' | 'custom' = 'standard';
+  public snapshotCustomChars = 25;
+  public snapshotCustomSeconds = 15;
+  private isHistoryDiffOnly = false;
+  private isVerticalUpright = false;
   private loreManager: LoreEntityManager;
   private dagEngine: CausalDagEngine = new CausalDagEngine();
   private walWorkerBridge: OpfsWalWorkerBridge = new OpfsWalWorkerBridge();
@@ -163,11 +172,9 @@ export class PlotailorApp {
   private init() {
     this.loadStateFromStorage();
 
-    if (window.innerWidth <= 768) {
-      const paneL = document.getElementById('paneLeft');
-      const paneR = document.getElementById('paneRight');
-      if (paneL) paneL.style.display = 'none';
-      if (paneR) paneR.style.display = 'none';
+    if (typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth <= 768) {
+      this.leftPaneOpen = false;
+      this.rightPaneOpen = false;
     }
 
     this.applyTheme();
@@ -298,6 +305,38 @@ export class PlotailorApp {
 
       const savedFamily = localStorage.getItem('plotailor_font_family');
       if (savedFamily) this.fontFamily = savedFamily;
+
+      const savedFreq = localStorage.getItem('plotailor_snapshot_frequency');
+      if (savedFreq && ['minimal', 'low', 'standard', 'high', 'custom'].includes(savedFreq)) {
+        this.snapshotFrequency = savedFreq as any;
+      }
+
+      const savedCustomChars = localStorage.getItem('plotailor_snapshot_custom_chars');
+      if (savedCustomChars) {
+        const num = parseInt(savedCustomChars, 10);
+        if (!isNaN(num) && num > 0) this.snapshotCustomChars = num;
+      }
+
+      const savedCustomSecs = localStorage.getItem('plotailor_snapshot_custom_seconds');
+      if (savedCustomSecs) {
+        const num = parseInt(savedCustomSecs, 10);
+        if (!isNaN(num) && num > 0) this.snapshotCustomSeconds = num;
+      }
+
+      const savedVerticalUpright = localStorage.getItem('plotailor_vertical_upright');
+      if (savedVerticalUpright !== null) {
+        this.isVerticalUpright = savedVerticalUpright === 'true';
+      }
+      document.body.classList.toggle('vertical-upright', this.isVerticalUpright);
+
+      // 8. Restore chapter snapshots
+      const savedSnaps = localStorage.getItem(`plotailor_snapshots_${this.currentProjectId}`);
+      if (savedSnaps) {
+        const parsed = JSON.parse(savedSnaps);
+        if (Array.isArray(parsed)) {
+          this.chapterSnapshots = new Map(parsed);
+        }
+      }
     } catch {}
   }
 
@@ -327,6 +366,14 @@ export class PlotailorApp {
       localStorage.setItem('plotailor_ruby_decorated', (this.rubyMode === 'normal').toString());
       localStorage.setItem('plotailor_theme', this.isNightTheme ? 'night' : 'washi');
       localStorage.setItem('plotailor_vertical', this.isVertical.toString());
+      localStorage.setItem('plotailor_snapshot_frequency', this.snapshotFrequency);
+
+      // Persist up to 50 recent snapshots per chapter so browser refresh never wipes history
+      const snapshotEntries: [string, any[]][] = [];
+      for (const [k, v] of this.chapterSnapshots.entries()) {
+        snapshotEntries.push([k, v.slice(-50)]);
+      }
+      localStorage.setItem(`plotailor_snapshots_${this.currentProjectId}`, JSON.stringify(snapshotEntries));
     } catch {}
     this.saveToVFS();
   }
@@ -344,6 +391,7 @@ export class PlotailorApp {
         history({ minDepth: 500, newGroupDelay: 500 }),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         verticalWritingExtension(),
+        markdownBoldExtension(),
         cm6ImeGuard(),
         multiLayerDecorationField,
         narrativeLinterExtension({
@@ -361,7 +409,7 @@ export class PlotailorApp {
             this.cadenceMachine.recordKeystroke();
             this.handleEditorChange();
             if (!update.view.composing) {
-              this.updateMultiLayerDecorations();
+              this.updateMultiLayerDecorationsDebounced();
             }
             this.checkShelvedCandidates();
           }
@@ -385,11 +433,87 @@ export class PlotailorApp {
     if (list.length > 0 && list[list.length - 1].text === text) return;
     list.push({ time: Date.now(), text, length: len });
     if (list.length > 500) list.shift();
+    if (chapterId === this.currentChapterId) {
+      this.updateHistoryUI();
+    }
   }
 
   private recordSnapshotDebounced(chapterId: string, text: string) {
+    const list = this.chapterSnapshots.get(chapterId) || [];
+    const lastSnap = list.length > 0 ? list[list.length - 1] : null;
+    const len = text.replace(/\s+/g, '').length;
+    const lastLen = lastSnap ? lastSnap.length : 0;
+    const charDelta = Math.abs(len - lastLen);
+
+    // Dynamic thresholds based on user-configured snapshotFrequency
+    let minTrivialDelta = 3;
+    let minSentenceDelta = 10;
+    let minSentenceInterval = 3000;
+    let minBurstDelta = 25;
+    let minBurstInterval = 5000;
+    let minIdlePause = 15000;
+    let minIdleDelta = 10;
+
+    if (this.snapshotFrequency === 'minimal') {
+      // 極小: 大節・大改稿（200字以上、または60秒休止）
+      minTrivialDelta = 20;
+      minSentenceDelta = 100;
+      minSentenceInterval = 20000;
+      minBurstDelta = 200;
+      minBurstInterval = 30000;
+      minIdlePause = 60000;
+      minIdleDelta = 100;
+    } else if (this.snapshotFrequency === 'low') {
+      // ひかえめ: 段落単位（50字以上、または30秒休止）
+      minTrivialDelta = 10;
+      minSentenceDelta = 40;
+      minSentenceInterval = 8000;
+      minBurstDelta = 80;
+      minBurstInterval = 15000;
+      minIdlePause = 30000;
+      minIdleDelta = 40;
+    } else if (this.snapshotFrequency === 'high') {
+      // こまめ: 短文単位（5字以上、または5秒休止）
+      minTrivialDelta = 1;
+      minSentenceDelta = 5;
+      minSentenceInterval = 1500;
+      minBurstDelta = 12;
+      minBurstInterval = 2500;
+      minIdlePause = 5000;
+      minIdleDelta = 5;
+    } else if (this.snapshotFrequency === 'custom') {
+      // カスタム: ユーザー指定の文字数と秒数
+      const customChars = Math.max(5, this.snapshotCustomChars || 25);
+      const customIdleMs = Math.max(2000, (this.snapshotCustomSeconds || 15) * 1000);
+      minTrivialDelta = Math.max(1, Math.round(customChars * 0.1));
+      minSentenceDelta = Math.max(3, Math.round(customChars * 0.4));
+      minSentenceInterval = Math.round(customIdleMs * 0.3);
+      minBurstDelta = customChars;
+      minBurstInterval = Math.round(customIdleMs * 0.5);
+      minIdlePause = customIdleMs;
+      minIdleDelta = Math.max(3, Math.round(customChars * 0.4));
+    }
+
+    // Suppress trivial inputs below threshold
+    if (charDelta < minTrivialDelta && lastSnap) {
+      return;
+    }
+
     const now = Date.now();
-    if (now - this.lastSnapshotTime > 4000) {
+    const timeSinceLast = now - this.lastSnapshotTime;
+
+    // Trigger conditions:
+    // 1. Natural sentence boundary (。！？ or newline after sentence)
+    const endsWithSentenceBoundary = /[。！？!?]\n?$/.test(text.trim());
+    const isSentenceBoundaryTrigger = endsWithSentenceBoundary && charDelta >= minSentenceDelta && timeSinceLast > minSentenceInterval;
+
+    // 2. Substantial typing burst
+    const isSubstantialChange = charDelta >= minBurstDelta && timeSinceLast > minBurstInterval;
+
+    // 3. Idle pause
+    const isIdlePauseTrigger = timeSinceLast > minIdlePause && charDelta >= minIdleDelta;
+
+    if (isSentenceBoundaryTrigger || isSubstantialChange || isIdlePauseTrigger || list.length === 0) {
       this.lastSnapshotTime = now;
       this.recordSnapshot(chapterId, text);
     }
@@ -451,8 +575,10 @@ export class PlotailorApp {
       btnHeaderRedo.style.cursor = canRedo ? 'pointer' : 'default';
     }
     if (badge) {
-      badge.textContent = `履歴: ${uDepth} / 500`;
-      badge.title = `保持可能履歴数: 最大500回 (現在: 元に戻す ${uDepth}件 / やり直す ${rDepth}件)`;
+      const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
+      const snapCount = snapshots.length;
+      badge.textContent = `履歴: ${snapCount} / 500 ▾`;
+      badge.title = `現在章の履歴スナップショット: ${snapCount}件 / 最大500件 (クリックで編集履歴・ロールバック比較モーダルを開く)`;
     }
   }
 
@@ -507,6 +633,19 @@ export class PlotailorApp {
         },
         { passive: false }
       );
+
+      // Margin click handling: snap caret to end of document when clicking background margin
+      canvasWrapper.addEventListener('click', (e: MouseEvent) => {
+        if (!this.cmEditor) return;
+        const target = e.target as HTMLElement;
+        if (target === canvasWrapper || target === this.editorBody) {
+          const docLen = this.cmEditor.state.doc.length;
+          this.cmEditor.dispatch({
+            selection: { anchor: docLen, head: docLen },
+          });
+          this.cmEditor.focus();
+        }
+      });
     }
 
     // Header Controls
@@ -553,8 +692,19 @@ export class PlotailorApp {
         this.closeExportModal();
         this.closeProjectModal?.();
         this.closeLoreModal?.();
+        this.closeHistoryModal?.();
         const settingsModal = document.getElementById('settingsModal');
         if (settingsModal) settingsModal.style.display = 'none';
+        const helpModal = document.getElementById('helpModal');
+        if (helpModal) helpModal.style.display = 'none';
+        const historyModal = document.getElementById('historyModal');
+        if (historyModal) historyModal.style.display = 'none';
+        const projectModal = document.getElementById('projectModal');
+        if (projectModal) projectModal.style.display = 'none';
+        const loreModal = document.getElementById('loreModal');
+        if (loreModal) loreModal.style.display = 'none';
+        const exportModal = document.getElementById('exportModal');
+        if (exportModal) exportModal.style.display = 'none';
       }
     });
 
@@ -565,6 +715,7 @@ export class PlotailorApp {
     this.initDecorationLegend();
     this.initSettingsModal();
     this.initHelpModal();
+    this.initHistoryModal();
 
     const btnExport = document.getElementById('btnExportAozora');
     btnExport?.addEventListener('click', () => this.openExportModal());
@@ -586,6 +737,13 @@ export class PlotailorApp {
 
     const btnRight = document.getElementById('btnToggleRightPane');
     btnRight?.addEventListener('click', () => this.toggleRightPane());
+
+    document.getElementById('canvasWrapper')?.addEventListener('click', () => {
+      if (window.innerWidth <= 1024) {
+        if (this.leftPaneOpen) this.toggleLeftPane();
+        if (this.rightPaneOpen) this.toggleRightPane();
+      }
+    });
 
     const chapterSelect = document.getElementById('chapterSelect') as HTMLSelectElement;
     chapterSelect?.addEventListener('change', (e) => {
@@ -719,8 +877,19 @@ export class PlotailorApp {
     }
   }
 
+  private updateMultiLayerDecorationsDebounced() {
+    if (this.multiLayerDebounceTimer !== null) {
+      clearTimeout(this.multiLayerDebounceTimer);
+    }
+    this.multiLayerDebounceTimer = setTimeout(() => {
+      this.multiLayerDebounceTimer = null;
+      this.updateMultiLayerDecorations();
+    }, 120);
+  }
+
   private updateMultiLayerDecorations() {
     if (!this.cmEditor) return;
+    if (this.cmEditor.composing) return;
     const doc = this.cmEditor.state.doc;
     const text = doc.toString();
     const entities = this.loreManager.getEntities();
@@ -778,8 +947,10 @@ export class PlotailorApp {
     }
 
     const decSet = buildMultiLayerDecorationSet(text.length, items);
+    const curSel = this.cmEditor.state.selection;
     this.cmEditor.dispatch({
       effects: setMultiLayerDecorations.of(decSet),
+      selection: curSel,
     });
   }
 
@@ -930,6 +1101,11 @@ export class PlotailorApp {
     const titleEl = document.getElementById('activeChapterTitle');
     if (titleEl) titleEl.textContent = ch.title;
 
+    const currentSnaps = this.chapterSnapshots.get(chapterId);
+    if (!currentSnaps || currentSnaps.length === 0) {
+      this.recordSnapshot(chapterId, ch.content);
+    }
+
     const selectEl = document.getElementById('chapterSelect') as HTMLSelectElement;
     if (selectEl) selectEl.value = chapterId;
 
@@ -941,17 +1117,162 @@ export class PlotailorApp {
   }
 
   public openHistoryModal() {
-    // Redirected to right-pane dock tab
-    this.activeRightTab = 'history';
-    const paneRight = document.getElementById('paneRight');
-    if (paneRight && paneRight.style.display === 'none') {
-      paneRight.style.display = '';
+    const modal = document.getElementById('historyModal');
+    if (!modal) return;
+    modal.style.display = 'flex';
+
+    let snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
+    const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
+    if (snapshots.length === 0 && currentText) {
+      this.recordSnapshot(this.currentChapterId, currentText);
+      snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
     }
-    this.renderRightPane();
+
+    const selQuick = document.getElementById('historySnapshotFrequencyQuick') as HTMLSelectElement | null;
+    if (selQuick) selQuick.value = this.snapshotFrequency;
+
+    // Default select latest snapshot or previous
+    const defaultIdx = snapshots.length > 1 ? snapshots.length - 2 : snapshots.length - 1;
+    this.selectedHistorySnapshotIndex = defaultIdx >= 0 ? defaultIdx : null;
+    this.renderHistoryList();
+    if (this.selectedHistorySnapshotIndex !== null) {
+      this.renderHistoryDiff(this.selectedHistorySnapshotIndex);
+    } else {
+      const diffContainer = document.getElementById('historyDiffContainer');
+      if (diffContainer) diffContainer.textContent = '保存された履歴スナップショットがありません。';
+      const btnRollback = document.getElementById('btnConfirmHistoryRollback') as HTMLButtonElement | null;
+      if (btnRollback) {
+        btnRollback.disabled = true;
+        btnRollback.style.opacity = '0.5';
+      }
+    }
   }
 
   public closeHistoryModal() {
-    // No-op: history is now an inline dock tab, not a modal
+    const modal = document.getElementById('historyModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  private renderHistoryList() {
+    const container = document.getElementById('historyListContainer');
+    if (!container) return;
+    const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
+    if (snapshots.length === 0) {
+      container.innerHTML = '<div style="font-size: 12px; color: var(--color-text-dim); padding: 12px; text-align: center;">履歴がありません</div>';
+      return;
+    }
+
+    container.innerHTML = snapshots
+      .map((snap, idx) => {
+        const isSelected = idx === this.selectedHistorySnapshotIndex;
+        const timeStr = new Date(snap.time).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const prevSnap = idx > 0 ? snapshots[idx - 1] : null;
+        const charDelta = prevSnap ? snap.length - prevSnap.length : 0;
+        const deltaLabel = charDelta > 0 ? `+${charDelta}` : charDelta < 0 ? `${charDelta}` : '±0';
+        const deltaColor = charDelta > 0 ? 'var(--color-success, #56d364)' : charDelta < 0 ? 'var(--color-danger, #f85149)' : 'var(--color-text-dim)';
+
+        return `
+          <div class="history-item ${isSelected ? 'active' : ''}" data-snap-idx="${idx}" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; border: 1px solid ${isSelected ? 'var(--color-gold)' : 'var(--color-border)'}; background: ${isSelected ? 'rgba(184, 134, 11, 0.12)' : 'rgba(0, 0, 0, 0.15)'}; transition: all 0.15s ease;">
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
+              <span style="font-weight: 600; color: ${isSelected ? 'var(--color-gold)' : 'var(--color-text)'};">#${idx + 1} ${timeStr}</span>
+              <span style="font-size: 10px; color: ${deltaColor}; font-weight: 600;">${deltaLabel}</span>
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-dim); margin-top: 4px; display: flex; justify-content: space-between;">
+              <span>文字数: <strong>${snap.length.toLocaleString()}</strong> 字</span>
+              <span style="font-size: 10px; opacity: 0.8;">${snap.text.slice(0, 12).replace(/\n/g, ' ')}...</span>
+            </div>
+          </div>
+        `;
+      })
+      .reverse()
+      .join('');
+
+    container.querySelectorAll('.history-item').forEach((item) => {
+      item.addEventListener('click', () => {
+        const idx = parseInt((item as HTMLElement).dataset.snapIdx || '0', 10);
+        this.selectedHistorySnapshotIndex = idx;
+        this.renderHistoryList();
+        this.renderHistoryDiff(idx);
+      });
+    });
+  }
+
+  private renderHistoryDiff(index: number) {
+    const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
+    const snap = snapshots[index];
+    const diffContainer = document.getElementById('historyDiffContainer');
+    const diffStats = document.getElementById('historyDiffStats');
+    const btnRollback = document.getElementById('btnConfirmHistoryRollback') as HTMLButtonElement | null;
+    if (!snap || !diffContainer) return;
+
+    const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
+    const summary = RevisionDiffSummarizer.summarize(snap.text, currentText);
+
+    if (diffStats) {
+      const delta = summary.stats.charDelta;
+      const deltaSign = delta > 0 ? `+${delta}` : delta === 0 ? '±0' : `${delta}`;
+      const timeStr = new Date(snap.time).toLocaleTimeString('ja-JP');
+      diffStats.innerHTML = `時点: <strong>${timeStr}</strong> (${snap.length.toLocaleString()}字) ⟷ 現在 (${summary.stats.newCharCount.toLocaleString()}字) <span style="margin-left: 6px; font-weight: bold; color: ${delta > 0 ? 'var(--color-success)' : delta < 0 ? 'var(--color-danger)' : 'var(--color-text-dim)'}">[差分: ${deltaSign}字]</span>`;
+    }
+
+    if (btnRollback) {
+      btnRollback.disabled = false;
+      btnRollback.style.opacity = '1';
+      btnRollback.textContent = `この時点 (${new Date(snap.time).toLocaleTimeString('ja-JP')}) へロールバック`;
+    }
+
+    if (snap.text === currentText) {
+      diffContainer.innerHTML = `<div style="text-align: center; padding: 24px; color: var(--color-gold);">✓ 選択されたスナップショットは現在の本文と完全に一致しています（差分なし）。</div>`;
+      return;
+    }
+
+    diffContainer.classList.toggle('history-diff-only-mode', this.isHistoryDiffOnly);
+
+    const htmlParts: string[] = [];
+    if (summary.lineSummaries.length > 0) {
+      htmlParts.push(`
+        <div style="background: rgba(184, 134, 11, 0.08); border-left: 3px solid var(--color-gold); padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: var(--color-text-dim);">
+          <strong style="color: var(--color-gold);">【変更要約】</strong><br>
+          ${summary.lineSummaries.slice(0, 5).map(s => `・${s}`).join('<br>')}
+          ${summary.lineSummaries.length > 5 ? `<br>・...他 ${summary.lineSummaries.length - 5} 件の変更` : ''}
+        </div>
+      `);
+    }
+
+    let isFirstDiffFound = false;
+    htmlParts.push(`<div style="display: flex; flex-direction: column; gap: 4px;">`);
+    for (const diff of summary.lineDiffs) {
+      if (diff.type === 'unchanged') {
+        const text = diff.newLine || diff.oldLine || '';
+        htmlParts.push(`<div class="diff-line-unchanged">${text ? text : '<span style="opacity: 0.3;">(空行)</span>'}</div>`);
+      } else {
+        const firstDiffAttr = !isFirstDiffFound ? 'id="historyFirstDiff"' : '';
+        isFirstDiffFound = true;
+
+        if (diff.type === 'added') {
+          htmlParts.push(`<div ${firstDiffAttr} class="diff-line-added">+ ${diff.newLine}</div>`);
+        } else if (diff.type === 'deleted') {
+          htmlParts.push(`<div ${firstDiffAttr} class="diff-line-deleted">- ${diff.oldLine}</div>`);
+        } else if (diff.type === 'modified') {
+          htmlParts.push(`
+            <div ${firstDiffAttr} class="diff-line-modified">
+              <div class="diff-text-deleted" style="text-decoration: line-through;">- ${diff.oldLine}</div>
+              <div class="diff-text-added">+ ${diff.newLine}</div>
+            </div>
+          `);
+        }
+      }
+    }
+    htmlParts.push(`</div>`);
+    diffContainer.innerHTML = htmlParts.join('');
+
+    // Smooth scroll to the first diff location so the user sees the changes immediately
+    const firstDiffEl = diffContainer.querySelector('#historyFirstDiff') as HTMLElement | null;
+    if (firstDiffEl) {
+      setTimeout(() => {
+        firstDiffEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 60);
+    }
   }
 
   private rollbackToSnapshot(index: number) {
@@ -973,11 +1294,15 @@ export class PlotailorApp {
       activeCh.content = snap.text;
       activeCh.charCount = snap.length;
     }
+
+    // 4. Reset debounce timer so future edits are immediately registered in snapshots
+    this.lastSnapshotTime = 0;
     this.saveToStorage();
 
-    this.showToast(`🕒 ${new Date(snap.time).toLocaleTimeString()} の状態へロールバックしました（未来の履歴を切り捨て）`);
+    this.showToast(`🕒 ${new Date(snap.time).toLocaleTimeString('ja-JP')} の状態へロールバックしました`);
     this.updateStats();
     this.updateHistoryUI();
+    this.closeHistoryModal();
   }
 
   private async initProjectVFS() {
@@ -1373,10 +1698,12 @@ export class PlotailorApp {
     const btn = document.getElementById('btnToggleOrientation');
     const wrapper = document.getElementById('canvasWrapper');
 
+    const btnIndent = document.getElementById('btnQuickIndent');
     if (this.isVertical) {
       center?.classList.add('vertical-rl');
       this.editorBody.classList.add('vertical-rl');
       if (btn) btn.textContent = '横書き';
+      if (btnIndent) btnIndent.textContent = '⤓ 字下げ';
       if (this.cmEditor) {
         this.cmEditor.dom.classList.add('cm-vertical-rl');
         this.cmEditor.requestMeasure();
@@ -1390,6 +1717,7 @@ export class PlotailorApp {
       center?.classList.remove('vertical-rl');
       this.editorBody.classList.remove('vertical-rl');
       if (btn) btn.textContent = '縦書き';
+      if (btnIndent) btnIndent.textContent = '⇥ 字下げ';
       if (this.cmEditor) {
         this.cmEditor.dom.classList.remove('cm-vertical-rl');
         this.cmEditor.requestMeasure();
@@ -1529,12 +1857,16 @@ export class PlotailorApp {
 
   private toggleLeftPane() {
     this.leftPaneOpen = !this.leftPaneOpen;
+    if (this.leftPaneOpen && window.innerWidth <= 1024 && this.rightPaneOpen) {
+      this.toggleRightPane();
+    }
     const pane = document.getElementById('paneLeft');
     const btn = document.getElementById('btnToggleLeftPane');
     const btnCollapse = document.getElementById('btnCollapseLeft');
     if (pane) {
       pane.style.display = '';
       pane.classList.toggle('collapsed', !this.leftPaneOpen);
+      pane.classList.toggle('drawer-open', this.leftPaneOpen);
     }
     if (btn) btn.classList.toggle('active', this.leftPaneOpen);
     if (btnCollapse) {
@@ -1545,12 +1877,16 @@ export class PlotailorApp {
 
   private toggleRightPane() {
     this.rightPaneOpen = !this.rightPaneOpen;
+    if (this.rightPaneOpen && window.innerWidth <= 1024 && this.leftPaneOpen) {
+      this.toggleLeftPane();
+    }
     const pane = document.getElementById('paneRight');
     const btn = document.getElementById('btnToggleRightPane');
     const btnCollapse = document.getElementById('btnCollapseRight');
     if (pane) {
       pane.style.display = '';
       pane.classList.toggle('collapsed', !this.rightPaneOpen);
+      pane.classList.toggle('drawer-open', this.rightPaneOpen);
     }
     if (btn) btn.classList.toggle('active', this.rightPaneOpen);
     if (btnCollapse) {
@@ -1567,6 +1903,10 @@ export class PlotailorApp {
     btnMenu.addEventListener('click', (e) => {
       e.stopPropagation();
       const isVisible = dropdown.style.display !== 'none';
+      if (!isVisible && window.innerWidth <= 1024) {
+        if (this.leftPaneOpen) this.toggleLeftPane();
+        if (this.rightPaneOpen) this.toggleRightPane();
+      }
       dropdown.style.display = isVisible ? 'none' : 'flex';
       btnMenu.setAttribute('aria-expanded', isVisible ? 'false' : 'true');
     });
@@ -1576,6 +1916,16 @@ export class PlotailorApp {
         dropdown.style.display = 'none';
         btnMenu.setAttribute('aria-expanded', 'false');
       }
+    });
+
+    document.getElementById('menuToggleThemeMobile')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      this.toggleTheme();
+    });
+
+    document.getElementById('menuToggleFullscreenMobile')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      this.toggleFullscreen();
     });
 
     document.getElementById('menuOpenSettings')?.addEventListener('click', () => {
@@ -1612,11 +1962,8 @@ export class PlotailorApp {
 
     document.getElementById('menuOpenHelp')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
-      this.activeRightTab = 'help';
-      if (!this.rightPaneOpen) {
-        this.toggleRightPane();
-      }
-      this.renderRightPane();
+      const helpModal = document.getElementById('helpModal');
+      if (helpModal) helpModal.style.display = 'flex';
     });
   }
 
@@ -1634,11 +1981,81 @@ export class PlotailorApp {
     const chkLinter = document.getElementById('settingRealtimeLinter') as HTMLInputElement | null;
     if (chkLinter) chkLinter.checked = this.isRealtimeLinter;
 
+    const chkUpright = document.getElementById('settingVerticalUpright') as HTMLInputElement | null;
+    if (chkUpright) chkUpright.checked = this.isVerticalUpright;
+
     const selSize = document.getElementById('settingFontSize') as HTMLSelectElement | null;
     if (selSize) selSize.value = this.fontSize;
 
     const selFamily = document.getElementById('settingFontFamily') as HTMLSelectElement | null;
     if (selFamily) selFamily.value = this.fontFamily;
+
+    const selFreq = document.getElementById('settingSnapshotFrequency') as HTMLSelectElement | null;
+    if (selFreq) selFreq.value = this.snapshotFrequency;
+
+    const customGrp = document.getElementById('settingCustomSnapshotGroup');
+    if (customGrp) {
+      customGrp.style.display = this.snapshotFrequency === 'custom' ? 'block' : 'none';
+    }
+
+    const inpChars = document.getElementById('settingSnapshotCustomChars') as HTMLInputElement | null;
+    if (inpChars) inpChars.value = this.snapshotCustomChars.toString();
+
+    const inpSecs = document.getElementById('settingSnapshotCustomSeconds') as HTMLInputElement | null;
+    if (inpSecs) inpSecs.value = this.snapshotCustomSeconds.toString();
+  }
+
+  public setVerticalUpright(enabled: boolean): void {
+    this.isVerticalUpright = enabled;
+    document.body.classList.toggle('vertical-upright', enabled);
+    try {
+      localStorage.setItem('plotailor_vertical_upright', enabled.toString());
+    } catch {}
+    const chk = document.getElementById('settingVerticalUpright') as HTMLInputElement | null;
+    if (chk && chk.checked !== enabled) chk.checked = enabled;
+    if (this.cmEditor) {
+      this.cmEditor.requestMeasure();
+    }
+    this.showToast(`縦書き英数字正立表示を ${enabled ? 'ON' : 'OFF'} に設定しました`);
+  }
+
+  public setSnapshotFrequency(freq: 'minimal' | 'low' | 'standard' | 'high' | 'custom', showToastMsg = true): void {
+    this.snapshotFrequency = freq;
+    try {
+      localStorage.setItem('plotailor_snapshot_frequency', freq);
+    } catch {}
+
+    const selSetting = document.getElementById('settingSnapshotFrequency') as HTMLSelectElement | null;
+    if (selSetting && selSetting.value !== freq) selSetting.value = freq;
+
+    const selQuick = document.getElementById('historySnapshotFrequencyQuick') as HTMLSelectElement | null;
+    if (selQuick && selQuick.value !== freq) selQuick.value = freq;
+
+    const customGrp = document.getElementById('settingCustomSnapshotGroup');
+    if (customGrp) {
+      customGrp.style.display = freq === 'custom' ? 'block' : 'none';
+    }
+
+    if (showToastMsg) {
+      const labels: Record<string, string> = {
+        minimal: '「極小 (大節・60秒単位)」',
+        low: '「ひかえめ (段落・30秒単位)」',
+        standard: '「標準 (25字・15秒単位)」',
+        high: '「こまめ (短文・5秒単位)」',
+        custom: `「カスタム (${this.snapshotCustomChars}字・${this.snapshotCustomSeconds}秒単位)」`,
+      };
+      this.showToast(`🕒 履歴記録頻度を${labels[freq] || freq}に変更しました`);
+    }
+  }
+
+  public toggleHistoryDiffOnly(enabled: boolean): void {
+    this.isHistoryDiffOnly = enabled;
+    const diffContainer = document.getElementById('historyDiffContainer');
+    if (diffContainer) {
+      diffContainer.classList.toggle('history-diff-only-mode', enabled);
+    }
+    const chk = document.getElementById('chkHistoryDiffOnly') as HTMLInputElement | null;
+    if (chk && chk.checked !== enabled) chk.checked = enabled;
   }
 
   private initSettingsModal(): void {
@@ -1694,14 +2111,59 @@ export class PlotailorApp {
       this.showToast(`推敲リント装飾表示を ${checked ? 'ON' : 'OFF'} に設定しました`);
     });
 
-    document.getElementById('settingFontSize')?.addEventListener('change', (e) => {
+    document.getElementById('settingVerticalUpright')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this.setVerticalUpright(checked);
+    });
+
+    const selectFontSize = document.getElementById('settingFontSize') as HTMLSelectElement | null;
+    const inputCustomFontSize = document.getElementById('settingCustomFontSize') as HTMLInputElement | null;
+    const customWrapper = document.getElementById('customFontSizeWrapper');
+
+    const updateFontSizeUI = () => {
+      const pxNum = parseInt(this.fontSize, 10) || 16;
+      if (inputCustomFontSize) inputCustomFontSize.value = pxNum.toString();
+      if (selectFontSize) {
+        const matchingOpt = Array.from(selectFontSize.options).find((opt) => opt.value === this.fontSize);
+        if (matchingOpt) {
+          selectFontSize.value = this.fontSize;
+        } else {
+          selectFontSize.value = 'custom';
+        }
+      }
+    };
+
+    updateFontSizeUI();
+
+    selectFontSize?.addEventListener('change', (e) => {
       const val = (e.target as HTMLSelectElement).value;
-      this.fontSize = val;
+      if (val === 'custom') {
+        const num = inputCustomFontSize ? parseInt(inputCustomFontSize.value, 10) || 16 : 16;
+        this.fontSize = `${num}px`;
+      } else {
+        this.fontSize = val;
+        if (inputCustomFontSize) {
+          inputCustomFontSize.value = (parseInt(val, 10) || 16).toString();
+        }
+      }
       try {
-        localStorage.setItem('plotailor_font_size', val);
+        localStorage.setItem('plotailor_font_size', this.fontSize);
       } catch {}
       this.applyFontPreferences();
-      this.showToast(`文字サイズを「${val}」に変更しました`);
+      this.showToast(`文字サイズを「${this.fontSize}」に変更しました`);
+    });
+
+    inputCustomFontSize?.addEventListener('input', (e) => {
+      const num = Math.max(8, Math.min(72, parseInt((e.target as HTMLInputElement).value, 10) || 16));
+      this.fontSize = `${num}px`;
+      if (selectFontSize) {
+        const matchingOpt = Array.from(selectFontSize.options).find((opt) => opt.value === this.fontSize);
+        selectFontSize.value = matchingOpt ? this.fontSize : 'custom';
+      }
+      try {
+        localStorage.setItem('plotailor_font_size', this.fontSize);
+      } catch {}
+      this.applyFontPreferences();
     });
 
     document.getElementById('settingFontFamily')?.addEventListener('change', (e) => {
@@ -1713,16 +2175,69 @@ export class PlotailorApp {
       this.applyFontPreferences();
       this.showToast(`本文フォントを変更しました`);
     });
+
+    document.getElementById('settingSnapshotFrequency')?.addEventListener('change', (e) => {
+      const val = (e.target as HTMLSelectElement).value as any;
+      this.setSnapshotFrequency(val);
+    });
+
+    document.getElementById('settingSnapshotCustomChars')?.addEventListener('input', (e) => {
+      const num = Math.max(5, Math.min(2000, parseInt((e.target as HTMLInputElement).value, 10) || 25));
+      this.snapshotCustomChars = num;
+      try {
+        localStorage.setItem('plotailor_snapshot_custom_chars', num.toString());
+      } catch {}
+    });
+
+    document.getElementById('settingSnapshotCustomSeconds')?.addEventListener('input', (e) => {
+      const num = Math.max(2, Math.min(600, parseInt((e.target as HTMLInputElement).value, 10) || 15));
+      this.snapshotCustomSeconds = num;
+      try {
+        localStorage.setItem('plotailor_snapshot_custom_seconds', num.toString());
+      } catch {}
+    });
   }
 
   private initHelpModal(): void {
-    // Help is now a right-pane dock tab; button opens it inline
+    const modal = document.getElementById('helpModal');
+    if (!modal) return;
     document.getElementById('btnHeaderHelp')?.addEventListener('click', () => {
-      this.activeRightTab = 'help';
-      if (!this.rightPaneOpen) {
-        this.toggleRightPane();
+      modal.style.display = 'flex';
+    });
+    document.getElementById('btnCloseHelpModal')?.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.style.display = 'none';
+    });
+  }
+
+  private initHistoryModal(): void {
+    const modal = document.getElementById('historyModal');
+    if (!modal) return;
+
+    document.getElementById('btnCloseHistoryModal')?.addEventListener('click', () => this.closeHistoryModal());
+    document.getElementById('btnCancelHistoryRollback')?.addEventListener('click', () => this.closeHistoryModal());
+    document.getElementById('historyDepthBadge')?.addEventListener('click', () => this.openHistoryModal());
+
+    document.getElementById('chkHistoryDiffOnly')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this.toggleHistoryDiffOnly(checked);
+    });
+
+    document.getElementById('historySnapshotFrequencyQuick')?.addEventListener('change', (e) => {
+      const val = (e.target as HTMLSelectElement).value as any;
+      this.setSnapshotFrequency(val);
+    });
+
+    document.getElementById('btnConfirmHistoryRollback')?.addEventListener('click', () => {
+      if (this.selectedHistorySnapshotIndex !== null) {
+        this.rollbackToSnapshot(this.selectedHistorySnapshotIndex);
       }
-      this.renderRightPane();
+    });
+
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) this.closeHistoryModal();
     });
   }
 
@@ -2280,6 +2795,18 @@ export class PlotailorApp {
         });
       });
 
+      // Bidirectional jump & highlight to editor
+      container.querySelectorAll('.lore-item').forEach((item) => {
+        item.addEventListener('click', (e) => {
+          if ((e.target as HTMLElement).tagName === 'BUTTON') return;
+          const from = parseInt((item as HTMLElement).dataset.from || '0', 10);
+          const to = parseInt((item as HTMLElement).dataset.to || '0', 10);
+          if (to > from) {
+            this.jumpToEditor(from, to);
+          }
+        });
+      });
+
       container.querySelectorAll('[data-action="toggle"]').forEach((header) => {
         header.addEventListener('click', (e) => {
           const target = (e.currentTarget as HTMLElement).dataset.target;
@@ -2363,114 +2890,6 @@ export class PlotailorApp {
           });
         }
       }
-    } else if (this.activeRightTab === 'pop') {
-      container.innerHTML = `
-        <div class="dock-card">
-          <div class="dock-card-header">
-            <span class="dock-card-title">📜 創作プロセス証明（PoP）</span>
-            <span style="font-size: 11px; color: var(--color-gold);">監査中</span>
-          </div>
-          <div class="dock-card-body">
-            <p>人間主体的執筆スコア: <strong style="color: var(--color-gold);">1.18 HCIS</strong></p>
-            <p>打鍵インターバル・エントロピー: <strong>4.82 bits</strong></p>
-            <p>Merkle Chain ブロック数: <strong>42 blocks</strong></p>
-            <p>ルートハッシュ: <code style="font-size: 10px; color: var(--color-accent);">958bcd33...018e</code></p>
-            <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 8px 0;">
-            <button class="ide-btn btn-primary" style="width: 100%; justify-content: center;" id="btnIssuePoP">
-              PoP証明書を発行 (CBOR/JSON)
-            </button>
-          </div>
-        </div>
-      `;
-      document.getElementById('btnIssuePoP')?.addEventListener('click', () => {
-        this.exportPoPCertificate();
-      });
-    } else if (this.activeRightTab === 'history') {
-      // Inline history dock (replaces #historyModal)
-      const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
-      const listItems = snapshots.length === 0
-        ? '<div style="color: var(--color-text-dim); font-size: 12px; padding: 8px;">まだ履歴がありません。</div>'
-        : snapshots.slice().reverse().map((snap: any, idx: number) => {
-            const time = new Date(snap.time).toLocaleTimeString('ja-JP');
-            const charCount = (snap.text || '').replace(/\s+/g, '').length;
-            return `<div class="history-entry" data-snap-idx="${snapshots.length - 1 - idx}" style="padding: 6px 8px; border-bottom: 1px solid var(--color-border); cursor: pointer; font-size: 12px; transition: background 0.15s;">
-              <div style="display: flex; justify-content: space-between;">
-                <span style="color: var(--color-gold);">${time}</span>
-                <span style="color: var(--color-text-dim);">${charCount}字</span>
-              </div>
-            </div>`;
-          }).join('');
-
-      container.innerHTML = `
-        <div class="dock-card">
-          <div class="dock-card-header">
-            <span class="dock-card-title">🕒 編集履歴・ロールバック</span>
-            <span style="font-size: 11px; color: var(--color-text-dim);">最大500件</span>
-          </div>
-          <div class="dock-card-body" style="padding: 0;">
-            <p style="font-size: 11px; color: var(--color-text-dim); padding: 8px; margin: 0; border-bottom: 1px solid var(--color-border);">
-              過去の編集ポイントをクリックすると、その時点の本文へロールバックします。
-            </p>
-            <div style="max-height: 400px; overflow-y: auto;">
-              ${listItems}
-            </div>
-          </div>
-        </div>
-      `;
-
-      container.querySelectorAll('.history-entry').forEach((entry) => {
-        entry.addEventListener('click', () => {
-          const snapIdx = parseInt((entry as HTMLElement).dataset.snapIdx || '0', 10);
-          const snap = snapshots[snapIdx];
-          if (snap && this.cmEditor) {
-            this.cmEditor.dispatch({
-              changes: { from: 0, to: this.cmEditor.state.doc.length, insert: snap.text },
-            });
-            this.showToast(`🕒 履歴 ${new Date(snap.time).toLocaleTimeString('ja-JP')} へロールバックしました`);
-          }
-        });
-        entry.addEventListener('mouseenter', () => {
-          (entry as HTMLElement).style.background = 'rgba(207,168,92,0.1)';
-        });
-        entry.addEventListener('mouseleave', () => {
-          (entry as HTMLElement).style.background = '';
-        });
-      });
-    } else if (this.activeRightTab === 'help') {
-      // Inline help dock (replaces #helpModal)
-      const shortcuts = [
-        ['元に戻す / やり直す', 'Ctrl + Z / Ctrl + Y'],
-        ['選択テキストをルビ化', 'Ctrl + R'],
-        ['全画面集中執筆モード', 'F11 / Escで解除'],
-        ['左ペイン（目次）開閉', 'Ctrl + B'],
-        ['段落字下げ / 逆字下げ', 'Tab / Shift + Tab'],
-        ['縦書き段落移動', '← / →'],
-        ['縦書き文字移動', '↑ / ↓'],
-        ['パレット / ESC', 'Esc'],
-      ];
-      const rows = shortcuts.map(([fn, key]) =>
-        `<tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
-          <td style="padding: 4px 8px;">${fn}</td>
-          <td style="text-align: right; padding: 4px 8px; font-family: var(--font-mono); color: var(--color-accent);">${key}</td>
-        </tr>`
-      ).join('');
-
-      container.innerHTML = `
-        <div class="dock-card">
-          <div class="dock-card-header">
-            <span class="dock-card-title">📖 操作ガイド ＆ ショートカット</span>
-          </div>
-          <div class="dock-card-body" style="padding: 0;">
-            <table style="width: 100%; font-size: 12px; border-collapse: collapse;">
-              <tr style="border-bottom: 1px solid var(--color-border); height: 28px;">
-                <th style="text-align: left; color: var(--color-gold); padding: 4px 8px;">機能</th>
-                <th style="text-align: right; color: var(--color-gold); padding: 4px 8px;">キー / 操作</th>
-              </tr>
-              ${rows}
-            </table>
-          </div>
-        </div>
-      `;
     }
   }
 
