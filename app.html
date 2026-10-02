@@ -419,19 +419,15 @@
 
         <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 4px 0;">
 
-        <!-- 4. Font Size -->
+        <!-- 4. Font Size & Line Height Control -->
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <div>
-            <strong style="font-size: 13px;">本文フォントサイズ</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">エディタ内の文字サイズを調整</small>
+            <strong style="font-size: 13px;">本文フォントサイズ ＆ 行間</strong>
+            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">任意の数値直接入力 (12〜36px)・自動追従計算</small>
           </div>
-          <select id="settingFontSize" class="ide-input" style="width: 120px;">
-            <option value="14px">小 (14px)</option>
-            <option value="16px" selected>標準 (16px)</option>
-            <option value="18px">中 (18px)</option>
-            <option value="20px">大 (20px)</option>
-            <option value="24px">特大 (24px)</option>
-          </select>
+          <div id="settingFontSizeControlContainer">
+            <!-- Rendered dynamically by FontSizeControl -->
+          </div>
         </div>
 
         <!-- 5. Font Family -->
