@@ -1,24 +1,40 @@
 declare module '@schema' {
-  export interface StateDeltaEvent {
-    type: string;
-    payload?: unknown;
-    timestamp?: number;
-    [key: string]: unknown;
-  }
-  export interface SubgraphSlice {
+  export type DeltaOperation = 'create' | 'update' | 'delete' | 'patch';
+
+  export interface StateDeltaEvent<T = unknown> {
     id: string;
-    rootNodeId?: string;
-    depth?: number;
-    nodes?: Record<string, unknown>;
-    edges?: Array<{ id?: string; source?: string; target?: string; relation?: string; [key: string]: unknown }>;
-    version?: number;
-    [key: string]: unknown;
+    timestamp: number;
+    entityId: string;
+    operation: DeltaOperation;
+    path?: string[];
+    previousValue?: T;
+    newValue?: T;
+    metadata?: Record<string, unknown>;
   }
+
+  export interface GraphEdge<TEdge = unknown> {
+    id: string;
+    source: string;
+    target: string;
+    relation: string;
+    data?: TEdge;
+  }
+
+  export interface SubgraphSlice<TNode = unknown, TEdge = unknown> {
+    id: string;
+    rootNodeId: string;
+    depth: number;
+    nodes: Record<string, TNode>;
+    edges: GraphEdge<TEdge>[];
+    version: number;
+    metadata?: Record<string, unknown>;
+  }
+
   export interface NarrativeContext {
-    characterIds?: string[];
-    activePlots?: string[];
+    characterIds: string[];
     locationId?: string;
-    [key: string]: unknown;
+    timelinePoint?: number;
+    activePlots: string[];
   }
 }
 
