@@ -38,13 +38,18 @@ import {
   type CharacterTermDef,
   type HeatmapAnalysisResult,
 } from '../editor/CharacterHeatmap.js';
+import {
+  analyzeDocument,
+  type DocumentAnalysis,
+  type DialogueRatioConfig,
+} from '../nlp/DialogueRatioAnalyzer.js';
 
 export interface WorkspaceState {
   currentDocumentId: string;
   rawText: string;
   isComposing: boolean;
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
-  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance' | 'revision-history' | 'scene-outliner' | 'emotional-arc' | 'foreshadowing' | 'character-heatmap' | string;
+  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance' | 'revision-history' | 'scene-outliner' | 'emotional-arc' | 'foreshadowing' | 'character-heatmap' | 'pacing-inspector' | string;
   diagnostics: LoreDiagnostic[];
   ellipsisDashDiagnostics: EllipsisDashDiagnostic[];
   passiveDiagnostics: PassiveVoiceDiagnostic[];
@@ -56,6 +61,7 @@ export interface WorkspaceState {
   hirakuDiagnostics: HirakuDiagnostic[];
   povResult: PovAnalysisResult | null;
   heatmapResult: HeatmapAnalysisResult | null;
+  pacingAnalysis: DocumentAnalysis;
   isSaving: boolean;
   lastSavedTimestamp: number;
 }
@@ -124,6 +130,7 @@ export class ThreePaneWorkspace {
     if (initialText) {
       this.foreshadowingEngine.parseManuscript(initialText);
     }
+    const initialPacing = analyzeDocument(initialText);
 
     this.state = {
       currentDocumentId: docId,
@@ -142,6 +149,7 @@ export class ThreePaneWorkspace {
       hirakuDiagnostics: initialText ? this.hirakuEngine.lint(initialText) : [],
       povResult: initialText ? this.povAnalyzer.analyze(initialText) : null,
       heatmapResult: initialText ? this.heatmapEngine.analyze(initialText, this.characterTargets) : null,
+      pacingAnalysis: initialPacing,
       isSaving: false,
       lastSavedTimestamp: Date.now(),
     };
@@ -205,6 +213,7 @@ export class ThreePaneWorkspace {
     this.state.povResult = isComposing ? null : this.povAnalyzer.analyze(newText);
     this.state.emotionalArc = this.emotionalArcAnalyzer.analyze(newText);
     this.state.heatmapResult = this.heatmapEngine.analyze(newText, this.characterTargets);
+    this.state.pacingAnalysis = analyzeDocument(newText);
 
     // Record edit event in PoP Merkle chain
     if (!isComposing) {
@@ -356,6 +365,22 @@ export class ThreePaneWorkspace {
           <div class="sparklines-container">${sparklinesHtml}</div>
         </div>
       `;
+    } else if (this.state.activeRightTab === 'pacing-inspector') {
+      const dialPct = (this.state.pacingAnalysis.overallDialogueRatio * 100).toFixed(1);
+      const narrPct = (this.state.pacingAnalysis.overallNarrativeRatio * 100).toFixed(1);
+      const statusLabel =
+        this.state.pacingAnalysis.overallPacingStatus === 'BALANCED'
+          ? '黄金比（良好）'
+          : this.state.pacingAnalysis.overallPacingStatus === 'DIALOGUE_DENSE'
+          ? '会話過密（過多）'
+          : '地の文過多';
+
+      rightPaneHtml = `<div class="pacing-dock">
+        <h4>地の文・台詞・会話比率アナライザー</h4>
+        <div>会話比率: ${dialPct}% / 地の文比率: ${narrPct}%</div>
+        <div>テンポ判定: <strong>${statusLabel}</strong></div>
+        <div>指摘件数: ${this.state.pacingAnalysis.diagnostics.length}件</div>
+      </div>`;
     } else {
       const oddCount = this.state.ellipsisDashDiagnostics?.length ?? 0;
       const passiveCount = this.state.passiveDiagnostics?.length ?? 0;
