@@ -145,11 +145,11 @@ describe('RubyWidget and BoutenWidget', () => {
     const widget = new RubyWidget('親文字', 'るび');
     const dom = widget.toDOM();
 
-    expect(dom.tagName.toLowerCase()).toBe('ruby');
+    expect(dom.tagName.toLowerCase()).toBe('span');
     expect(dom.className).toBe('cm-ruby');
-    expect(dom.childNodes[0].textContent).toBe('親文字');
+    expect(dom.querySelector('.cm-ruby-base')?.textContent).toBe('親文字');
 
-    const rt = dom.querySelector('rt');
+    const rt = dom.querySelector('.cm-ruby-text');
     expect(rt).not.toBeNull();
     expect(rt?.textContent).toBe('るび');
 
@@ -346,7 +346,7 @@ describe('Compound word and zero-gap ruby regression', () => {
     const widget = new RubyWidget('第一衛星', 'セレネ', 2, 11);
     const dom = widget.toDOM();
 
-    expect(dom.tagName.toLowerCase()).toBe('ruby');
+    expect(dom.tagName.toLowerCase()).toBe('span');
     expect(dom.classList.contains('cm-ruby')).toBe(true);
     expect(dom.title).toContain('セレネ');
 

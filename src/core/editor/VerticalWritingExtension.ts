@@ -280,7 +280,12 @@ const verticalWheelHandler = EditorView.domEventHandlers({
     if (!isVerticalMode(view)) return false;
     if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
       event.preventDefault();
-      view.scrollDOM.scrollLeft -= event.deltaY;
+      const canvasWrapper = view.dom.closest('.canvas-wrapper') as HTMLElement | null;
+      if (canvasWrapper) {
+        canvasWrapper.scrollLeft -= event.deltaY;
+      } else {
+        view.scrollDOM.scrollLeft -= event.deltaY;
+      }
       return true;
     }
     return false;
@@ -308,32 +313,56 @@ function handleVerticalArrow(
   let targetPos = currentPos;
 
   if (key === 'ArrowUp') {
-    // 視覚的な上＝同じ段落（行）の1文字上へ
-    if (currentPos > currentLine.from) {
+    // 視覚的な上＝直前の文字へ移動
+    if (currentPos > 0) {
       targetPos = currentPos - 1;
-    } else if (currentLine.number > 1) {
-      const prevLine = doc.line(currentLine.number - 1);
-      targetPos = prevLine.to;
     }
   } else if (key === 'ArrowDown') {
-    // 視覚的な下＝同じ段落（行）の1文字下へ
-    if (currentPos < currentLine.to) {
+    // 視覚的な下＝直後の文字へ移動
+    if (currentPos < doc.length) {
       targetPos = currentPos + 1;
-    } else if (currentLine.number < doc.lines) {
-      const nextLine = doc.line(currentLine.number + 1);
-      targetPos = nextLine.from;
     }
   } else if (key === 'ArrowLeft') {
-    // 視覚的な左＝左側の段落（次の段落）の同位置へ移動！
-    if (currentLine.number < doc.lines) {
-      const nextLine = doc.line(currentLine.number + 1);
-      targetPos = nextLine.from + Math.min(offsetInLine, nextLine.length);
+    // 視覚的な左＝左隣の列（次の行/列）の同位置へ幾何学的に移動
+    let moved = false;
+    const rect = view.coordsAtPos(currentPos);
+    if (rect) {
+      const charHeight = Math.max(12, rect.bottom - rect.top);
+      const columnStep = charHeight * 2.2;
+      const targetX = rect.left - columnStep;
+      const targetY = (rect.top + rect.bottom) / 2;
+      const geoPos = view.posAtCoords({ x: targetX, y: targetY });
+      if (geoPos !== null && geoPos !== currentPos) {
+        targetPos = geoPos;
+        moved = true;
+      }
+    }
+    if (!moved) {
+      if (currentLine.number < doc.lines) {
+        const nextLine = doc.line(currentLine.number + 1);
+        targetPos = nextLine.from + Math.min(offsetInLine, nextLine.length);
+      }
     }
   } else if (key === 'ArrowRight') {
-    // 視覚的な右＝右側の段落（前の段落）の同位置へ移動！
-    if (currentLine.number > 1) {
-      const prevLine = doc.line(currentLine.number - 1);
-      targetPos = prevLine.from + Math.min(offsetInLine, prevLine.length);
+    // 視覚的な右＝右隣の列（前の行/列）の同位置へ幾何学的に移動
+    let moved = false;
+    const rect = view.coordsAtPos(currentPos);
+    if (rect) {
+      const charHeight = Math.max(12, rect.bottom - rect.top);
+      const columnStep = charHeight * 2.2;
+      const targetX = rect.right + columnStep;
+      const targetY = (rect.top + rect.bottom) / 2;
+      const geoPos = view.posAtCoords({ x: targetX, y: targetY });
+      if (geoPos !== null && geoPos !== currentPos) {
+        targetPos = geoPos;
+        moved = true;
+      }
+    }
+    if (!moved) {
+      if (currentLine.number > 1) {
+        const prevLine = doc.line(currentLine.number - 1);
+        targetPos = prevLine.from + Math.min(offsetInLine, prevLine.length);
+      }
     }
   }
 

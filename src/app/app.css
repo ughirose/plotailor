@@ -638,6 +638,7 @@ ruby {
   letter-spacing: normal !important;
   border-radius: 2px;
   ruby-align: start !important;
+  white-space: nowrap !important;
   transition: background-color 0.15s ease;
 }
 
@@ -665,67 +666,99 @@ rb {
 }
 
 /* ==========================================================================
-   Vertical-RL Ruby Typesetting (Right-side absolute overhang, ZERO gap)
+   Horizontal (LTR) Ruby Typesetting (Zero baseline shift, perfect centering)
    ========================================================================== */
-.vertical-rl .cm-ruby,
-.vertical-rl ruby,
-.cm-vertical-rl .cm-ruby,
-.cm-vertical-rl ruby,
-.pane-center.vertical-rl .cm-ruby,
-.pane-center.vertical-rl ruby {
-  display: inline !important;
-  writing-mode: vertical-rl !important;
-  -webkit-writing-mode: vertical-rl !important;
-  margin: 0 !important;
-  padding: 0 !important;
+.pane-center:not(.vertical-rl) .cm-line,
+.editor-body:not(.vertical-rl) .cm-line {
+  line-height: 2.2 !important;
 }
 
-.vertical-rl .cm-ruby-text,
-.vertical-rl .cm-ruby rt,
-.vertical-rl rt,
-.cm-vertical-rl .cm-ruby-text,
-.cm-vertical-rl .cm-ruby rt,
-.cm-vertical-rl rt,
-.pane-center.vertical-rl .cm-ruby-text,
-.pane-center.vertical-rl .cm-ruby rt,
-.pane-center.vertical-rl rt {
+.pane-center:not(.vertical-rl) .cm-ruby {
+  display: inline-block !important;
+  vertical-align: baseline !important;
+  text-align: center !important;
+  position: relative !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+  line-height: 1 !important;
+}
+
+.pane-center:not(.vertical-rl) .cm-ruby-base {
+  display: inline-block !important;
+  line-height: inherit !important;
+  font-family: inherit !important;
+  white-space: nowrap !important;
+}
+
+.pane-center:not(.vertical-rl) .cm-ruby-text {
   display: block !important;
   position: absolute !important;
-  top: 50% !important;
-  right: -0.6em !important; /* Position flush along the right column line */
-  left: auto !important;
-  bottom: auto !important;
-  transform: translateY(-50%) !important;
+  left: 50% !important;
+  bottom: 100% !important;
+  transform: translateX(-50%) !important;
   font-size: 0.52em !important;
-  color: var(--color-gold) !important;
-  letter-spacing: 0 !important;
   line-height: 1 !important;
+  color: var(--color-gold) !important;
   text-align: center !important;
   white-space: nowrap !important;
   user-select: none !important;
   pointer-events: none !important;
   font-family: var(--font-serif) !important;
+  margin-bottom: 2px !important;
   z-index: 3 !important;
 }
 
 /* ==========================================================================
-   Horizontal (LTR) Ruby Typesetting (Prevents overlapping previous line)
+   Vertical-RL Ruby Typesetting (Strict ZERO Gap via widgetBuffer suppression)
    ========================================================================== */
-.pane-center:not(.vertical-rl) .cm-line,
-.editor-body:not(.vertical-rl) .cm-line {
-  line-height: 2.2 !important; /* Generous literary leading ensures ruby never penetrates line above */
+/* Suppress CodeMirror's 16px widget buffer img in vertical mode (root cause of trailing spacing!) */
+.vertical-rl .cm-widgetBuffer,
+.cm-vertical-rl .cm-widgetBuffer,
+.pane-center.vertical-rl .cm-widgetBuffer {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
 }
 
-.pane-center:not(.vertical-rl) .cm-ruby-text,
-.pane-center:not(.vertical-rl) .cm-ruby rt,
-.pane-center:not(.vertical-rl) rt {
-  display: block !important;
+.vertical-rl .cm-ruby,
+.cm-vertical-rl .cm-ruby,
+.pane-center.vertical-rl .cm-ruby {
+  display: inline !important;
+  position: relative !important;
+  writing-mode: vertical-rl !important;
+  -webkit-writing-mode: vertical-rl !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+  line-height: inherit !important;
+  ruby-align: start !important;
+}
+
+.vertical-rl .cm-ruby-base,
+.cm-vertical-rl .cm-ruby-base,
+.pane-center.vertical-rl .cm-ruby-base {
+  display: inline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  line-height: inherit !important;
+  font-family: inherit !important;
+  white-space: nowrap !important;
+}
+
+.vertical-rl .cm-ruby-text,
+.cm-vertical-rl .cm-ruby-text,
+.pane-center.vertical-rl .cm-ruby-text {
+  display: inline !important;
   position: absolute !important;
-  left: 50% !important;
-  bottom: 0.88em !important; /* Snug above base text, safely clear of previous line */
-  top: auto !important;
-  right: auto !important;
-  transform: translateX(-50%) !important;
+  top: 50% !important;
+  right: -0.6em !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) !important;
   font-size: 0.52em !important;
   color: var(--color-gold) !important;
   letter-spacing: 0 !important;
@@ -1903,6 +1936,7 @@ body.theme-washi .cm-decoration-layer2 {
    Decoration Legend Card Styling
    ========================================================================== */
 .decoration-legend-panel {
+  background: rgba(14, 17, 23, 0.95);
   border-left: 3px solid var(--color-gold);
   border-radius: 4px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
@@ -1917,38 +1951,52 @@ body.theme-washi .cm-decoration-layer2 {
 /* ==========================================================================
    Washi Theme Overrides for Legend, Dropdown, and Modals
    ========================================================================== */
-body.theme-washi .header-dropdown-menu {
+body.theme-washi .header-dropdown-menu,
+.app-container.theme-washi .header-dropdown-menu,
+.theme-washi .header-dropdown-menu {
   background: #f7f4ea !important;
   border-color: #dcd3b8 !important;
   color: #2c251e !important;
   box-shadow: 0 12px 28px rgba(78, 64, 46, 0.25) !important;
 }
 
-body.theme-washi .dropdown-item {
+body.theme-washi .dropdown-item,
+.app-container.theme-washi .dropdown-item,
+.theme-washi .dropdown-item {
   color: #2c251e !important;
 }
 
-body.theme-washi .dropdown-item:hover {
+body.theme-washi .dropdown-item:hover,
+.app-container.theme-washi .dropdown-item:hover,
+.theme-washi .dropdown-item:hover {
   background: rgba(207, 168, 92, 0.2) !important;
   color: #1a1612 !important;
 }
 
-body.theme-washi .dropdown-item small {
+body.theme-washi .dropdown-item small,
+.app-container.theme-washi .dropdown-item small,
+.theme-washi .dropdown-item small {
   color: #6e6456 !important;
 }
 
-body.theme-washi .dropdown-divider {
+body.theme-washi .dropdown-divider,
+.app-container.theme-washi .dropdown-divider,
+.theme-washi .dropdown-divider {
   background: #dcd3b8 !important;
 }
 
-body.theme-washi .decoration-legend-panel {
+body.theme-washi .decoration-legend-panel,
+.app-container.theme-washi .decoration-legend-panel,
+.theme-washi .decoration-legend-panel {
   background: #f4efdf !important;
   border-color: #dcd3b8 !important;
   color: #2c251e !important;
   box-shadow: 0 4px 12px rgba(78, 64, 46, 0.15) !important;
 }
 
-body.theme-washi .decoration-legend-panel strong {
+body.theme-washi .decoration-legend-panel strong,
+.app-container.theme-washi .decoration-legend-panel strong,
+.theme-washi .decoration-legend-panel strong {
   filter: brightness(0.85);
 }
 

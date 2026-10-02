@@ -1585,6 +1585,7 @@ export class PlotailorApp {
 
     document.getElementById('menuExportAozora')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
+      this.exportFullAozora('copy');
       this.openExportModal();
     });
 
@@ -1612,9 +1613,8 @@ export class PlotailorApp {
     document.getElementById('menuOpenHelp')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
       this.activeRightTab = 'help';
-      const paneRight = document.getElementById('paneRight');
-      if (paneRight && paneRight.style.display === 'none') {
-        paneRight.style.display = '';
+      if (!this.rightPaneOpen) {
+        this.toggleRightPane();
       }
       this.renderRightPane();
     });
@@ -1719,9 +1719,8 @@ export class PlotailorApp {
     // Help is now a right-pane dock tab; button opens it inline
     document.getElementById('btnHeaderHelp')?.addEventListener('click', () => {
       this.activeRightTab = 'help';
-      const paneRight = document.getElementById('paneRight');
-      if (paneRight && paneRight.style.display === 'none') {
-        paneRight.style.display = '';
+      if (!this.rightPaneOpen) {
+        this.toggleRightPane();
       }
       this.renderRightPane();
     });
@@ -1746,8 +1745,10 @@ export class PlotailorApp {
     a.download = `${this.workTitle}_PoP_創作証明書.json`;
     document.body.appendChild(a);
     a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 1000);
     this.showToast('🛡️ 創作プロセス証明書（PoP）を発行・保存しました！');
   }
 
@@ -2382,7 +2383,7 @@ export class PlotailorApp {
         </div>
       `;
       document.getElementById('btnIssuePoP')?.addEventListener('click', () => {
-        this.showToast('📜 PoP創作証明書（SHA-256 Merkle連鎖）を発行・保存しました');
+        this.exportPoPCertificate();
       });
     } else if (this.activeRightTab === 'history') {
       // Inline history dock (replaces #historyModal)

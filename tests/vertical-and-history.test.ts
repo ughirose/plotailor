@@ -105,19 +105,17 @@ describe('RubyWidget DOM Structure', () => {
     const widget = new RubyWidget('第一衛星', 'セレネ');
     const dom = widget.toDOM();
 
-    expect(dom.tagName.toLowerCase()).toBe('ruby');
+    expect(dom.tagName.toLowerCase()).toBe('span');
     expect(dom.className).toBe('cm-ruby');
 
-    const rb = dom.querySelector('rb');
-    const rt = dom.querySelector('rt');
+    const rb = dom.querySelector('.cm-ruby-base');
+    const rt = dom.querySelector('.cm-ruby-text');
 
     expect(rb).not.toBeNull();
     expect(rb?.textContent).toBe('第一衛星');
-    expect(rb?.className).toBe('cm-ruby-base');
 
     expect(rt).not.toBeNull();
     expect(rt?.textContent).toBe('セレネ');
-    expect(rt?.className).toBe('cm-ruby-text');
   });
 });
 

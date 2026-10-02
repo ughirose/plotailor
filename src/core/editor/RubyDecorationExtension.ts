@@ -201,15 +201,15 @@ export class RubyWidget extends WidgetType {
   }
 
   toDOM(view?: EditorView): HTMLElement {
-    const rubyEl = document.createElement('ruby');
+    const rubyEl = document.createElement('span');
     rubyEl.className = 'cm-ruby';
     rubyEl.title = `ルビ: ${this.rubyText}（カーソルを合わせると直接編集可能）`;
 
-    const rbEl = document.createElement('rb');
+    const rbEl = document.createElement('span');
     rbEl.className = 'cm-ruby-base';
     rbEl.textContent = this.baseText;
 
-    const rtEl = document.createElement('rt');
+    const rtEl = document.createElement('span');
     rtEl.className = 'cm-ruby-text';
     rtEl.textContent = this.rubyText;
 
