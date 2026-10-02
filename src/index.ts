@@ -187,6 +187,8 @@ export * from './core/editor/CharacterHeatmap.js';
 export * from './core/nlp/TaigenRhythmEngine.js';
 export * from './core/editor/KanjiHirakuDictionary.js';
 export * from './core/editor/HierarchicalTocEngine.js';
+export * from './core/editor/JapaneseBeautifyExtension.js';
+export * from './types/manuscript-counter.js';
 export { EditorView } from './web/EditorView.js';
 
 
