@@ -189,6 +189,7 @@ export * from './core/editor/KanjiHirakuDictionary.js';
 export * from './core/editor/HierarchicalTocEngine.js';
 export * from './core/editor/JapaneseBeautifyExtension.js';
 export * from './types/manuscript-counter.js';
+export * from './ui/OrthographyInspector.js';
 export { EditorView } from './web/EditorView.js';
 
 
