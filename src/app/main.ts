@@ -42,6 +42,7 @@ import {
 import { LiteraryExporter, normalizeAozoraMarkup } from '../core/export/LiteraryExporter.js';
 import { RevisionDiffSummarizer } from '../core/editor/RevisionDiffSummarizer.js';
 import { markdownBoldExtension } from '../core/editor/MarkdownBoldExtension.js';
+import { FontSizeControl, type FontMetrics } from '../ui/FontSizeControl.js';
 
 interface ChapterData {
   id: string;
@@ -99,6 +100,7 @@ export class PlotailorApp {
   private isAutoRuby = true;
   private isRealtimeLinter = true;
   private fontSize = '16px';
+  private fontSizeControl: FontSizeControl;
   private fontFamily = 'mincho';
   private leftPaneOpen = true;
   private rightPaneOpen = true;
@@ -164,6 +166,10 @@ export class PlotailorApp {
         this.renderRightPane();
         this.renderLeftPane();
       },
+    });
+
+    this.fontSizeControl = new FontSizeControl({
+      onChange: (size, metrics) => this.handleFontSizeChange(size, metrics),
     });
 
     this.init();
@@ -342,7 +348,12 @@ export class PlotailorApp {
 
   public applyFontPreferences() {
     if (!this.editorBody) return;
-    this.editorBody.style.fontSize = this.fontSize;
+    const currentSize = FontSizeControl.clampFontSize(this.fontSize);
+    FontSizeControl.applyToDOM(this.editorBody, currentSize, { isVertical: this.isVertical });
+    if (this.cmEditor) {
+      FontSizeControl.applyToDOM(this.cmEditor.dom, currentSize, { isVertical: this.isVertical });
+      this.cmEditor.requestMeasure();
+    }
     if (this.fontFamily === 'mincho') {
       this.editorBody.style.fontFamily = "'Shippori Mincho', 'Noto Serif JP', serif";
     } else if (this.fontFamily === 'gothic') {
@@ -350,6 +361,15 @@ export class PlotailorApp {
     } else {
       this.editorBody.style.fontFamily = "system-ui, -apple-system, sans-serif";
     }
+  }
+
+  private handleFontSizeChange(size: number, metrics: FontMetrics) {
+    this.fontSize = `${size}px`;
+    try {
+      localStorage.setItem('plotailor_font_size', this.fontSize);
+    } catch {}
+    this.applyFontPreferences();
+    this.showToast(`文字サイズを ${size}px に変更しました (行間: ${metrics.lineHeight}px)`);
   }
 
   private saveToStorage() {

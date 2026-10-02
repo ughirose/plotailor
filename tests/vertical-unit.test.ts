@@ -133,7 +133,7 @@ describe('VerticalViewport', () => {
     const viewport = new VerticalViewport();
 
     viewport.setFontSize(5); // below min
-    expect(viewport.getSettings().fontSize).toBe(10);
+    expect(viewport.getSettings().fontSize).toBe(12);
 
     viewport.setFontSize(100); // above max
     expect(viewport.getSettings().fontSize).toBe(36);

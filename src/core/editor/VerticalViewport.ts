@@ -11,6 +11,7 @@
 
 import { AozoraParser } from './AozoraParser.js';
 import { ScrollNormalizer } from './ScrollNormalizer.js';
+import { FontSizeControl, type FontMetrics } from '../../ui/FontSizeControl.js';
 
 export type WritingMode = 'vertical-rl' | 'horizontal-tb';
 
@@ -58,9 +59,13 @@ export class VerticalViewport {
   }
 
   setFontSize(fontSize: number): void {
-    this.settings.fontSize = Math.max(10, Math.min(36, fontSize));
+    this.settings.fontSize = FontSizeControl.clampFontSize(fontSize);
     this.scrollNormalizer = new ScrollNormalizer({ lineHeight: this.settings.fontSize * this.settings.linePitch });
     this.notify();
+  }
+
+  getMetrics(): FontMetrics {
+    return FontSizeControl.calculateMetrics(this.settings.fontSize, this.settings.linePitch);
   }
 
   setLinePitch(linePitch: number): void {
