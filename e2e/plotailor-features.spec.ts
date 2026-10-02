@@ -39,14 +39,16 @@ test.describe('Plotailor Literature IDE - Core Features E2E', () => {
     });
 
     // 4. Delete chapter
-    page.once('dialog', async (dialog) => {
-      await dialog.accept();
-    });
     const lastChapter = page.locator('.chapter-item').last();
     await lastChapter.hover();
     const deleteBtn = lastChapter.locator('.chapter-delete-btn');
     await expect(deleteBtn).toBeVisible();
     await deleteBtn.click();
+
+    // Confirm inline delete
+    const confirmBtn = page.getByRole('button', { name: '削除' });
+    await expect(confirmBtn).toBeVisible();
+    await confirmBtn.click();
 
     await expect(page.locator('.chapter-item')).toHaveCount(3);
   });
@@ -275,7 +277,7 @@ test.describe('Plotailor Literature IDE - Core Features E2E', () => {
     await btnPromote.click();
 
     // Toast confirmation
-    const toast = page.locator('div', { hasText: '未配置棚から復帰' });
+    const toast = page.locator('#footerToastArea', { hasText: '未配置棚から復帰' });
     await expect(toast).toBeVisible();
   });
 });
