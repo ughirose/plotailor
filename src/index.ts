@@ -190,6 +190,8 @@ export * from './core/editor/HierarchicalTocEngine.js';
 export * from './core/editor/JapaneseBeautifyExtension.js';
 export * from './types/manuscript-counter.js';
 export * from './ui/OrthographyInspector.js';
+export * from './types/frontmatter-scene.js';
+export * from './lib/parser/frontmatter-parser.js';
 export { EditorView } from './web/EditorView.js';
 
 
