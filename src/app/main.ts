@@ -40,6 +40,7 @@ import {
   SHELF_THRESHOLD,
 } from '../core/lore/ShelvedLoreLifecycle.js';
 import { LiteraryExporter, normalizeAozoraMarkup } from '../core/export/LiteraryExporter.js';
+import { FontSizeControl, type FontMetrics } from '../ui/FontSizeControl.js';
 
 interface ChapterData {
   id: string;
@@ -96,8 +97,8 @@ export class PlotailorApp {
   private isAutoIndent = true;
   private isAutoRuby = true;
   private isRealtimeLinter = true;
-  private fontSize = '16px';
   private fontFamily = 'mincho';
+  private fontSizeControl: FontSizeControl;
   private leftPaneOpen = true;
   private rightPaneOpen = true;
   private activeLeftTab = 'toc';
@@ -155,6 +156,10 @@ export class PlotailorApp {
         this.renderRightPane();
         this.renderLeftPane();
       },
+    });
+
+    this.fontSizeControl = new FontSizeControl({
+      onChange: (size, metrics) => this.handleFontSizeChange(size, metrics),
     });
 
     this.init();
@@ -293,9 +298,6 @@ export class PlotailorApp {
         this.isRealtimeLinter = savedLinter === 'true';
       }
 
-      const savedSize = localStorage.getItem('plotailor_font_size');
-      if (savedSize) this.fontSize = savedSize;
-
       const savedFamily = localStorage.getItem('plotailor_font_family');
       if (savedFamily) this.fontFamily = savedFamily;
     } catch {}
@@ -303,7 +305,12 @@ export class PlotailorApp {
 
   public applyFontPreferences() {
     if (!this.editorBody) return;
-    this.editorBody.style.fontSize = this.fontSize;
+    const currentSize = this.fontSizeControl.getFontSize();
+    FontSizeControl.applyToDOM(this.editorBody, currentSize, { isVertical: this.isVertical });
+    if (this.cmEditor) {
+      FontSizeControl.applyToDOM(this.cmEditor.dom, currentSize, { isVertical: this.isVertical });
+      this.cmEditor.requestMeasure();
+    }
     if (this.fontFamily === 'mincho') {
       this.editorBody.style.fontFamily = "'Shippori Mincho', 'Noto Serif JP', serif";
     } else if (this.fontFamily === 'gothic') {
@@ -311,6 +318,17 @@ export class PlotailorApp {
     } else {
       this.editorBody.style.fontFamily = "system-ui, -apple-system, sans-serif";
     }
+  }
+
+  private handleFontSizeChange(size: number, metrics: FontMetrics) {
+    if (this.editorBody) {
+      FontSizeControl.applyToDOM(this.editorBody, size, { isVertical: this.isVertical });
+    }
+    if (this.cmEditor) {
+      FontSizeControl.applyToDOM(this.cmEditor.dom, size, { isVertical: this.isVertical });
+      this.cmEditor.requestMeasure();
+    }
+    this.showToast(`文字サイズを ${size}px に変更しました (行間: ${metrics.lineHeight}px)`);
   }
 
   private saveToStorage() {
@@ -1634,8 +1652,11 @@ export class PlotailorApp {
     const chkLinter = document.getElementById('settingRealtimeLinter') as HTMLInputElement | null;
     if (chkLinter) chkLinter.checked = this.isRealtimeLinter;
 
-    const selSize = document.getElementById('settingFontSize') as HTMLSelectElement | null;
-    if (selSize) selSize.value = this.fontSize;
+    const container = document.getElementById('settingFontSizeControlContainer');
+    if (container) {
+      container.innerHTML = this.fontSizeControl.renderHTML('setting-font-size');
+      this.fontSizeControl.bindEvents(container, 'setting-font-size');
+    }
 
     const selFamily = document.getElementById('settingFontFamily') as HTMLSelectElement | null;
     if (selFamily) selFamily.value = this.fontFamily;
@@ -1692,16 +1713,6 @@ export class PlotailorApp {
       } catch {}
       document.body.classList.toggle('linter-hidden', !checked);
       this.showToast(`推敲リント装飾表示を ${checked ? 'ON' : 'OFF'} に設定しました`);
-    });
-
-    document.getElementById('settingFontSize')?.addEventListener('change', (e) => {
-      const val = (e.target as HTMLSelectElement).value;
-      this.fontSize = val;
-      try {
-        localStorage.setItem('plotailor_font_size', val);
-      } catch {}
-      this.applyFontPreferences();
-      this.showToast(`文字サイズを「${val}」に変更しました`);
     });
 
     document.getElementById('settingFontFamily')?.addEventListener('change', (e) => {
