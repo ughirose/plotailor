@@ -292,7 +292,7 @@ export class NarrativeLinterEngine {
           const best = ranked.length > 0 ? ranked[0] : null;
           const { line, col } = NarrativeLinterEngine.offsetToLineCol(text, from);
 
-          const candidateList: ZeroPronounCandidate[] = ranked.slice(0, 3).map((r) => ({
+          const candidateList: ZeroPronounCandidate[] = ranked.slice(0, 3).map((r: any) => ({
             text: r.candidate.text,
             likelihood: Math.round(r.anaphoraLikelihood * 100),
             entityType: r.candidate.entityType,

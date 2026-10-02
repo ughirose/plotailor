@@ -10,7 +10,8 @@
     "@codemirror/view": "^6.23.0",
     "@worldcraft/core": "workspace:*",
     "@worldcraft/narrative-nano": "workspace:*",
-    "@worldcraft/schema": "workspace:*"
+    "@worldcraft/schema": "workspace:*",
+    "zod": "^3.23.8"
   },
   "scripts": {
     "dev": "vite",

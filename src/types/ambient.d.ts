@@ -57,4 +57,31 @@ declare module '@nano' {
   }
   export const JAPANESE_PAS_CASES: string[];
   export type PASCase = string;
+  export const SyntacticLinterRules: any;
+  export type Diagnostic = any;
+  export type SyntacticLinterOptions = any;
+  export class ZeroPronounResolver {
+    constructor(options?: any);
+    collectCandidatesFromContext(currentSentence: any, recentSentences: any): any;
+    rankCandidates(caseRole: string, dist: number, candidates: any): any;
+  }
+  export type AntecedentCandidate = any;
+  export type ContextSentence = any;
+  export class SPSCRingBuffer {
+    constructor(capacity?: any, buffer?: any);
+    getStats(): any;
+  }
+  export type RingBufferStats = any;
+}
+
+declare module '@worldcraft/narrative-nano' {
+  export * from '@nano';
+}
+
+declare module '@worldcraft/core' {
+  export * from '@core';
+}
+
+declare module '@worldcraft/schema' {
+  export * from '@schema';
 }
