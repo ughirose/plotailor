@@ -10,12 +10,12 @@ export default defineConfig({
   workers: 1,
   reporter: 'line',
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://localhost:8080',
     trace: 'off',
   },
   webServer: {
-    command: 'npx vite --port 5173',
-    port: 5173,
+    command: 'npx vite --port 8080',
+    port: 8080,
     reuseExistingServer: true,
     timeout: 8000,
     env: {

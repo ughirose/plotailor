@@ -19,10 +19,10 @@ export default defineConfig({
       configureServer(server) {
         server.middlewares.use((req, res, next) => {
           const url = req.url || '';
-          if (url === '/app' || url === '/app/' || url.startsWith('/app?')) {
-            req.url = '/app.html';
-          } else if (url === '/' || url === '/lp' || url === '/lp/' || url.startsWith('/lp?')) {
+          if (url === '/lp' || url === '/lp/' || url.startsWith('/lp?')) {
             req.url = '/index.html';
+          } else if (url === '/' || url === '/app' || url === '/app/' || url.startsWith('/app?')) {
+            req.url = '/app.html';
           }
           next();
         });
