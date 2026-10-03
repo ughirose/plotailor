@@ -13,6 +13,7 @@ import { KinsokuEngine, type KinsokuViolation } from '../core/editor/KinsokuEngi
 import { WritingVelocityWidget } from '../core/editor/WritingVelocityWidget.js';
 import { MultiSiteNovelFormatter } from '../core/exporters/multisite-novel-formatter.js';
 import { FullscreenStatusBar } from '../ui/FullscreenStatusBar.js';
+import { ColumnGuideline } from '../ui/ColumnGuideline.js';
 
 export class EditorView {
   private container: HTMLElement;
@@ -24,6 +25,7 @@ export class EditorView {
   private kinsokuEngine: KinsokuEngine;
   private velocityWidget: WritingVelocityWidget;
   private fullscreenStatusBar: FullscreenStatusBar | null = null;
+  private columnGuideline: ColumnGuideline | null = null;
   private rawText: string;
   private isVerticalMode: boolean = false;
   private isComposing: boolean = false;
@@ -243,6 +245,17 @@ export class EditorView {
       });
     }
 
+    // Mount ColumnGuideline to editor-workspace
+    const editorContainer = this.container.querySelector('#editor-workspace') as HTMLElement;
+    if (editorContainer) {
+      this.columnGuideline = new ColumnGuideline({
+        container: editorContainer,
+        columns: this.kinsokuEngine.getConfig().columnsPerLine,
+        allowHanging: this.kinsokuEngine.getConfig().allowHanging,
+        isVertical: this.isVerticalMode,
+      });
+    }
+
     this.bindEvents();
     this.updateEditorState();
   }
@@ -291,6 +304,7 @@ export class EditorView {
         rawTextarea.style.display = 'block';
         btnToggleVertical.classList.remove('active');
       }
+      this.columnGuideline?.setVertical(this.isVerticalMode);
       this.updateEditorState();
     });
 
@@ -593,11 +607,13 @@ export class EditorView {
 
   public setKinsokuColumns(cols: number): void {
     this.kinsokuEngine.updateConfig({ columnsPerLine: cols });
+    this.columnGuideline?.setColumns(cols);
     this.updateEditorState();
   }
 
   public setAllowHanging(allow: boolean): void {
     this.kinsokuEngine.updateConfig({ allowHanging: allow });
+    this.columnGuideline?.setAllowHanging(allow);
     this.updateEditorState();
   }
 
@@ -607,6 +623,14 @@ export class EditorView {
 
   public setIdleThreshold(ms: number): void {
     this.velocityWidget.setIdleThreshold(ms);
+  }
+
+  public setColumnGuidelineVisible(visible: boolean): void {
+    this.columnGuideline?.setVisible(visible);
+  }
+
+  public getColumnGuideline(): ColumnGuideline | null {
+    return this.columnGuideline;
   }
 
   public getKinsokuEngine(): KinsokuEngine {

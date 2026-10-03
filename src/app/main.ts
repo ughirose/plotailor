@@ -47,6 +47,7 @@ import { KinsokuEngine } from '../core/editor/KinsokuEngine.js';
 import { WritingVelocityWidget } from '../core/editor/WritingVelocityWidget.js';
 import { MultiSiteNovelFormatter } from '../core/exporters/multisite-novel-formatter.js';
 import { FullscreenStatusBar } from '../ui/FullscreenStatusBar.js';
+import { ColumnGuideline } from '../ui/ColumnGuideline.js';
 
 interface ChapterData {
   id: string;
@@ -141,6 +142,8 @@ export class PlotailorApp {
   private kinsokuEngine = new KinsokuEngine({ columnsPerLine: 40, allowHanging: true });
   private kinsokuColumns: number = 40;
   private kinsokuHanging: boolean = true;
+  private columnGuideline: ColumnGuideline | null = null;
+  private columnGuidelineVisible: boolean = true;
   private targetWordCount: number = 5000;
   private idleThresholdMs: number = 60000;
 
@@ -216,6 +219,18 @@ export class PlotailorApp {
     this.kinsokuEngine.updateConfig({ columnsPerLine: this.kinsokuColumns, allowHanging: this.kinsokuHanging });
     this.velocityWidget.setIdleThreshold(this.idleThresholdMs);
     this.velocityWidget.startSession(initialContent.length);
+
+    if (this.editorBody) {
+      this.columnGuideline = new ColumnGuideline({
+        container: this.editorBody,
+        columns: this.kinsokuColumns,
+        allowHanging: this.kinsokuHanging,
+        isVertical: this.isVertical,
+        fontSize: FontSizeControl.clampFontSize(this.fontSize),
+        visible: this.columnGuidelineVisible,
+      });
+    }
+
     const canvasWrapper = document.getElementById('canvasWrapper');
     if (canvasWrapper) {
       this.fullscreenStatusBar = new FullscreenStatusBar({
@@ -375,6 +390,11 @@ export class PlotailorApp {
         this.kinsokuHanging = savedKinsokuHanging === 'true';
       }
 
+      const savedGuideline = localStorage.getItem('plotailor_column_guideline_visible');
+      if (savedGuideline !== null) {
+        this.columnGuidelineVisible = savedGuideline === 'true';
+      }
+
       const savedTargetCount = localStorage.getItem('plotailor_target_word_count');
       if (savedTargetCount) {
         const num = parseInt(savedTargetCount, 10);
@@ -412,6 +432,9 @@ export class PlotailorApp {
       this.editorBody.style.fontFamily = "'BIZ UDPGothic', 'Yu Gothic', sans-serif";
     } else {
       this.editorBody.style.fontFamily = "system-ui, -apple-system, sans-serif";
+    }
+    if (this.columnGuideline) {
+      this.columnGuideline.setFontSize(currentSize);
     }
   }
 
@@ -1824,6 +1847,9 @@ export class PlotailorApp {
         });
       }
     }
+    if (this.columnGuideline) {
+      this.columnGuideline.setVertical(this.isVertical);
+    }
   }
 
   private toggleOrientation() {
@@ -2116,6 +2142,9 @@ export class PlotailorApp {
     const chkKinsokuHanging = document.getElementById('settingKinsokuHanging') as HTMLInputElement | null;
     if (chkKinsokuHanging) chkKinsokuHanging.checked = this.kinsokuHanging;
 
+    const chkColumnGuideline = document.getElementById('settingColumnGuideline') as HTMLInputElement | null;
+    if (chkColumnGuideline) chkColumnGuideline.checked = this.columnGuideline ? this.columnGuideline.isVisible() : this.columnGuidelineVisible;
+
     const inpTargetWordCount = document.getElementById('settingTargetWordCount') as HTMLInputElement | null;
     if (inpTargetWordCount) inpTargetWordCount.value = this.targetWordCount.toString();
 
@@ -2323,6 +2352,7 @@ export class PlotailorApp {
       this.kinsokuColumns = val;
       if (spanKinsokuColsVal) spanKinsokuColsVal.textContent = `${val}字`;
       this.kinsokuEngine.updateConfig({ columnsPerLine: val });
+      this.columnGuideline?.setColumns(val);
       const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
       const violations = this.kinsokuEngine.detectViolations(currentText);
       this.narrativeDock.updateKinsokuViolations(violations);
@@ -2338,11 +2368,23 @@ export class PlotailorApp {
       const checked = (e.target as HTMLInputElement).checked;
       this.kinsokuHanging = checked;
       this.kinsokuEngine.updateConfig({ allowHanging: checked });
+      this.columnGuideline?.setAllowHanging(checked);
       const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
       const violations = this.kinsokuEngine.detectViolations(currentText);
       this.narrativeDock.updateKinsokuViolations(violations);
       try {
         localStorage.setItem('plotailor_kinsoku_hanging', checked.toString());
+      } catch {}
+    });
+
+    // 8.5. Column Guideline Toggle
+    const chkColumnGuideline = document.getElementById('settingColumnGuideline') as HTMLInputElement | null;
+    chkColumnGuideline?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this.columnGuidelineVisible = checked;
+      this.columnGuideline?.setVisible(checked);
+      try {
+        localStorage.setItem('plotailor_column_guideline_visible', checked.toString());
       } catch {}
     });
 
@@ -3361,6 +3403,10 @@ export class PlotailorApp {
         this.cmEditor.focus();
       }
     });
+  }
+
+  public getColumnGuideline(): ColumnGuideline | null {
+    return this.columnGuideline;
   }
 }
 
