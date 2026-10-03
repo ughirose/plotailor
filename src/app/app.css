@@ -2777,4 +2777,117 @@ body.theme-washi ::-webkit-scrollbar-thumb:hover {
   background: #a8997e;
 }
 
+/* ==========================================================================
+   Fullscreen Status Bar (Non-intrusive Floating Status for Writing Canvas)
+   ========================================================================== */
+.fullscreen-status-bar-wrapper {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  pointer-events: none;
+}
+
+.fullscreen-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 16px;
+  background: rgba(20, 20, 24, 0.88);
+  border: 1px solid rgba(207, 168, 92, 0.35);
+  border-radius: 20px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #e5e5e5;
+  font-size: 11px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transition: opacity 0.4s ease, transform 0.3s ease;
+  pointer-events: auto;
+}
+
+body.theme-washi .fullscreen-status-bar {
+  background: rgba(248, 244, 236, 0.94);
+  border-color: rgba(184, 150, 80, 0.4);
+  color: #3d3429;
+  box-shadow: 0 4px 16px rgba(100, 80, 50, 0.15);
+}
+
+.fullscreen-status-bar.mode-normal {
+  display: none; /* Hide in normal 3-pane mode to avoid covering editor text */
+}
+
+.fullscreen-status-bar.mode-fullscreen {
+  display: flex;
+}
+
+.fullscreen-status-bar.is-faded-out {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(6px);
+}
+
+.fullscreen-status-bar.is-visible,
+.fullscreen-status-bar:hover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.fullscreen-status-bar .status-bar-metrics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fullscreen-status-bar .status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fullscreen-status-bar .metric-word-count {
+  font-weight: 600;
+  color: var(--color-gold);
+}
+
+.fullscreen-status-bar .metric-manuscript {
+  color: var(--color-text-dim);
+}
+
+.fullscreen-status-bar .metric-speed {
+  color: var(--color-success, #3fb950);
+}
+
+.fullscreen-status-bar .status-bar-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  padding-left: 10px;
+}
+
+body.theme-washi .fullscreen-status-bar .status-bar-progress {
+  border-left-color: rgba(0, 0, 0, 0.12);
+}
+
+.fullscreen-status-bar .progress-gauge-track {
+  width: 80px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+body.theme-washi .fullscreen-status-bar .progress-gauge-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.fullscreen-status-bar .progress-gauge-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-gold), #f59e0b);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
 
