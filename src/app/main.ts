@@ -22,7 +22,7 @@ import {
 } from '../core/lore/LoreEntityManager.js';
 import { CausalDagEngine } from '../core/causality/CausalDagEngine.js';
 import { OpfsWalWorkerBridge } from '../core/storage/OpfsWalWorkerBridge.js';
-import { ExportController, SettingsController } from './controllers/index.js';
+import { ExportController, SettingsController, PaneController, HistoryController } from './controllers/index.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
 import { ProjectManager, type ProjectMeta } from '../core/project/index.js';
 import { TypingCadenceMachine, type CadenceStatus } from '../core/editor/TypingCadenceMachine.js';
@@ -149,6 +149,8 @@ export class PlotailorApp {
   private idleThresholdMs: number = 60000;
   public exportController!: ExportController;
   public settingsController!: SettingsController;
+  public paneController!: PaneController;
+  public historyController!: HistoryController;
 
   constructor() {
     this.editorBody = (document.getElementById('editorBody') || document.getElementById('editor-body')) as HTMLDivElement;
@@ -205,6 +207,40 @@ export class PlotailorApp {
       getRubyCompartment: () => this.rubyCompartment,
       setRubyMode: (mode) => { this.rubyMode = mode; },
       showToast: (msg) => this.showToast(msg),
+    });
+
+    this.paneController = new PaneController({
+      isLeftPaneOpen: () => this.leftPaneOpen,
+      setLeftPaneOpen: (open) => { this.leftPaneOpen = open; },
+      isRightPaneOpen: () => this.rightPaneOpen,
+      setRightPaneOpen: (open) => { this.rightPaneOpen = open; },
+      openSettingsModal: () => this.openSettingsModal(),
+      exportFullAozora: (action) => this.exportFullAozora(action),
+      openExportModal: () => this.openExportModal(),
+      exportPoPCertificate: () => this.exportPoPCertificate(),
+      toggleRuby: () => this.toggleRuby(),
+      getRubyMode: () => this.rubyMode,
+      toggleWrap: () => this.toggleWrap(),
+      isLineWrapping: () => this.isLineWrapping,
+      setActiveRightTab: (tab) => { this.activeRightTab = tab; },
+      renderRightPane: () => this.renderRightPane(),
+    });
+
+    this.historyController = new HistoryController({
+      getEditorView: () => this.cmEditor,
+      getCurrentChapterId: () => this.currentChapterId,
+      getChapterSnapshots: () => this.chapterSnapshots,
+      getChapterStates: () => this.chapterStates,
+      getChapters: () => this.chapters,
+      createChapterState: (content) => this.createChapterState(content),
+      saveToStorage: () => this.saveToStorage(),
+      updateStats: () => this.updateStats(),
+      showToast: (msg) => this.showToast(msg),
+      setActiveRightTab: (tab) => { this.activeRightTab = tab; },
+      renderRightPane: () => this.renderRightPane(),
+      getSnapshotFrequency: () => this.snapshotFrequency,
+      getSnapshotCustomChars: () => this.snapshotCustomChars,
+      getSnapshotCustomSeconds: () => this.snapshotCustomSeconds,
     });
 
     this.init();
@@ -539,100 +575,14 @@ export class PlotailorApp {
   }
 
   private recordSnapshot(chapterId: string, text: string) {
-    let list = this.chapterSnapshots.get(chapterId);
-    if (!list) {
-      list = [];
-      this.chapterSnapshots.set(chapterId, list);
-    }
-    const len = text.replace(/\s+/g, '').length;
-    // Do not record if text is identical to last recorded snapshot
-    if (list.length > 0 && list[list.length - 1].text === text) return;
-    list.push({ time: Date.now(), text, length: len });
-    if (list.length > 500) list.shift();
+    this.historyController.recordSnapshot(chapterId, text);
     if (chapterId === this.currentChapterId) {
       this.updateHistoryUI();
     }
   }
 
   private recordSnapshotDebounced(chapterId: string, text: string) {
-    const list = this.chapterSnapshots.get(chapterId) || [];
-    const lastSnap = list.length > 0 ? list[list.length - 1] : null;
-    const len = text.replace(/\s+/g, '').length;
-    const lastLen = lastSnap ? lastSnap.length : 0;
-    const charDelta = Math.abs(len - lastLen);
-
-    // Dynamic thresholds based on user-configured snapshotFrequency
-    let minTrivialDelta = 3;
-    let minSentenceDelta = 10;
-    let minSentenceInterval = 3000;
-    let minBurstDelta = 25;
-    let minBurstInterval = 5000;
-    let minIdlePause = 15000;
-    let minIdleDelta = 10;
-
-    if (this.snapshotFrequency === 'minimal') {
-      // 極小: 大節・大改稿（200字以上、または60秒休止）
-      minTrivialDelta = 20;
-      minSentenceDelta = 100;
-      minSentenceInterval = 20000;
-      minBurstDelta = 200;
-      minBurstInterval = 30000;
-      minIdlePause = 60000;
-      minIdleDelta = 100;
-    } else if (this.snapshotFrequency === 'low') {
-      // ひかえめ: 段落単位（50字以上、または30秒休止）
-      minTrivialDelta = 10;
-      minSentenceDelta = 40;
-      minSentenceInterval = 8000;
-      minBurstDelta = 80;
-      minBurstInterval = 15000;
-      minIdlePause = 30000;
-      minIdleDelta = 40;
-    } else if (this.snapshotFrequency === 'high') {
-      // こまめ: 短文単位（5字以上、または5秒休止）
-      minTrivialDelta = 1;
-      minSentenceDelta = 5;
-      minSentenceInterval = 1500;
-      minBurstDelta = 12;
-      minBurstInterval = 2500;
-      minIdlePause = 5000;
-      minIdleDelta = 5;
-    } else if (this.snapshotFrequency === 'custom') {
-      // カスタム: ユーザー指定の文字数と秒数
-      const customChars = Math.max(5, this.snapshotCustomChars || 25);
-      const customIdleMs = Math.max(2000, (this.snapshotCustomSeconds || 15) * 1000);
-      minTrivialDelta = Math.max(1, Math.round(customChars * 0.1));
-      minSentenceDelta = Math.max(3, Math.round(customChars * 0.4));
-      minSentenceInterval = Math.round(customIdleMs * 0.3);
-      minBurstDelta = customChars;
-      minBurstInterval = Math.round(customIdleMs * 0.5);
-      minIdlePause = customIdleMs;
-      minIdleDelta = Math.max(3, Math.round(customChars * 0.4));
-    }
-
-    // Suppress trivial inputs below threshold
-    if (charDelta < minTrivialDelta && lastSnap) {
-      return;
-    }
-
-    const now = Date.now();
-    const timeSinceLast = now - this.lastSnapshotTime;
-
-    // Trigger conditions:
-    // 1. Natural sentence boundary (。！？ or newline after sentence)
-    const endsWithSentenceBoundary = /[。！？!?]\n?$/.test(text.trim());
-    const isSentenceBoundaryTrigger = endsWithSentenceBoundary && charDelta >= minSentenceDelta && timeSinceLast > minSentenceInterval;
-
-    // 2. Substantial typing burst
-    const isSubstantialChange = charDelta >= minBurstDelta && timeSinceLast > minBurstInterval;
-
-    // 3. Idle pause
-    const isIdlePauseTrigger = timeSinceLast > minIdlePause && charDelta >= minIdleDelta;
-
-    if (isSentenceBoundaryTrigger || isSubstantialChange || isIdlePauseTrigger || list.length === 0) {
-      this.lastSnapshotTime = now;
-      this.recordSnapshot(chapterId, text);
-    }
+    this.historyController.recordSnapshotDebounced(chapterId, text);
   }
 
   private initCodeMirror() {
@@ -2052,120 +2002,15 @@ export class PlotailorApp {
   }
 
   private toggleLeftPane() {
-    this.leftPaneOpen = !this.leftPaneOpen;
-    if (this.leftPaneOpen && window.innerWidth <= 1024 && this.rightPaneOpen) {
-      this.toggleRightPane();
-    }
-    const pane = document.getElementById('paneLeft');
-    const btn = document.getElementById('btnToggleLeftPane');
-    const btnCollapse = document.getElementById('btnCollapseLeft');
-    if (pane) {
-      pane.style.display = '';
-      pane.classList.toggle('collapsed', !this.leftPaneOpen);
-      pane.classList.toggle('drawer-open', this.leftPaneOpen);
-    }
-    if (btn) btn.classList.toggle('active', this.leftPaneOpen);
-    if (btnCollapse) {
-      btnCollapse.textContent = this.leftPaneOpen ? '◀' : '▶';
-      btnCollapse.title = this.leftPaneOpen ? '左ペインを折りたたむ (◀)' : '左ペインを展開 (▶)';
-    }
+    this.paneController.toggleLeftPane();
   }
 
   private toggleRightPane() {
-    this.rightPaneOpen = !this.rightPaneOpen;
-    if (this.rightPaneOpen && window.innerWidth <= 1024 && this.leftPaneOpen) {
-      this.toggleLeftPane();
-    }
-    const pane = document.getElementById('paneRight');
-    const btn = document.getElementById('btnToggleRightPane');
-    const btnCollapse = document.getElementById('btnCollapseRight');
-    if (pane) {
-      pane.style.display = '';
-      pane.classList.toggle('collapsed', !this.rightPaneOpen);
-      pane.classList.toggle('drawer-open', this.rightPaneOpen);
-    }
-    if (btn) btn.classList.toggle('active', this.rightPaneOpen);
-    if (btnCollapse) {
-      btnCollapse.textContent = this.rightPaneOpen ? '▶' : '◀';
-      btnCollapse.title = this.rightPaneOpen ? '右ペインを折りたたむ (▶)' : '右ペインを展開 (◀)';
-    }
+    this.paneController.toggleRightPane();
   }
 
   private initHamburgerMenu(): void {
-    const btnMenu = document.getElementById('btnHamburgerMenu');
-    const dropdown = document.getElementById('hamburgerDropdown');
-    if (!btnMenu || !dropdown) return;
-
-    btnMenu.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const isVisible = dropdown.style.display !== 'none';
-      if (!isVisible && window.innerWidth <= 1024) {
-        if (this.leftPaneOpen) this.toggleLeftPane();
-        if (this.rightPaneOpen) this.toggleRightPane();
-      }
-      dropdown.style.display = isVisible ? 'none' : 'flex';
-      btnMenu.setAttribute('aria-expanded', isVisible ? 'false' : 'true');
-    });
-
-    document.addEventListener('click', (e) => {
-      if (!btnMenu.contains(e.target as Node) && !dropdown.contains(e.target as Node)) {
-        dropdown.style.display = 'none';
-        btnMenu.setAttribute('aria-expanded', 'false');
-      }
-    });
-
-    document.getElementById('menuToggleThemeMobile')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      this.toggleTheme();
-    });
-
-    document.getElementById('menuToggleFullscreenMobile')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      this.toggleFullscreen(!this.isFullscreen);
-    });
-
-    document.getElementById('menuOpenSettings')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      this.openSettingsModal();
-    });
-
-    document.getElementById('menuExportAozora')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      this.exportFullAozora('copy');
-      this.openExportModal();
-    });
-
-    document.getElementById('menuExportMultiSite')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      this.openExportModal();
-    });
-
-    document.getElementById('menuExportPoP')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      this.exportPoPCertificate();
-    });
-
-    document.getElementById('menuToggleRuby')?.addEventListener('click', () => {
-      this.toggleRuby();
-      const menuStatus = document.getElementById('menuRubyStatus');
-      if (menuStatus) {
-        menuStatus.textContent = `現在: ${this.rubyMode === 'normal' ? '通常ルビ' : this.rubyMode === 'raw' ? '青空記法' : 'ルビ非表示'}`;
-      }
-    });
-
-    document.getElementById('menuToggleWrap')?.addEventListener('click', () => {
-      this.toggleWrap();
-      const menuStatus = document.getElementById('menuWrapStatus');
-      if (menuStatus) {
-        menuStatus.textContent = `現在: ${this.isLineWrapping ? 'ON' : 'OFF'}`;
-      }
-    });
-
-    document.getElementById('menuOpenHelp')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      const helpModal = document.getElementById('helpModal');
-      if (helpModal) helpModal.style.display = 'flex';
-    });
+    this.paneController.initHamburgerMenu();
   }
 
   public openSettingsModal(): void {
@@ -2586,32 +2431,7 @@ export class PlotailorApp {
   }
 
   private initPaneCollapseButtons(): void {
-    const btnCollapseLeft = document.getElementById('btnCollapseLeft');
-    const btnCollapseRight = document.getElementById('btnCollapseRight');
-    const paneLeft = document.getElementById('paneLeft');
-    const paneRight = document.getElementById('paneRight');
-
-    btnCollapseLeft?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggleLeftPane();
-    });
-
-    btnCollapseRight?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      this.toggleRightPane();
-    });
-
-    paneLeft?.addEventListener('click', (e) => {
-      if (!this.leftPaneOpen) {
-        this.toggleLeftPane();
-      }
-    });
-
-    paneRight?.addEventListener('click', (e) => {
-      if (!this.rightPaneOpen) {
-        this.toggleRightPane();
-      }
-    });
+    this.paneController.initPaneCollapseButtons();
   }
 
   private initDecorationLegend(): void {
@@ -3304,66 +3124,7 @@ export class PlotailorApp {
   }
 
   private initPaneResizers(): void {
-    const paneLeft = document.getElementById('paneLeft');
-    const paneRight = document.getElementById('paneRight');
-    const resizerLeft = document.getElementById('resizerLeft');
-    const resizerRight = document.getElementById('resizerRight');
-
-    if (resizerLeft && paneLeft) {
-      let isDragging = false;
-      resizerLeft.addEventListener('mousedown', (e) => {
-        isDragging = true;
-        resizerLeft.classList.add('is-dragging');
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-
-        const onMouseMove = (ev: MouseEvent) => {
-          if (!isDragging) return;
-          const newWidth = Math.max(160, Math.min(500, ev.clientX));
-          paneLeft.style.width = `${newWidth}px`;
-        };
-
-        const onMouseUp = () => {
-          isDragging = false;
-          resizerLeft.classList.remove('is-dragging');
-          document.body.style.cursor = '';
-          document.body.style.userSelect = '';
-          window.removeEventListener('mousemove', onMouseMove);
-          window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-      });
-    }
-
-    if (resizerRight && paneRight) {
-      let isDragging = false;
-      resizerRight.addEventListener('mousedown', (e) => {
-        isDragging = true;
-        resizerRight.classList.add('is-dragging');
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-
-        const onMouseMove = (ev: MouseEvent) => {
-          if (!isDragging) return;
-          const newWidth = Math.max(200, Math.min(600, window.innerWidth - ev.clientX));
-          paneRight.style.width = `${newWidth}px`;
-        };
-
-        const onMouseUp = () => {
-          isDragging = false;
-          resizerRight.classList.remove('is-dragging');
-          document.body.style.cursor = '';
-          document.body.style.userSelect = '';
-          window.removeEventListener('mousemove', onMouseMove);
-          window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-      });
-    }
+    this.paneController.initPaneResizers();
   }
 
   private initQuickFormatButtons(): void {

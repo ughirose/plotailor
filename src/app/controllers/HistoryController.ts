@@ -23,6 +23,9 @@ export interface HistoryControllerDependencies {
   showToast: (msg: string) => void;
   setActiveRightTab: (tab: string) => void;
   renderRightPane: () => void;
+  getSnapshotFrequency?: () => 'minimal' | 'low' | 'standard' | 'high' | 'custom';
+  getSnapshotCustomChars?: () => number;
+  getSnapshotCustomSeconds?: () => number;
 }
 
 export type SnapshotListener = (chapterId: string, snapshotCount: number) => void;
@@ -88,8 +91,70 @@ export class HistoryController {
   }
 
   public recordSnapshotDebounced(chapterId: string, text: string): void {
+    const list = this.deps.getChapterSnapshots().get(chapterId) || [];
+    const lastSnap = list.length > 0 ? list[list.length - 1] : null;
+    const len = text.replace(/\s+/g, '').length;
+    const lastLen = lastSnap ? lastSnap.length : 0;
+    const charDelta = Math.abs(len - lastLen);
+
+    const freq = this.deps.getSnapshotFrequency ? this.deps.getSnapshotFrequency() : 'standard';
+    let minTrivialDelta = 3;
+    let minSentenceDelta = 10;
+    let minSentenceInterval = 3000;
+    let minBurstDelta = 25;
+    let minBurstInterval = 5000;
+    let minIdlePause = 15000;
+    let minIdleDelta = 10;
+
+    if (freq === 'minimal') {
+      minTrivialDelta = 20;
+      minSentenceDelta = 100;
+      minSentenceInterval = 20000;
+      minBurstDelta = 200;
+      minBurstInterval = 30000;
+      minIdlePause = 60000;
+      minIdleDelta = 100;
+    } else if (freq === 'low') {
+      minTrivialDelta = 10;
+      minSentenceDelta = 40;
+      minSentenceInterval = 8000;
+      minBurstDelta = 80;
+      minBurstInterval = 15000;
+      minIdlePause = 30000;
+      minIdleDelta = 40;
+    } else if (freq === 'high') {
+      minTrivialDelta = 1;
+      minSentenceDelta = 5;
+      minSentenceInterval = 1500;
+      minBurstDelta = 12;
+      minBurstInterval = 2500;
+      minIdlePause = 5000;
+      minIdleDelta = 5;
+    } else if (freq === 'custom') {
+      const customChars = Math.max(5, (this.deps.getSnapshotCustomChars ? this.deps.getSnapshotCustomChars() : 25));
+      const customIdleMs = Math.max(2000, ((this.deps.getSnapshotCustomSeconds ? this.deps.getSnapshotCustomSeconds() : 15)) * 1000);
+      minTrivialDelta = Math.max(1, Math.round(customChars * 0.1));
+      minSentenceDelta = Math.max(3, Math.round(customChars * 0.4));
+      minSentenceInterval = Math.round(customIdleMs * 0.3);
+      minBurstDelta = customChars;
+      minBurstInterval = Math.round(customIdleMs * 0.5);
+      minIdlePause = customIdleMs;
+      minIdleDelta = Math.max(3, Math.round(customChars * 0.4));
+    }
+
+    if (charDelta < minTrivialDelta && lastSnap) {
+      return;
+    }
+
     const now = Date.now();
-    if (now - this.lastSnapshotTime > 4000) {
+    const timeSinceLast = now - this.lastSnapshotTime;
+
+    const endsWithSentenceBoundary = /[。！？!?]\n?$/.test(text.trim());
+    const isSentenceBoundaryTrigger = endsWithSentenceBoundary && charDelta >= minSentenceDelta && timeSinceLast > minSentenceInterval;
+    const isSubstantialChange = charDelta >= minBurstDelta && timeSinceLast > minBurstInterval;
+    const isIdlePauseTrigger = timeSinceLast > minIdlePause && charDelta >= minIdleDelta;
+
+    if (isSentenceBoundaryTrigger || isSubstantialChange || isIdlePauseTrigger || list.length === 0) {
       this.lastSnapshotTime = now;
       this.recordSnapshot(chapterId, text);
     }

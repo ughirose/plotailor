@@ -48,6 +48,9 @@ export class PaneController {
 
   public toggleLeftPane(): void {
     const nextOpen = !this.deps.isLeftPaneOpen();
+    if (nextOpen && typeof window !== 'undefined' && window.innerWidth <= 1024 && this.deps.isRightPaneOpen()) {
+      this.toggleRightPane();
+    }
     this.deps.setLeftPaneOpen(nextOpen);
     const pane = document.getElementById('paneLeft');
     const btn = document.getElementById('btnToggleLeftPane');
@@ -55,6 +58,7 @@ export class PaneController {
     if (pane) {
       pane.style.display = '';
       pane.classList.toggle('collapsed', !nextOpen);
+      pane.classList.toggle('drawer-open', nextOpen);
     }
     if (btn) btn.classList.toggle('active', nextOpen);
     if (btnCollapse) {
@@ -66,6 +70,9 @@ export class PaneController {
 
   public toggleRightPane(): void {
     const nextOpen = !this.deps.isRightPaneOpen();
+    if (nextOpen && typeof window !== 'undefined' && window.innerWidth <= 1024 && this.deps.isLeftPaneOpen()) {
+      this.toggleLeftPane();
+    }
     this.deps.setRightPaneOpen(nextOpen);
     const pane = document.getElementById('paneRight');
     const btn = document.getElementById('btnToggleRightPane');
@@ -73,6 +80,7 @@ export class PaneController {
     if (pane) {
       pane.style.display = '';
       pane.classList.toggle('collapsed', !nextOpen);
+      pane.classList.toggle('drawer-open', nextOpen);
     }
     if (btn) btn.classList.toggle('active', nextOpen);
     if (btnCollapse) {
