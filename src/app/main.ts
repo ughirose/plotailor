@@ -30,6 +30,7 @@ import {
   ChapterController,
   LoreController,
   ViewController,
+  ProjectController,
 } from './controllers/index.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
 import { ProjectManager, type ProjectMeta } from '../core/project/index.js';
@@ -41,13 +42,7 @@ import {
   setMultiLayerDecorations,
   buildMultiLayerDecorationSet,
 } from '../core/editor/MultiLayerDecoration.js';
-import { DualTrackTimelineEngine, type TimelineSceneInput } from '../core/timeline/DualTrackTimeline.js';
-import {
-  calculateManualScore,
-  reconcileEntityLifecycles,
-  findShelvedCandidates,
-  SHELF_THRESHOLD,
-} from '../core/lore/ShelvedLoreLifecycle.js';
+import { DualTrackTimelineEngine } from '../core/timeline/DualTrackTimeline.js';
 import { LiteraryExporter, normalizeAozoraMarkup } from '../core/export/LiteraryExporter.js';
 import { RevisionDiffSummarizer } from '../core/editor/RevisionDiffSummarizer.js';
 import { markdownBoldExtension } from '../core/editor/MarkdownBoldExtension.js';
@@ -164,6 +159,7 @@ export class PlotailorApp {
   public chapterController!: ChapterController;
   public loreController!: LoreController;
   public viewController!: ViewController;
+  public projectController!: ProjectController;
 
   constructor() {
     this.editorBody = (document.getElementById('editorBody') || document.getElementById('editor-body')) as HTMLDivElement;
@@ -355,6 +351,32 @@ export class PlotailorApp {
       reorderChapters: (from, to) => this.reorderChapters(from, to),
       updateMultiLayerDecorations: () => this.updateMultiLayerDecorations(),
       showToast: (msg) => this.showToast(msg),
+    });
+
+    this.projectController = new ProjectController({
+      getProjectManager: () => this.projectManager,
+      getCurrentProjectId: () => this.currentProjectId,
+      setCurrentProjectId: (id) => { this.currentProjectId = id; },
+      getWorkTitle: () => this.workTitle,
+      setWorkTitle: (title) => { this.workTitle = title; },
+      getChapters: () => this.chapters,
+      setChapters: (chs) => { this.chapters = chs; },
+      getCurrentChapterId: () => this.currentChapterId,
+      setCurrentChapterId: (id) => { this.currentChapterId = id; },
+      getLoreManager: () => this.loreManager,
+      getLoreDock: () => this.loreDock,
+      saveToStorage: () => this.saveToStorage(),
+      renderChapterSelect: () => this.renderChapterSelect(),
+      loadChapter: (id) => this.loadChapter(id),
+      renderLeftPane: () => this.renderLeftPane(),
+      renderRightPane: () => this.renderRightPane(),
+      updateStats: () => this.updateStats(),
+      updateMultiLayerDecorations: () => this.updateMultiLayerDecorations(),
+      showToast: (msg) => this.showToast(msg),
+      clearChapterStatesAndSnapshots: () => {
+        this.chapterStates.clear();
+        this.chapterSnapshots.clear();
+      },
     });
 
     this.init();
@@ -1090,90 +1112,19 @@ export class PlotailorApp {
   }
 
   private checkShelvedCandidates() {
-    if (!this.cmEditor) return;
-    const text = this.cmEditor.state.doc.toString();
-    const shelvedEntities = this.loreManager.getEntities().filter((e) => e.status === 'shelved');
-    const matches = findShelvedCandidates(text, shelvedEntities);
-    if (matches.length > 0) {
-      const match = matches[0];
-      const saveIndicator = document.getElementById('saveStatusIndicator');
-      if (saveIndicator) {
-        saveIndicator.innerHTML = `💡 未配置設定「<strong>${match.matchedText}</strong>」検知 (Alt+Pで再バインド)`;
-        saveIndicator.style.color = 'var(--color-gold)';
-      }
-    }
+    this.loreController.checkShelvedCandidates();
   }
 
   private reconcileShelvedLore(isCommitted: boolean) {
-    const fullText = this.chapters.map((c) => c.content).join('\n\n');
-    const allEntities = this.loreManager.getEntities();
-    const result = reconcileEntityLifecycles(fullText, allEntities, isCommitted);
-
-    let changed = false;
-    for (const ent of result.updatedEntities) {
-      const existing = this.loreManager.getEntity(ent.id);
-      if (existing && existing.status !== ent.status) {
-        this.loreManager.updateEntity(ent.id, { status: ent.status });
-        changed = true;
-      }
-    }
-    for (const purged of result.purgedEntities) {
-      this.loreManager.deleteEntity(purged.id);
-      changed = true;
-    }
-
-    if (changed) {
-      this.renderLeftPane();
-      this.renderRightPane();
-    }
+    this.loreController.reconcileShelvedLore(isCommitted);
   }
 
   public promoteShelvedLore(entityId?: string) {
-    let target = entityId ? this.loreManager.getEntity(entityId) : null;
-    if (!target) {
-      const shelvedList = this.loreManager.getEntities().filter((e) => e.status === 'shelved');
-      if (shelvedList.length > 0) {
-        if (this.cmEditor) {
-          const text = this.cmEditor.state.doc.toString();
-          const head = this.cmEditor.state.selection.main.head;
-          const matches = findShelvedCandidates(text, shelvedList);
-          const nearby = matches.find((m) => Math.abs(m.from - head) < 50);
-          target = nearby ? nearby.entity : shelvedList[0];
-        } else {
-          target = shelvedList[0];
-        }
-      }
-    }
-
-    if (target) {
-      this.loreManager.updateEntity(target.id, { status: 'active' });
-      this.saveLoreData();
-      this.renderLeftPane();
-      this.renderRightPane();
-      this.updateMultiLayerDecorations();
-      this.showToast(`✨「${target.name}」を未配置棚から復帰（再バインド）しました`);
-    } else {
-      this.showToast(`未配置棚に再バインド可能な項目はありません`);
-    }
+    this.loreController.promoteShelvedLore(entityId);
   }
 
-  private renderTimelineSvg(): string {
-    const scenes: TimelineSceneInput[] = this.chapters.map((ch, idx) => ({
-      id: ch.id,
-      chapterId: ch.id,
-      title: ch.title,
-      charCount: Math.max(100, ch.charCount || ch.content.length),
-      storyDayStart: idx === 1 ? 10 : (idx === 0 ? 100 : 250),
-      storyDayEnd: idx === 1 ? 12 : (idx === 0 ? 102 : 255),
-      foreshadowingRef: idx === 0
-        ? { type: 'plant', foreshadowingId: 'fore-omen' }
-        : idx === 2
-        ? { type: 'resolve', foreshadowingId: 'fore-omen' }
-        : undefined,
-    }));
-
-    this.timelineEngine.setScenes(scenes);
-    return this.timelineEngine.renderSvg();
+  public renderTimelineSvg(): string {
+    return this.loreController.renderTimelineSvg();
   }
 
   public jumpToEditor(from: number, to: number) {
@@ -1269,237 +1220,31 @@ export class PlotailorApp {
   }
 
   private async initProjectVFS() {
-    try {
-      await this.projectManager.initWorkspace();
-      const projects = await this.projectManager.listProjects();
-
-      if (projects.length === 0) {
-        const migrated = await this.projectManager.migrateFromLegacyStorage();
-        if (migrated) {
-          this.currentProjectId = migrated.id;
-        } else {
-          const defaultProj = await this.projectManager.createProject({
-            id: 'default_work',
-            title: this.workTitle || '星辰の境界線',
-          });
-          this.currentProjectId = defaultProj.id;
-          for (let i = 0; i < this.chapters.length; i++) {
-            const ch = this.chapters[i];
-            await this.projectManager.saveChapter(this.currentProjectId, ch.id, ch.title, ch.content);
-          }
-          await this.loreManager.saveToVFS(this.currentProjectId);
-        }
-      } else {
-        const targetProj = projects.find((p) => p.id === this.currentProjectId) || projects[0];
-        if (targetProj) {
-          this.currentProjectId = targetProj.id;
-          const projData = await this.projectManager.getProject(targetProj.id);
-          this.workTitle = projData.meta.title;
-          const titleEl = document.getElementById('workTitleText');
-          if (titleEl) titleEl.textContent = this.workTitle;
-
-          if (projData.chapters.length > 0) {
-            this.chapters = [];
-            for (const ch of projData.chapters) {
-              const loaded = await this.projectManager.loadChapter(targetProj.id, ch.id);
-              this.chapters.push({
-                id: ch.id,
-                title: ch.title,
-                charCount: ch.charCount,
-                content: loaded.content,
-              });
-            }
-          }
-          if (projData.meta.activeChapterId && this.chapters.some((c) => c.id === projData.meta.activeChapterId)) {
-            this.currentChapterId = projData.meta.activeChapterId;
-          } else if (this.chapters.length > 0) {
-            this.currentChapterId = this.chapters[0].id;
-          }
-
-          await this.loreManager.loadFromVFS(this.currentProjectId);
-          this.loreDock.updateDictionary(this.loreManager.toLoreTermDefinitions());
-        }
-      }
-
-      this.saveToStorage();
-      this.renderChapterSelect();
-      this.loadChapter(this.currentChapterId);
-      this.renderLeftPane();
-      this.renderRightPane();
-      this.updateStats();
-      this.updateMultiLayerDecorations();
-    } catch (err) {
-      console.warn('VFS init warning:', err);
-    }
+    await this.projectController.initProjectVFS();
   }
 
   private async saveToVFS() {
-    try {
-      try {
-        await this.projectManager.getProject(this.currentProjectId);
-      } catch {
-        await this.projectManager.createProject({
-          id: this.currentProjectId,
-          title: this.workTitle,
-        });
-      }
-
-      for (const ch of this.chapters) {
-        await this.projectManager.saveChapter(
-          this.currentProjectId,
-          ch.id,
-          ch.title,
-          ch.content
-        );
-      }
-      await this.projectManager.updateProjectMeta(this.currentProjectId, {
-        title: this.workTitle,
-        activeChapterId: this.currentChapterId,
-      });
-      await this.loreManager.saveToVFS(this.currentProjectId);
-    } catch (err) {
-      console.warn('VFS auto-save warning:', err);
-    }
+    await this.projectController.saveToVFS();
   }
 
   public async openProjectModal() {
-    const modal = document.getElementById('projectModal');
-    if (!modal) return;
-    await this.renderProjectList();
-    modal.style.display = 'flex';
+    await this.projectController.openProjectModal();
   }
 
   public closeProjectModal() {
-    const modal = document.getElementById('projectModal');
-    if (modal) modal.style.display = 'none';
+    this.projectController.closeProjectModal();
   }
 
   private async renderProjectList() {
-    const container = document.getElementById('projectListContainer');
-    if (!container) return;
-
-    try {
-      const projects = await this.projectManager.listProjects();
-      if (projects.length === 0) {
-        container.innerHTML = '<div style="font-size: 13px; color: var(--color-text-dim); text-align: center; padding: 24px;">まだ保存された作品がありません。</div>';
-        return;
-      }
-
-      container.innerHTML = projects.map((p) => {
-        const isCurrent = p.id === this.currentProjectId;
-        const dateStr = new Date(p.updatedAt).toLocaleDateString() + ' ' + new Date(p.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        return `
-          <div class="history-item ${isCurrent ? 'active' : ''}" data-project-id="${p.id}" style="${isCurrent ? 'border-color: var(--color-gold); background: rgba(184, 134, 11, 0.08);' : ''}">
-            <div class="history-item-info">
-              <div class="history-item-time" style="font-weight: 600; color: var(--color-text);">
-                ${p.title} ${isCurrent ? '<span style="color: var(--color-gold); font-size: 11px; margin-left: 6px;">[執筆中]</span>' : ''}
-              </div>
-              <div class="history-item-preview" style="font-size: 11px;">
-                総文字数: ${p.totalCharCount.toLocaleString()} 字 | 更新: ${dateStr}
-              </div>
-            </div>
-            <div style="display: flex; gap: 6px; align-items: center;">
-              ${!isCurrent ? `<button class="ide-btn btn-switch-proj" data-id="${p.id}" style="font-size: 11px; padding: 2px 8px;">開く</button>` : ''}
-            </div>
-          </div>
-        `;
-      }).join('');
-
-      container.querySelectorAll('.btn-switch-proj').forEach((btn) => {
-        btn.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          const id = (e.currentTarget as HTMLElement).dataset.id;
-          if (id) {
-            await this.switchProject(id);
-            this.closeProjectModal();
-          }
-        });
-      });
-    } catch (err) {
-      container.innerHTML = `<div style="color: var(--color-danger); padding: 12px;">作品一覧の読込に失敗しました: ${err}</div>`;
-    }
+    await this.projectController.renderProjectList();
   }
 
   private async createNewProjectPrompt() {
-    const title = await showInlinePrompt({
-      message: '新規作品のタイトルを入力してください:',
-      defaultValue: `長編小説_${new Date().toISOString().slice(0, 10)}`,
-      placeholder: '作品タイトル',
-    });
-    if (!title || !title.trim()) return;
-
-    try {
-      await this.saveToVFS();
-      const newProj = await this.projectManager.createProject({ title: title.trim() });
-      await this.projectManager.saveChapter(
-        newProj.id,
-        'ch1',
-        '第一章 幕開け',
-        '　ここに新しい物語の最初の一行を書き始めます。'
-      );
-
-      // Reset lore entities completely to eliminate residual sample data
-      this.loreManager.setEntities([]);
-      await this.loreManager.saveToVFS(newProj.id);
-
-      await this.switchProject(newProj.id);
-      this.closeProjectModal();
-      this.showToast(`✨ 新規作品「${newProj.title}」を作成し、執筆を開始しました`);
-    } catch (err) {
-      await showInlineAlert({ message: `作品の作成に失敗しました: ${err}` });
-    }
+    await this.projectController.createNewProjectPrompt();
   }
 
   private async switchProject(projectId: string) {
-    try {
-      await this.saveToVFS();
-
-      const data = await this.projectManager.getProject(projectId);
-      this.currentProjectId = projectId;
-      this.workTitle = data.meta.title;
-
-      const titleEl = document.getElementById('workTitleText');
-      if (titleEl) titleEl.textContent = this.workTitle;
-
-      if (data.chapters.length > 0) {
-        this.chapters = [];
-        for (const ch of data.chapters) {
-          const loaded = await this.projectManager.loadChapter(projectId, ch.id);
-          this.chapters.push({
-            id: ch.id,
-            title: ch.title,
-            charCount: ch.charCount,
-            content: loaded.content,
-          });
-        }
-      } else {
-        this.chapters = [
-          { id: 'ch1', title: '第一章 幕開け', charCount: 22, content: '　ここに新しい物語の最初の一行を書き始めます。' },
-        ];
-      }
-
-      this.currentChapterId = data.meta.activeChapterId && this.chapters.some((c) => c.id === data.meta.activeChapterId)
-        ? data.meta.activeChapterId
-        : this.chapters[0].id;
-
-      await this.loreManager.loadFromVFS(projectId);
-      this.loreDock.updateDictionary(this.loreManager.toLoreTermDefinitions());
-
-      this.chapterStates.clear();
-      this.chapterSnapshots.clear();
-
-      this.saveToStorage();
-      this.renderChapterSelect();
-      this.loadChapter(this.currentChapterId);
-      this.renderLeftPane();
-      this.renderRightPane();
-      this.updateStats();
-      this.updateMultiLayerDecorations();
-      this.showToast(`📚 作品「${this.workTitle}」を開きました`);
-    } catch (err) {
-      console.error('Failed to switch project:', err);
-      this.showToast(`❌ 作品切り替えエラー: ${err}`);
-    }
+    await this.projectController.switchProject(projectId);
   }
 
   private addNewChapter() {

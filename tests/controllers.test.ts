@@ -8,6 +8,7 @@ import {
   ChapterController,
   LoreController,
   ViewController,
+  ProjectController,
   type ChapterData,
 } from '../src/app/controllers/index.js';
 import { LoreEntityManager } from '../src/core/lore/LoreEntityManager.js';
@@ -359,5 +360,65 @@ describe('Plotailor Controllers Refactoring & Extension Points', () => {
       expect(viewCtrl.getRubyButtonLabel()).toBe('ルビ: 記法直接');
     });
   });
+
+  describe('ProjectController', () => {
+    it('initializes VFS, switches projects and triggers switch listeners', async () => {
+      const pm = new ProjectManager();
+      const loreManager = new LoreEntityManager(pm.getVFS());
+      const loreDock = new LoreInspectorDock({ dictionary: [] });
+
+      let currentProjectId = 'default_work';
+      let workTitle = 'テスト作品';
+      let chapters: ChapterData[] = [
+        { id: 'ch1', title: '第1話', charCount: 10, content: 'テスト内容' },
+      ];
+      let currentChapterId = 'ch1';
+
+      const showToast = vi.fn();
+      const projectCtrl = new ProjectController({
+        getProjectManager: () => pm,
+        getCurrentProjectId: () => currentProjectId,
+        setCurrentProjectId: (id) => { currentProjectId = id; },
+        getWorkTitle: () => workTitle,
+        setWorkTitle: (title) => { workTitle = title; },
+        getChapters: () => chapters,
+        setChapters: (chs) => { chapters = chs; },
+        getCurrentChapterId: () => currentChapterId,
+        setCurrentChapterId: (id) => { currentChapterId = id; },
+        getLoreManager: () => loreManager,
+        getLoreDock: () => loreDock,
+        saveToStorage: vi.fn(),
+        renderChapterSelect: vi.fn(),
+        loadChapter: vi.fn(),
+        renderLeftPane: vi.fn(),
+        renderRightPane: vi.fn(),
+        updateStats: vi.fn(),
+        updateMultiLayerDecorations: vi.fn(),
+        showToast,
+        clearChapterStatesAndSnapshots: vi.fn(),
+      });
+
+      const listener = vi.fn();
+      projectCtrl.registerProjectSwitchListener(listener);
+
+      // init VFS
+      await projectCtrl.initProjectVFS();
+      expect(currentProjectId).toBe('default_work');
+
+      // Create new project
+      const proj2 = await pm.createProject({ id: 'proj-new', title: '新長編' });
+      await pm.saveChapter(proj2.id, 'ch-p2-1', '第1章', '新天地の物語');
+
+      // Switch project
+      await projectCtrl.switchProject('proj-new');
+      expect(currentProjectId).toBe('proj-new');
+      expect(workTitle).toBe('新長編');
+      expect(chapters.length).toBe(1);
+      expect(chapters[0].id).toBe('ch-p2-1');
+      expect(listener).toHaveBeenCalledWith('proj-new', '新長編');
+      expect(showToast).toHaveBeenCalledWith(expect.stringContaining('新長編'));
+    });
+  });
 });
+
 
