@@ -129,12 +129,10 @@ export class PlotailorApp {
   private scrollNormalizer = new ScrollNormalizer();
   private chapterStates: Map<string, EditorState> = new Map();
   private chapterSnapshots: Map<string, Array<{ time: number; text: string; length: number }>> = new Map();
-  private selectedHistorySnapshotIndex: number | null = null;
   private lastSnapshotTime = 0;
   public snapshotFrequency: 'minimal' | 'low' | 'standard' | 'high' | 'custom' = 'standard';
   public snapshotCustomChars = 25;
   public snapshotCustomSeconds = 15;
-  private isHistoryDiffOnly = false;
   private isVerticalUpright = false;
   private loreManager: LoreEntityManager;
   private dagEngine: CausalDagEngine = new CausalDagEngine();
@@ -216,6 +214,44 @@ export class PlotailorApp {
       getRubyCompartment: () => this.rubyCompartment,
       setRubyMode: (mode) => { this.rubyMode = mode; },
       showToast: (msg) => this.showToast(msg),
+      isVerticalUpright: () => this.isVerticalUpright,
+      setVerticalUpright: (enabled) => this.setVerticalUpright(enabled),
+      getSnapshotFrequency: () => this.snapshotFrequency,
+      setSnapshotFrequency: (val) => this.setSnapshotFrequency(val),
+      getSnapshotCustomChars: () => this.snapshotCustomChars,
+      setSnapshotCustomChars: (num) => {
+        this.snapshotCustomChars = num;
+        try { localStorage.setItem('plotailor_snapshot_custom_chars', num.toString()); } catch {}
+      },
+      getSnapshotCustomSeconds: () => this.snapshotCustomSeconds,
+      setSnapshotCustomSeconds: (num) => {
+        this.snapshotCustomSeconds = num;
+        try { localStorage.setItem('plotailor_snapshot_custom_seconds', num.toString()); } catch {}
+      },
+      getKinsokuColumns: () => this.kinsokuColumns,
+      setKinsokuColumns: (val) => this.setKinsokuColumns(val),
+      getKinsokuHanging: () => this.kinsokuHanging,
+      setKinsokuHanging: (checked) => this.setKinsokuHanging(checked),
+      getColumnGuidelineVisible: () => this.columnGuideline ? this.columnGuideline.isVisible() : this.columnGuidelineVisible,
+      setColumnGuidelineVisible: (checked) => {
+        this.columnGuidelineVisible = checked;
+        this.columnGuideline?.setVisible(checked);
+        try { localStorage.setItem('plotailor_column_guideline_visible', checked.toString()); } catch {}
+      },
+      getTargetWordCount: () => this.targetWordCount,
+      setTargetWordCount: (val) => {
+        this.targetWordCount = val;
+        this.fullscreenStatusBar?.setTargetWordCount(val);
+        try { localStorage.setItem('plotailor_target_word_count', val.toString()); } catch {}
+      },
+      getIdleThresholdMs: () => this.idleThresholdMs,
+      setIdleThresholdMs: (val) => {
+        this.idleThresholdMs = val;
+        this.velocityWidget.setIdleThreshold(val);
+        try { localStorage.setItem('plotailor_idle_threshold_ms', val.toString()); } catch {}
+      },
+      onFontSizeChanged: (fontSize) => { this.fontSize = fontSize; },
+      onFontFamilyChanged: (fontFamily) => { this.fontFamily = fontFamily; },
     });
 
     this.paneController = new PaneController({
@@ -248,6 +284,7 @@ export class PlotailorApp {
       setActiveRightTab: (tab) => { this.activeRightTab = tab; },
       renderRightPane: () => this.renderRightPane(),
       getSnapshotFrequency: () => this.snapshotFrequency,
+      setSnapshotFrequency: (f) => this.setSnapshotFrequency(f),
       getSnapshotCustomChars: () => this.snapshotCustomChars,
       getSnapshotCustomSeconds: () => this.snapshotCustomSeconds,
     });
@@ -667,45 +704,7 @@ export class PlotailorApp {
   }
 
   private updateHistoryUI() {
-    if (!this.cmEditor) return;
-    const state = this.cmEditor.state;
-    const uDepth = undoDepth(state);
-    const rDepth = redoDepth(state);
-    const canUndo = uDepth > 0;
-    const canRedo = rDepth > 0;
-
-    const btnToolbarUndo = document.getElementById('btnToolbarUndo') as HTMLButtonElement | null;
-    const btnToolbarRedo = document.getElementById('btnToolbarRedo') as HTMLButtonElement | null;
-    const btnHeaderUndo = document.getElementById('btnHeaderUndo') as HTMLButtonElement | null;
-    const btnHeaderRedo = document.getElementById('btnHeaderRedo') as HTMLButtonElement | null;
-    const badge = document.getElementById('historyDepthBadge');
-
-    if (btnToolbarUndo) {
-      btnToolbarUndo.disabled = !canUndo;
-      btnToolbarUndo.style.opacity = canUndo ? '1' : '0.4';
-      btnToolbarUndo.style.cursor = canUndo ? 'pointer' : 'default';
-    }
-    if (btnToolbarRedo) {
-      btnToolbarRedo.disabled = !canRedo;
-      btnToolbarRedo.style.opacity = canRedo ? '1' : '0.4';
-      btnToolbarRedo.style.cursor = canRedo ? 'pointer' : 'default';
-    }
-    if (btnHeaderUndo) {
-      btnHeaderUndo.disabled = !canUndo;
-      btnHeaderUndo.style.opacity = canUndo ? '1' : '0.4';
-      btnHeaderUndo.style.cursor = canUndo ? 'pointer' : 'default';
-    }
-    if (btnHeaderRedo) {
-      btnHeaderRedo.disabled = !canRedo;
-      btnHeaderRedo.style.opacity = canRedo ? '1' : '0.4';
-      btnHeaderRedo.style.cursor = canRedo ? 'pointer' : 'default';
-    }
-    if (badge) {
-      const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
-      const snapCount = snapshots.length;
-      badge.textContent = `履歴: ${snapCount} / 500 ▾`;
-      badge.title = `現在章の履歴スナップショット: ${snapCount}件 / 最大500件 (クリックで編集履歴・ロールバック比較モーダルを開く)`;
-    }
+    this.historyController.updateHistoryUI();
   }
 
   private bindEvents() {
@@ -843,24 +842,7 @@ export class PlotailorApp {
     this.initHelpModal();
     this.initHistoryModal();
 
-    const btnExport = document.getElementById('btnExportAozora');
-    btnExport?.addEventListener('click', () => this.openExportModal());
-
-    document.getElementById('btnCloseExportModal')?.addEventListener('click', () => this.closeExportModal());
-    document.getElementById('btnCopyAozoraFull')?.addEventListener('click', () => this.exportFullAozora('copy'));
-    document.getElementById('btnDownloadAozoraTxt')?.addEventListener('click', () => this.exportFullAozora('download'));
-    document.getElementById('btnOpenPrintPreview')?.addEventListener('click', () => this.exportPrintPreview());
-    document.getElementById('btnDownloadLoreBible')?.addEventListener('click', () => this.exportLoreBible());
-    document.getElementById('btnCopyActiveChapterAozora')?.addEventListener('click', () => this.exportActiveChapterAozora());
-    document.getElementById('btnCopyKakuyomu')?.addEventListener('click', () => this.exportKakuyomu());
-    document.getElementById('btnCopyNarou')?.addEventListener('click', () => this.exportNarou());
-    document.getElementById('btnCopyDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('copy'));
-    document.getElementById('btnDownloadDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('download'));
-
-    const exportModal = document.getElementById('exportModal');
-    exportModal?.addEventListener('click', (e) => {
-      if (e.target === exportModal) this.closeExportModal();
-    });
+    this.exportController.initExportModal();
 
     const btnLeft = document.getElementById('btnToggleLeftPane');
     btnLeft?.addEventListener('click', () => this.toggleLeftPane());
@@ -1252,192 +1234,20 @@ export class PlotailorApp {
   }
 
   public openHistoryModal() {
-    const modal = document.getElementById('historyModal');
-    if (!modal) return;
-    modal.style.display = 'flex';
-
-    let snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
-    const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
-    if (snapshots.length === 0 && currentText) {
-      this.recordSnapshot(this.currentChapterId, currentText);
-      snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
-    }
-
-    const selQuick = document.getElementById('historySnapshotFrequencyQuick') as HTMLSelectElement | null;
-    if (selQuick) selQuick.value = this.snapshotFrequency;
-
-    // Default select latest snapshot or previous
-    const defaultIdx = snapshots.length > 1 ? snapshots.length - 2 : snapshots.length - 1;
-    this.selectedHistorySnapshotIndex = defaultIdx >= 0 ? defaultIdx : null;
-    this.renderHistoryList();
-    if (this.selectedHistorySnapshotIndex !== null) {
-      this.renderHistoryDiff(this.selectedHistorySnapshotIndex);
-    } else {
-      const diffContainer = document.getElementById('historyDiffContainer');
-      if (diffContainer) diffContainer.textContent = '保存された履歴スナップショットがありません。';
-      const btnRollback = document.getElementById('btnConfirmHistoryRollback') as HTMLButtonElement | null;
-      if (btnRollback) {
-        btnRollback.disabled = true;
-        btnRollback.style.opacity = '0.5';
-      }
-    }
+    this.historyController.openHistoryModal();
   }
-
   public closeHistoryModal() {
-    const modal = document.getElementById('historyModal');
-    if (modal) modal.style.display = 'none';
+    this.historyController.closeHistoryModal();
   }
-
   private renderHistoryList() {
-    const container = document.getElementById('historyListContainer');
-    if (!container) return;
-    const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
-    if (snapshots.length === 0) {
-      container.innerHTML = '<div style="font-size: 12px; color: var(--color-text-dim); padding: 12px; text-align: center;">履歴がありません</div>';
-      return;
-    }
-
-    container.innerHTML = snapshots
-      .map((snap, idx) => {
-        const isSelected = idx === this.selectedHistorySnapshotIndex;
-        const timeStr = new Date(snap.time).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const prevSnap = idx > 0 ? snapshots[idx - 1] : null;
-        const charDelta = prevSnap ? snap.length - prevSnap.length : 0;
-        const deltaLabel = charDelta > 0 ? `+${charDelta}` : charDelta < 0 ? `${charDelta}` : '±0';
-        const deltaColor = charDelta > 0 ? 'var(--color-success, #56d364)' : charDelta < 0 ? 'var(--color-danger, #f85149)' : 'var(--color-text-dim)';
-
-        return `
-          <div class="history-item ${isSelected ? 'active' : ''}" data-snap-idx="${idx}" style="padding: 8px 10px; cursor: pointer; border-radius: 4px; border: 1px solid ${isSelected ? 'var(--color-gold)' : 'var(--color-border)'}; background: ${isSelected ? 'rgba(184, 134, 11, 0.12)' : 'rgba(0, 0, 0, 0.15)'}; transition: all 0.15s ease;">
-            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px;">
-              <span style="font-weight: 600; color: ${isSelected ? 'var(--color-gold)' : 'var(--color-text)'};">#${idx + 1} ${timeStr}</span>
-              <span style="font-size: 10px; color: ${deltaColor}; font-weight: 600;">${deltaLabel}</span>
-            </div>
-            <div style="font-size: 11px; color: var(--color-text-dim); margin-top: 4px; display: flex; justify-content: space-between;">
-              <span>文字数: <strong>${snap.length.toLocaleString()}</strong> 字</span>
-              <span style="font-size: 10px; opacity: 0.8;">${snap.text.slice(0, 12).replace(/\n/g, ' ')}...</span>
-            </div>
-          </div>
-        `;
-      })
-      .reverse()
-      .join('');
-
-    container.querySelectorAll('.history-item').forEach((item) => {
-      item.addEventListener('click', () => {
-        const idx = parseInt((item as HTMLElement).dataset.snapIdx || '0', 10);
-        this.selectedHistorySnapshotIndex = idx;
-        this.renderHistoryList();
-        this.renderHistoryDiff(idx);
-      });
-    });
+    this.historyController.renderHistoryList();
   }
-
   private renderHistoryDiff(index: number) {
-    const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
-    const snap = snapshots[index];
-    const diffContainer = document.getElementById('historyDiffContainer');
-    const diffStats = document.getElementById('historyDiffStats');
-    const btnRollback = document.getElementById('btnConfirmHistoryRollback') as HTMLButtonElement | null;
-    if (!snap || !diffContainer) return;
-
-    const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
-    const summary = RevisionDiffSummarizer.summarize(snap.text, currentText);
-
-    if (diffStats) {
-      const delta = summary.stats.charDelta;
-      const deltaSign = delta > 0 ? `+${delta}` : delta === 0 ? '±0' : `${delta}`;
-      const timeStr = new Date(snap.time).toLocaleTimeString('ja-JP');
-      diffStats.innerHTML = `時点: <strong>${timeStr}</strong> (${snap.length.toLocaleString()}字) ⟷ 現在 (${summary.stats.newCharCount.toLocaleString()}字) <span style="margin-left: 6px; font-weight: bold; color: ${delta > 0 ? 'var(--color-success)' : delta < 0 ? 'var(--color-danger)' : 'var(--color-text-dim)'}">[差分: ${deltaSign}字]</span>`;
-    }
-
-    if (btnRollback) {
-      btnRollback.disabled = false;
-      btnRollback.style.opacity = '1';
-      btnRollback.textContent = `この時点 (${new Date(snap.time).toLocaleTimeString('ja-JP')}) へロールバック`;
-    }
-
-    if (snap.text === currentText) {
-      diffContainer.innerHTML = `<div style="text-align: center; padding: 24px; color: var(--color-gold);">✓ 選択されたスナップショットは現在の本文と完全に一致しています（差分なし）。</div>`;
-      return;
-    }
-
-    diffContainer.classList.toggle('history-diff-only-mode', this.isHistoryDiffOnly);
-
-    const htmlParts: string[] = [];
-    if (summary.lineSummaries.length > 0) {
-      htmlParts.push(`
-        <div style="background: rgba(184, 134, 11, 0.08); border-left: 3px solid var(--color-gold); padding: 8px 12px; margin-bottom: 12px; font-size: 12px; color: var(--color-text-dim);">
-          <strong style="color: var(--color-gold);">【変更要約】</strong><br>
-          ${summary.lineSummaries.slice(0, 5).map(s => `・${s}`).join('<br>')}
-          ${summary.lineSummaries.length > 5 ? `<br>・...他 ${summary.lineSummaries.length - 5} 件の変更` : ''}
-        </div>
-      `);
-    }
-
-    let isFirstDiffFound = false;
-    htmlParts.push(`<div style="display: flex; flex-direction: column; gap: 4px;">`);
-    for (const diff of summary.lineDiffs) {
-      if (diff.type === 'unchanged') {
-        const text = diff.newLine || diff.oldLine || '';
-        htmlParts.push(`<div class="diff-line-unchanged">${text ? text : '<span style="opacity: 0.3;">(空行)</span>'}</div>`);
-      } else {
-        const firstDiffAttr = !isFirstDiffFound ? 'id="historyFirstDiff"' : '';
-        isFirstDiffFound = true;
-
-        if (diff.type === 'added') {
-          htmlParts.push(`<div ${firstDiffAttr} class="diff-line-added">+ ${diff.newLine}</div>`);
-        } else if (diff.type === 'deleted') {
-          htmlParts.push(`<div ${firstDiffAttr} class="diff-line-deleted">- ${diff.oldLine}</div>`);
-        } else if (diff.type === 'modified') {
-          htmlParts.push(`
-            <div ${firstDiffAttr} class="diff-line-modified">
-              <div class="diff-text-deleted" style="text-decoration: line-through;">- ${diff.oldLine}</div>
-              <div class="diff-text-added">+ ${diff.newLine}</div>
-            </div>
-          `);
-        }
-      }
-    }
-    htmlParts.push(`</div>`);
-    diffContainer.innerHTML = htmlParts.join('');
-
-    // Smooth scroll to the first diff location so the user sees the changes immediately
-    const firstDiffEl = diffContainer.querySelector('#historyFirstDiff') as HTMLElement | null;
-    if (firstDiffEl) {
-      setTimeout(() => {
-        firstDiffEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 60);
-    }
+    this.historyController.renderHistoryDiff(index);
   }
 
   private rollbackToSnapshot(index: number) {
-    const snapshots = this.chapterSnapshots.get(this.currentChapterId) || [];
-    const snap = snapshots[index];
-    if (!snap || !this.cmEditor) return;
-
-    // 1. Truncate future snapshots beyond the selected rollback point (Git-style rollback)
-    snapshots.splice(index + 1);
-
-    // 2. Reset EditorState with the restored text so rollback itself does not pollute history
-    const newState = this.createChapterState(snap.text);
-    this.chapterStates.set(this.currentChapterId, newState);
-    this.cmEditor.setState(newState);
-
-    // 3. Update chapter model & storage
-    const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
-    if (activeCh) {
-      activeCh.content = snap.text;
-      activeCh.charCount = snap.length;
-    }
-
-    // 4. Reset debounce timer so future edits are immediately registered in snapshots
-    this.lastSnapshotTime = 0;
-    this.saveToStorage();
-
-    this.showToast(`🕒 ${new Date(snap.time).toLocaleTimeString('ja-JP')} の状態へロールバックしました`);
-    this.updateStats();
-    this.updateHistoryUI();
-    this.closeHistoryModal();
+    this.historyController.rollbackToSnapshot(index);
   }
 
   private async initProjectVFS() {
@@ -1978,62 +1788,35 @@ export class PlotailorApp {
   private initHamburgerMenu(): void {
     this.paneController.initHamburgerMenu();
   }
-
   public openSettingsModal(): void {
-    const modal = document.getElementById('settingsModal');
-    if (!modal) return;
-    modal.style.display = 'flex';
+    this.settingsController.openSettingsModal();
+  }
 
-    const chkIndent = document.getElementById('settingAutoIndent') as HTMLInputElement | null;
-    if (chkIndent) chkIndent.checked = this.isAutoIndent;
+  public setKinsokuColumns(val: number): void {
+    this.kinsokuColumns = val;
+    this.kinsokuEngine.updateConfig({ columnsPerLine: val });
+    this.columnGuideline?.setColumns(val);
+    this.updateEditorWidth();
+    const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
+    const violations = this.kinsokuEngine.detectViolations(currentText);
+    this.narrativeDock.updateKinsokuViolations(violations);
+    this.updateCursorStats();
+    try {
+      localStorage.setItem('plotailor_kinsoku_columns', val.toString());
+    } catch {}
+  }
 
-    const chkRuby = document.getElementById('settingAutoRuby') as HTMLInputElement | null;
-    if (chkRuby) chkRuby.checked = this.isAutoRuby;
-
-    const chkLinter = document.getElementById('settingRealtimeLinter') as HTMLInputElement | null;
-    if (chkLinter) chkLinter.checked = this.isRealtimeLinter;
-
-    const chkUpright = document.getElementById('settingVerticalUpright') as HTMLInputElement | null;
-    if (chkUpright) chkUpright.checked = this.isVerticalUpright;
-
-    const selSize = document.getElementById('settingFontSize') as HTMLSelectElement | null;
-    if (selSize) selSize.value = this.fontSize;
-
-    const selFamily = document.getElementById('settingFontFamily') as HTMLSelectElement | null;
-    if (selFamily) selFamily.value = this.fontFamily;
-
-    const selFreq = document.getElementById('settingSnapshotFrequency') as HTMLSelectElement | null;
-    if (selFreq) selFreq.value = this.snapshotFrequency;
-
-    const customGrp = document.getElementById('settingCustomSnapshotGroup');
-    if (customGrp) {
-      customGrp.style.display = this.snapshotFrequency === 'custom' ? 'block' : 'none';
-    }
-
-    const inpChars = document.getElementById('settingSnapshotCustomChars') as HTMLInputElement | null;
-    if (inpChars) inpChars.value = this.snapshotCustomChars.toString();
-
-    const inpSecs = document.getElementById('settingSnapshotCustomSeconds') as HTMLInputElement | null;
-    if (inpSecs) inpSecs.value = this.snapshotCustomSeconds.toString();
-
-    // Regulation & Velocity Settings
-    const rngKinsokuCols = document.getElementById('settingKinsokuColumns') as HTMLInputElement | null;
-    if (rngKinsokuCols) rngKinsokuCols.value = this.kinsokuColumns.toString();
-
-    const spanKinsokuColsVal = document.getElementById('settingKinsokuColumnsVal');
-    if (spanKinsokuColsVal) spanKinsokuColsVal.textContent = `${this.kinsokuColumns}字`;
-
-    const chkKinsokuHanging = document.getElementById('settingKinsokuHanging') as HTMLInputElement | null;
-    if (chkKinsokuHanging) chkKinsokuHanging.checked = this.kinsokuHanging;
-
-    const chkColumnGuideline = document.getElementById('settingColumnGuideline') as HTMLInputElement | null;
-    if (chkColumnGuideline) chkColumnGuideline.checked = this.columnGuideline ? this.columnGuideline.isVisible() : this.columnGuidelineVisible;
-
-    const inpTargetWordCount = document.getElementById('settingTargetWordCount') as HTMLInputElement | null;
-    if (inpTargetWordCount) inpTargetWordCount.value = this.targetWordCount.toString();
-
-    const selIdleThreshold = document.getElementById('settingIdleThreshold') as HTMLSelectElement | null;
-    if (selIdleThreshold) selIdleThreshold.value = this.idleThresholdMs.toString();
+  public setKinsokuHanging(checked: boolean): void {
+    this.kinsokuHanging = checked;
+    this.kinsokuEngine.updateConfig({ allowHanging: checked });
+    this.columnGuideline?.setAllowHanging(checked);
+    const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
+    const violations = this.kinsokuEngine.detectViolations(currentText);
+    this.narrativeDock.updateKinsokuViolations(violations);
+    this.updateCursorStats();
+    try {
+      localStorage.setItem('plotailor_kinsoku_hanging', checked.toString());
+    } catch {}
   }
 
   public setVerticalUpright(enabled: boolean): void {
@@ -2080,224 +1863,11 @@ export class PlotailorApp {
   }
 
   public toggleHistoryDiffOnly(enabled: boolean): void {
-    this.isHistoryDiffOnly = enabled;
-    const diffContainer = document.getElementById('historyDiffContainer');
-    if (diffContainer) {
-      diffContainer.classList.toggle('history-diff-only-mode', enabled);
-    }
-    const chk = document.getElementById('chkHistoryDiffOnly') as HTMLInputElement | null;
-    if (chk && chk.checked !== enabled) chk.checked = enabled;
+    this.historyController.toggleHistoryDiffOnly(enabled);
   }
 
   private initSettingsModal(): void {
-    const modal = document.getElementById('settingsModal');
-    document.getElementById('btnCloseSettingsModal')?.addEventListener('click', () => {
-      if (modal) modal.style.display = 'none';
-    });
-
-    modal?.addEventListener('click', (e) => {
-      if (e.target === modal) modal.style.display = 'none';
-    });
-
-    document.getElementById('settingAutoIndent')?.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.isAutoIndent = checked;
-      setAutoIndentEnabled(checked);
-      try {
-        localStorage.setItem('plotailor_auto_indent', checked.toString());
-      } catch {}
-      this.showToast(`段落自動字下げを ${checked ? 'ON' : 'OFF'} に設定しました`);
-    });
-
-    document.getElementById('settingAutoRuby')?.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.isAutoRuby = checked;
-      this.rubyMode = checked ? 'normal' : 'raw';
-      try {
-        localStorage.setItem('plotailor_auto_ruby', checked.toString());
-        localStorage.setItem('plotailor_ruby_mode', this.rubyMode);
-      } catch {}
-      if (this.cmEditor) {
-        this.cmEditor.dispatch({
-          effects: [
-            this.rubyCompartment.reconfigure(
-              this.rubyMode === 'raw'
-                ? []
-                : rubyDecorationExtension({ mode: this.rubyMode, expandOnCursor: true })
-            ),
-            setRubyDisplayMode.of(this.rubyMode),
-          ],
-        });
-      }
-      this.showToast(`ルビ展開を ${checked ? 'ON' : 'OFF'} に設定しました`);
-    });
-
-    document.getElementById('settingRealtimeLinter')?.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.isRealtimeLinter = checked;
-      try {
-        localStorage.setItem('plotailor_realtime_linter', checked.toString());
-      } catch {}
-      document.body.classList.toggle('linter-hidden', !checked);
-      this.showToast(`推敲リント装飾表示を ${checked ? 'ON' : 'OFF'} に設定しました`);
-    });
-
-    document.getElementById('settingVerticalUpright')?.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.setVerticalUpright(checked);
-    });
-
-    const selectFontSize = document.getElementById('settingFontSize') as HTMLSelectElement | null;
-    const inputCustomFontSize = document.getElementById('settingCustomFontSize') as HTMLInputElement | null;
-    const customWrapper = document.getElementById('customFontSizeWrapper');
-
-    const updateFontSizeUI = () => {
-      const pxNum = parseInt(this.fontSize, 10) || 16;
-      if (inputCustomFontSize) inputCustomFontSize.value = pxNum.toString();
-      if (selectFontSize) {
-        const matchingOpt = Array.from(selectFontSize.options).find((opt) => opt.value === this.fontSize);
-        if (matchingOpt) {
-          selectFontSize.value = this.fontSize;
-        } else {
-          selectFontSize.value = 'custom';
-        }
-      }
-    };
-
-    updateFontSizeUI();
-
-    selectFontSize?.addEventListener('change', (e) => {
-      const val = (e.target as HTMLSelectElement).value;
-      if (val === 'custom') {
-        const num = inputCustomFontSize ? parseInt(inputCustomFontSize.value, 10) || 16 : 16;
-        this.fontSize = `${num}px`;
-      } else {
-        this.fontSize = val;
-        if (inputCustomFontSize) {
-          inputCustomFontSize.value = (parseInt(val, 10) || 16).toString();
-        }
-      }
-      try {
-        localStorage.setItem('plotailor_font_size', this.fontSize);
-      } catch {}
-      this.applyFontPreferences();
-      this.showToast(`文字サイズを「${this.fontSize}」に変更しました`);
-    });
-
-    inputCustomFontSize?.addEventListener('input', (e) => {
-      const num = Math.max(8, Math.min(72, parseInt((e.target as HTMLInputElement).value, 10) || 16));
-      this.fontSize = `${num}px`;
-      if (selectFontSize) {
-        const matchingOpt = Array.from(selectFontSize.options).find((opt) => opt.value === this.fontSize);
-        selectFontSize.value = matchingOpt ? this.fontSize : 'custom';
-      }
-      try {
-        localStorage.setItem('plotailor_font_size', this.fontSize);
-      } catch {}
-      this.applyFontPreferences();
-    });
-
-    document.getElementById('settingFontFamily')?.addEventListener('change', (e) => {
-      const val = (e.target as HTMLSelectElement).value;
-      this.fontFamily = val;
-      try {
-        localStorage.setItem('plotailor_font_family', val);
-      } catch {}
-      this.applyFontPreferences();
-      this.showToast(`本文フォントを変更しました`);
-    });
-
-    document.getElementById('settingSnapshotFrequency')?.addEventListener('change', (e) => {
-      const val = (e.target as HTMLSelectElement).value as any;
-      this.setSnapshotFrequency(val);
-    });
-
-    document.getElementById('settingSnapshotCustomChars')?.addEventListener('input', (e) => {
-      const num = Math.max(5, Math.min(2000, parseInt((e.target as HTMLInputElement).value, 10) || 25));
-      this.snapshotCustomChars = num;
-      try {
-        localStorage.setItem('plotailor_snapshot_custom_chars', num.toString());
-      } catch {}
-    });
-
-    document.getElementById('settingSnapshotCustomSeconds')?.addEventListener('input', (e) => {
-      const num = Math.max(2, Math.min(600, parseInt((e.target as HTMLInputElement).value, 10) || 15));
-      this.snapshotCustomSeconds = num;
-      try {
-        localStorage.setItem('plotailor_snapshot_custom_seconds', num.toString());
-      } catch {}
-    });
-
-    // 7. Kinsoku Columns Slider
-    const inputKinsokuCols = document.getElementById('settingKinsokuColumns') as HTMLInputElement | null;
-    const spanKinsokuColsVal = document.getElementById('settingKinsokuColumnsVal');
-    const onKinsokuColsChange = (e: Event) => {
-      const val = parseInt((e.target as HTMLInputElement).value, 10) || 40;
-      this.kinsokuColumns = val;
-      if (spanKinsokuColsVal) spanKinsokuColsVal.textContent = `${val}字`;
-      this.kinsokuEngine.updateConfig({ columnsPerLine: val });
-      this.columnGuideline?.setColumns(val);
-      this.updateEditorWidth();
-      const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
-      const violations = this.kinsokuEngine.detectViolations(currentText);
-      this.narrativeDock.updateKinsokuViolations(violations);
-      this.updateCursorStats();
-      try {
-        localStorage.setItem('plotailor_kinsoku_columns', val.toString());
-      } catch {}
-    };
-    inputKinsokuCols?.addEventListener('input', onKinsokuColsChange);
-    inputKinsokuCols?.addEventListener('change', onKinsokuColsChange);
-
-    // 8. Kinsoku Hanging Toggle
-    document.getElementById('settingKinsokuHanging')?.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.kinsokuHanging = checked;
-      this.kinsokuEngine.updateConfig({ allowHanging: checked });
-      this.columnGuideline?.setAllowHanging(checked);
-      const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
-      const violations = this.kinsokuEngine.detectViolations(currentText);
-      this.narrativeDock.updateKinsokuViolations(violations);
-      this.updateCursorStats();
-      try {
-        localStorage.setItem('plotailor_kinsoku_hanging', checked.toString());
-      } catch {}
-    });
-
-    // 8.5. Column Guideline Toggle
-    const chkColumnGuideline = document.getElementById('settingColumnGuideline') as HTMLInputElement | null;
-    chkColumnGuideline?.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.columnGuidelineVisible = checked;
-      this.columnGuideline?.setVisible(checked);
-      try {
-        localStorage.setItem('plotailor_column_guideline_visible', checked.toString());
-      } catch {}
-    });
-
-    // 9. Target Word Count Input
-    const inputTargetWordCount = document.getElementById('settingTargetWordCount') as HTMLInputElement | null;
-    const onTargetWordCountChange = (e: Event) => {
-      const val = parseInt((e.target as HTMLInputElement).value, 10) || 5000;
-      if (val <= 0) return;
-      this.targetWordCount = val;
-      this.fullscreenStatusBar?.setTargetWordCount(val);
-      try {
-        localStorage.setItem('plotailor_target_word_count', val.toString());
-      } catch {}
-    };
-    inputTargetWordCount?.addEventListener('input', onTargetWordCountChange);
-    inputTargetWordCount?.addEventListener('change', onTargetWordCountChange);
-
-    // 10. Idle Threshold Select
-    document.getElementById('settingIdleThreshold')?.addEventListener('change', (e) => {
-      const val = parseInt((e.target as HTMLSelectElement).value, 10) || 60000;
-      this.idleThresholdMs = val;
-      this.velocityWidget.setIdleThreshold(val);
-      try {
-        localStorage.setItem('plotailor_idle_threshold_ms', val.toString());
-      } catch {}
-    });
+    this.settingsController.initSettingsModal();
   }
 
   public getKinsokuColumns(): number {
@@ -2343,32 +1913,7 @@ export class PlotailorApp {
   }
 
   private initHistoryModal(): void {
-    const modal = document.getElementById('historyModal');
-    if (!modal) return;
-
-    document.getElementById('btnCloseHistoryModal')?.addEventListener('click', () => this.closeHistoryModal());
-    document.getElementById('btnCancelHistoryRollback')?.addEventListener('click', () => this.closeHistoryModal());
-    document.getElementById('historyDepthBadge')?.addEventListener('click', () => this.openHistoryModal());
-
-    document.getElementById('chkHistoryDiffOnly')?.addEventListener('change', (e) => {
-      const checked = (e.target as HTMLInputElement).checked;
-      this.toggleHistoryDiffOnly(checked);
-    });
-
-    document.getElementById('historySnapshotFrequencyQuick')?.addEventListener('change', (e) => {
-      const val = (e.target as HTMLSelectElement).value as any;
-      this.setSnapshotFrequency(val);
-    });
-
-    document.getElementById('btnConfirmHistoryRollback')?.addEventListener('click', () => {
-      if (this.selectedHistorySnapshotIndex !== null) {
-        this.rollbackToSnapshot(this.selectedHistorySnapshotIndex);
-      }
-    });
-
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) this.closeHistoryModal();
-    });
+    this.historyController.initHistoryModal();
   }
 
   private exportPoPCertificate(): void {
