@@ -14,7 +14,7 @@ describe('DemonstrativeOveruseDetector', () => {
     expect(options.demonstratives).toEqual(DEFAULT_DEMONSTRATIVE_TERMS);
     expect(options.paragraphCountThreshold).toBe(3);
     expect(options.paragraphDensityThreshold).toBe(0.05);
-    expect(options.consecutiveSentenceCountThreshold).toBe(2);
+    expect(options.consecutiveSentenceCountThreshold).toBe(3);
     expect(options.sentenceWindowSize).toBe(3);
   });
 

@@ -552,6 +552,7 @@ export class PlotailorApp {
     if (this.columnGuideline) {
       this.columnGuideline.setFontSize(currentSize);
     }
+    this.updateEditorWidth();
   }
 
   private handleFontSizeChange(size: number, metrics: FontMetrics) {
@@ -1837,6 +1838,7 @@ export class PlotailorApp {
     if (this.columnGuideline) {
       this.columnGuideline.setVertical(this.isVertical);
     }
+    this.updateEditorWidth();
   }
 
   private toggleOrientation() {
@@ -2235,6 +2237,7 @@ export class PlotailorApp {
       if (spanKinsokuColsVal) spanKinsokuColsVal.textContent = `${val}字`;
       this.kinsokuEngine.updateConfig({ columnsPerLine: val });
       this.columnGuideline?.setColumns(val);
+      this.updateEditorWidth();
       const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
       const violations = this.kinsokuEngine.detectViolations(currentText);
       this.narrativeDock.updateKinsokuViolations(violations);
@@ -2560,6 +2563,22 @@ export class PlotailorApp {
         this.cmEditor.focus();
       }
     });
+  }
+
+  public updateEditorWidth(): void {
+    if (!this.editorBody) return;
+    if (this.isVertical) {
+      this.editorBody.style.maxWidth = '';
+      this.editorBody.style.width = 'max-content';
+      return;
+    }
+    const currentSize = FontSizeControl.clampFontSize(this.fontSize);
+    // Character width is base font size * 1.03 (matching ColumnGuideline pitch)
+    const pitchWidth = currentSize * 1.03;
+    // Left and right padding: 48px + 48px = 96px, plus 16px buffer for caret / hanging punctuation
+    const totalWidthPx = Math.ceil(this.kinsokuColumns * pitchWidth + 96 + 16);
+    this.editorBody.style.maxWidth = `${totalWidthPx}px`;
+    this.editorBody.style.width = '100%';
   }
 
   public getColumnGuideline(): ColumnGuideline | null {

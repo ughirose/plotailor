@@ -2,7 +2,7 @@
  * Multi-layer Decoration & POV Breach Detection Engine
  * 
  * Complies with Plotailor Literature IDE Spec Section 2.2:
- * - Layer 0 (Physical Anchor): border-bottom 1px dotted rgba(56, 189, 248, 0.6) (vertical: left side), Z-Index 10.
+ * - Layer 0 (Physical Anchor): border-bottom 1px dotted rgba(56, 189, 248, 0.6) (vertical: right side), Z-Index 10.
  * - Layer 1 (Foreshadowing): background-color rgba(245, 158, 11, 0.15), Z-Index 20, mix-blend-mode: multiply.
  * - Layer 2 (POV Violation): text-decoration wavy underline #ef4444 1.5px (vertical: right side), Z-Index 30.
  * - Conflict Arbitration: Layer 2 completely masks Layer 0 on overlapping ranges to avoid vertical line interference.

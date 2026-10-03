@@ -24,7 +24,7 @@ export interface DemonstrativeOveruseOptions {
   paragraphCountThreshold?: number;
   /** Max character density ratio of demonstratives in a paragraph (default: 0.05 => 5%) */
   paragraphDensityThreshold?: number;
-  /** Max demonstratives allowed in sliding proximate sentences window (default: 2) */
+  /** Max demonstratives allowed in sliding proximate sentences window (default: 3) */
   consecutiveSentenceCountThreshold?: number;
   /** Size of sliding sentence context window (default: 3 sentences = current + up to 2 preceding sentences) */
   sentenceWindowSize?: number;
@@ -82,7 +82,7 @@ export class DemonstrativeOveruseDetector {
     this.demonstratives = options?.demonstratives ?? DEFAULT_DEMONSTRATIVE_TERMS;
     this.paragraphCountThreshold = options?.paragraphCountThreshold ?? 3;
     this.paragraphDensityThreshold = options?.paragraphDensityThreshold ?? 0.05;
-    this.consecutiveSentenceCountThreshold = options?.consecutiveSentenceCountThreshold ?? 2;
+    this.consecutiveSentenceCountThreshold = options?.consecutiveSentenceCountThreshold ?? 3;
     this.sentenceWindowSize = options?.sentenceWindowSize ?? 3; // 3 sentences = current + 2 preceding sentences
     this.paragraphPenaltyBase = options?.paragraphPenaltyBase ?? 15;
     this.proximityPenaltyBase = options?.proximityPenaltyBase ?? 10;

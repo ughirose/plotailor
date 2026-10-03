@@ -2283,7 +2283,8 @@ body.theme-washi .lore-filter-chip.active {
 .canvas-wrapper.is-vertical .cm-decoration-layer0,
 .vertical-rl .cm-decoration-layer0 {
   border-bottom: none !important;
-  border-left: 1.5px dotted #38bdf8 !important;
+  border-right: 1.5px dotted #38bdf8 !important;
+  background-color: rgba(56, 189, 248, 0.08) !important;
 }
 body.theme-washi .cm-decoration-layer0 {
   color: inherit !important;
