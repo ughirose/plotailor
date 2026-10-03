@@ -43,6 +43,10 @@ import { LiteraryExporter, normalizeAozoraMarkup } from '../core/export/Literary
 import { RevisionDiffSummarizer } from '../core/editor/RevisionDiffSummarizer.js';
 import { markdownBoldExtension } from '../core/editor/MarkdownBoldExtension.js';
 import { FontSizeControl, type FontMetrics } from '../ui/FontSizeControl.js';
+import { KinsokuEngine } from '../core/editor/KinsokuEngine.js';
+import { WritingVelocityWidget } from '../core/editor/WritingVelocityWidget.js';
+import { MultiSiteNovelFormatter } from '../core/exporters/multisite-novel-formatter.js';
+import { FullscreenStatusBar } from '../ui/FullscreenStatusBar.js';
 
 interface ChapterData {
   id: string;
@@ -132,6 +136,9 @@ export class PlotailorApp {
   private povDetector = new PovBreachDetector();
   private timelineEngine = new DualTrackTimelineEngine();
   private currentPovCharacterId = 'char-valerius';
+  private velocityWidget = new WritingVelocityWidget();
+  private fullscreenStatusBar: FullscreenStatusBar | null = null;
+  private kinsokuEngine = new KinsokuEngine({ columnsPerLine: 40, allowHanging: true });
 
   constructor() {
     this.editorBody = (document.getElementById('editorBody') || document.getElementById('editor-body')) as HTMLDivElement;
@@ -199,6 +206,18 @@ export class PlotailorApp {
     this.applyOrientation();
     this.initProjectVFS();
     this.applyFontPreferences();
+
+    const currentCh = this.chapters.find((c) => c.id === this.currentChapterId) || this.chapters[0];
+    const initialContent = currentCh ? currentCh.content : '';
+    this.velocityWidget.startSession(initialContent.length);
+    const canvasWrapper = document.getElementById('canvasWrapper');
+    if (canvasWrapper) {
+      this.fullscreenStatusBar = new FullscreenStatusBar({
+        container: canvasWrapper,
+        initialText: initialContent,
+        isFullscreen: this.isFullscreen,
+      });
+    }
   }
 
   private loadStateFromStorage() {
@@ -746,6 +765,10 @@ export class PlotailorApp {
     document.getElementById('btnOpenPrintPreview')?.addEventListener('click', () => this.exportPrintPreview());
     document.getElementById('btnDownloadLoreBible')?.addEventListener('click', () => this.exportLoreBible());
     document.getElementById('btnCopyActiveChapterAozora')?.addEventListener('click', () => this.exportActiveChapterAozora());
+    document.getElementById('btnCopyKakuyomu')?.addEventListener('click', () => this.exportKakuyomu());
+    document.getElementById('btnCopyNarou')?.addEventListener('click', () => this.exportNarou());
+    document.getElementById('btnCopyDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('copy'));
+    document.getElementById('btnDownloadDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('download'));
 
     const exportModal = document.getElementById('exportModal');
     exportModal?.addEventListener('click', (e) => {
@@ -843,6 +866,11 @@ export class PlotailorApp {
     }
 
     this.updateStats();
+
+    this.velocityWidget.recordKeystroke(rawText);
+    this.fullscreenStatusBar?.updateText(rawText);
+    const kinsokuViolations = this.kinsokuEngine.detectViolations(rawText);
+    this.narrativeDock.updateKinsokuViolations(kinsokuViolations);
 
     // Record snapshot debounced
     this.recordSnapshotDebounced(this.currentChapterId, rawText);
@@ -1130,6 +1158,10 @@ export class PlotailorApp {
     if (selectEl) selectEl.value = chapterId;
 
     this.saveToStorage();
+    this.velocityWidget.startSession(ch.content.length);
+    this.fullscreenStatusBar?.updateText(ch.content);
+    const kinsokuViolations = this.kinsokuEngine.detectViolations(ch.content);
+    this.narrativeDock.updateKinsokuViolations(kinsokuViolations);
     this.renderLeftPane();
     this.updateStats();
     this.updateHistoryUI();
@@ -1705,12 +1737,23 @@ export class PlotailorApp {
     const selLengthEl = document.getElementById('selectionLength');
     if (selLengthEl) selLengthEl.textContent = Math.abs(mainSel.to - mainSel.from).toString();
 
-    // Typing speed calculation
+    // Typing speed calculation using WritingVelocityWidget
     this.keystrokeCount++;
-    const elapsedMinutes = Math.max(0.1, (Date.now() - this.typingStartTime) / 60000);
-    const speed = Math.round(this.keystrokeCount / elapsedMinutes);
+    const metrics = this.velocityWidget.getMetrics();
     const speedEl = document.getElementById('typingSpeed');
-    if (speedEl) speedEl.textContent = speed.toString();
+    if (speedEl) {
+      // Show CPM or fallback to keystrokes/minute if CPM is 0 in short tests
+      const displaySpeed = metrics.cpm > 0 ? metrics.cpm : Math.round(this.keystrokeCount / Math.max(0.1, (Date.now() - this.typingStartTime) / 60000));
+      speedEl.textContent = displaySpeed.toString();
+    }
+
+    const extraInfoEl = document.getElementById('velocityExtraInfo');
+    if (extraInfoEl) {
+      const deltaSign = metrics.netCharacterDelta >= 0 ? '+' : '';
+      const idleText = metrics.isCurrentlyIdle ? ' [休憩中]' : '';
+      extraInfoEl.textContent = `(${metrics.cph}字/時 | 純増:${deltaSign}${metrics.netCharacterDelta}${idleText})`;
+      extraInfoEl.title = `打鍵数: ${metrics.totalKeystrokes} / CPM: ${metrics.cpm} / CPH: ${metrics.cph} / 純増: ${deltaSign}${metrics.netCharacterDelta}文字`;
+    }
   }
 
   private applyOrientation() {
@@ -1862,6 +1905,7 @@ export class PlotailorApp {
 
   private toggleFullscreen(enable: boolean) {
     this.isFullscreen = enable;
+    this.fullscreenStatusBar?.setFullscreen(enable);
     if (enable) {
       document.body.classList.add('fullscreen-active');
       if (document.documentElement.requestFullscreen) {
@@ -1956,6 +2000,11 @@ export class PlotailorApp {
     document.getElementById('menuExportAozora')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
       this.exportFullAozora('copy');
+      this.openExportModal();
+    });
+
+    document.getElementById('menuExportMultiSite')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
       this.openExportModal();
     });
 
@@ -2408,6 +2457,33 @@ export class PlotailorApp {
     const raw = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
     const normalized = normalizeAozoraMarkup(raw);
     this.copyTextToClipboard(normalized, '✅ 現在の章（青空記法）をコピーしました');
+  }
+
+  private exportKakuyomu() {
+    const fullText = LiteraryExporter.exportAozoraFullText(this.workTitle, this.chapters);
+    const res = MultiSiteNovelFormatter.format(fullText, { platform: 'kakuyomu' });
+    this.copyTextToClipboard(res.formattedContent, `✅ カクヨム形式（${res.stats.characterCount}文字）をコピーしました`);
+  }
+
+  private exportNarou() {
+    const fullText = LiteraryExporter.exportAozoraFullText(this.workTitle, this.chapters);
+    const res = MultiSiteNovelFormatter.format(fullText, { platform: 'narou' });
+    this.copyTextToClipboard(res.formattedContent, `✅ 小説家になろう形式（${res.stats.characterCount}文字）をコピーしました`);
+  }
+
+  private exportDenshokyoEpub(action: 'copy' | 'download') {
+    const fullText = LiteraryExporter.exportAozoraFullText(this.workTitle, this.chapters);
+    const res = MultiSiteNovelFormatter.format(fullText, {
+      platform: 'denshokyo_epub',
+      title: this.workTitle,
+      author: 'Author',
+    });
+    if (action === 'copy') {
+      this.copyTextToClipboard(res.formattedContent, '✅ 電書協 EPUB3 XHTML をコピーしました');
+    } else {
+      LiteraryExporter.downloadFile(`${this.workTitle}_denshokyo.xhtml`, res.formattedContent, 'application/xhtml+xml;charset=utf-8');
+      this.showToast(`📥「${this.workTitle}_denshokyo.xhtml」をダウンロードしました`);
+    }
   }
 
   private toastTimer: any = null;

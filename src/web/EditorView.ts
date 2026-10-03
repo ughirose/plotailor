@@ -9,6 +9,10 @@ import { PoPAuditEngine } from '../core/pop/PoPAuditEngine.js';
 import { CelestialCalendarEngine } from '@core';
 import { ForeshadowingEngine, type ForeshadowingJumpTarget } from '../core/editor/ForeshadowingEngine.js';
 import { ForeshadowingProgressPanel } from '../core/editor/ForeshadowingProgressPanel.js';
+import { KinsokuEngine, type KinsokuViolation } from '../core/editor/KinsokuEngine.js';
+import { WritingVelocityWidget } from '../core/editor/WritingVelocityWidget.js';
+import { MultiSiteNovelFormatter } from '../core/exporters/multisite-novel-formatter.js';
+import { FullscreenStatusBar } from '../ui/FullscreenStatusBar.js';
 
 export class EditorView {
   private container: HTMLElement;
@@ -17,9 +21,13 @@ export class EditorView {
   private popEngine: PoPAuditEngine;
   private celestialEngine: CelestialCalendarEngine;
   private foreshadowingEngine: ForeshadowingEngine;
+  private kinsokuEngine: KinsokuEngine;
+  private velocityWidget: WritingVelocityWidget;
+  private fullscreenStatusBar: FullscreenStatusBar | null = null;
   private rawText: string;
   private isVerticalMode: boolean = false;
   private isComposing: boolean = false;
+  private isFullscreen: boolean = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -28,6 +36,8 @@ export class EditorView {
     this.popEngine = new PoPAuditEngine('author-session-01');
     this.foreshadowingEngine = new ForeshadowingEngine();
     this.foreshadowingEngine.parse('第1章\n@plant(f01, "誓いの指輪")');
+    this.kinsokuEngine = new KinsokuEngine({ columnsPerLine: 40, allowHanging: true });
+    this.velocityWidget = new WritingVelocityWidget();
 
     // Setup fictional calendar
     this.celestialEngine = new CelestialCalendarEngine(
@@ -135,13 +145,25 @@ export class EditorView {
               <button class="tool-btn" id="btn-insert-bouten">
                 <span>︙</span> 傍点挿入
               </button>
+              <button class="tool-btn" id="btn-toggle-fullscreen">
+                <span>⛶</span> 全画面
+              </button>
+              <button class="tool-btn" id="btn-export-kakuyomu" title="カクヨム記法でコピー">
+                <span>📖</span> カクヨム
+              </button>
+              <button class="tool-btn" id="btn-export-narou" title="小説家になろう記法でコピー">
+                <span>📗</span> なろう
+              </button>
+              <button class="tool-btn" id="btn-export-epub" title="電書協EPUB3 XHTMLでコピー">
+                <span>📑</span> EPUB3
+              </button>
             </div>
             <div class="toolbar-group">
               <span id="ime-indicator" style="font-size: 0.75rem; color: #10b981;">● IME: 待機</span>
             </div>
           </div>
 
-          <div class="editor-workspace">
+          <div class="editor-workspace" id="editor-workspace">
             <!-- Raw Editor -->
             <textarea class="raw-textarea" id="editor-raw" spellcheck="false" placeholder="ここに原稿を執筆...">${this.rawText}</textarea>
 
@@ -153,6 +175,7 @@ export class EditorView {
 
           <div class="editor-footer">
             <div id="word-count-display">文字数: 0字 / 原稿用紙 約0枚</div>
+            <div id="velocity-display">⚡ 速度: 0 CPM (0字/時)</div>
             <div id="save-status-display">💾 OPFS Auto-Save: 待機中 (WAL同期済)</div>
           </div>
         </main>
@@ -164,6 +187,12 @@ export class EditorView {
             <span class="status-dot"></span>
           </div>
           <div class="pane-content">
+            <!-- Kinsoku Typesetting Diagnostics -->
+            <div class="tree-group">
+              <div class="tree-title">📐 組版・禁則検査 (Kinsoku Engine)</div>
+              <div id="kinsoku-results-container"></div>
+            </div>
+
             <!-- Lore Diagnostics -->
             <div class="tree-group">
               <div class="tree-title">設定語句リント (Aho-Corasick)</div>
@@ -203,6 +232,16 @@ export class EditorView {
         </aside>
       </div>
     `;
+
+    // Mount FullscreenStatusBar to workspace
+    const workspace = this.container.querySelector('#editor-workspace') as HTMLElement;
+    if (workspace) {
+      this.fullscreenStatusBar = new FullscreenStatusBar({
+        container: workspace,
+        initialText: this.rawText,
+        isFullscreen: this.isFullscreen,
+      });
+    }
 
     this.bindEvents();
     this.updateEditorState();
@@ -263,6 +302,46 @@ export class EditorView {
     btnInsertBouten?.addEventListener('click', () => {
       this.insertAtCursor('《《傍点文字》》');
     });
+
+    // Fullscreen toggle
+    const btnFullscreen = this.container.querySelector('#btn-toggle-fullscreen');
+    btnFullscreen?.addEventListener('click', () => {
+      this.isFullscreen = !this.isFullscreen;
+      btnFullscreen.classList.toggle('active', this.isFullscreen);
+      this.fullscreenStatusBar?.setFullscreen(this.isFullscreen);
+    });
+
+    // Multi-site export buttons
+    const btnKakuyomu = this.container.querySelector('#btn-export-kakuyomu');
+    btnKakuyomu?.addEventListener('click', () => {
+      const res = MultiSiteNovelFormatter.format(this.rawText, { platform: 'kakuyomu' });
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(res.formattedContent).catch(() => {});
+      }
+      alert(`カクヨム形式（${res.stats.characterCount}文字）をクリップボードにコピーしました`);
+    });
+
+    const btnNarou = this.container.querySelector('#btn-export-narou');
+    btnNarou?.addEventListener('click', () => {
+      const res = MultiSiteNovelFormatter.format(this.rawText, { platform: 'narou' });
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(res.formattedContent).catch(() => {});
+      }
+      alert(`小説家になろう形式（${res.stats.characterCount}文字）をクリップボードにコピーしました`);
+    });
+
+    const btnEpub = this.container.querySelector('#btn-export-epub');
+    btnEpub?.addEventListener('click', () => {
+      const res = MultiSiteNovelFormatter.format(this.rawText, {
+        platform: 'denshokyo_epub',
+        title: '作品プレビュー',
+        author: 'Author',
+      });
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(res.formattedContent).catch(() => {});
+      }
+      alert('電書協EPUB3 XHTMLをクリップボードにコピーしました');
+    });
   }
 
   private insertAtCursor(text: string): void {
@@ -288,7 +367,7 @@ export class EditorView {
       manuscript.innerHTML = AozoraParser.toHtml(this.rawText);
     }
 
-    // 2. Word count
+    // 2. Word count & Writing Velocity
     const wordCount = this.rawText.length;
     const pages = (wordCount / 400).toFixed(1);
     const wordCountDisplay = this.container.querySelector('#word-count-display');
@@ -296,7 +375,21 @@ export class EditorView {
       wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
     }
 
-    // 3. Run Lore Linter & Style Discomfort Detector
+    this.velocityWidget.recordKeystroke(this.rawText);
+    this.fullscreenStatusBar?.updateText(this.rawText);
+    const vel = this.velocityWidget.getMetrics();
+    const velEl = this.container.querySelector('#velocity-display');
+    if (velEl) {
+      const deltaSign = vel.netCharacterDelta >= 0 ? '+' : '';
+      const idleText = vel.isCurrentlyIdle ? ' [休]' : '';
+      velEl.textContent = `⚡ 速度: ${vel.cpm} CPM (${vel.cph}字/時 | 純増:${deltaSign}${vel.netCharacterDelta}字${idleText})`;
+    }
+
+    // 3. Kinsoku Typesetting Diagnostics
+    const kinsokuViolations = this.kinsokuEngine.detectViolations(this.rawText);
+    this.renderKinsokuDiagnostics(kinsokuViolations);
+
+    // 4. Run Lore Linter & Style Discomfort Detector
     const diagnostics = this.linter.lint(this.rawText);
     this.renderDiagnostics(diagnostics);
 
@@ -320,6 +413,47 @@ export class EditorView {
     const seleneEl = this.container.querySelector('#moon-phase-selene');
     if (lunaEl) lunaEl.textContent = `${(lunaPhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
     if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
+  }
+
+  private renderKinsokuDiagnostics(violations: KinsokuViolation[]): void {
+    const container = this.container.querySelector('#kinsoku-results-container');
+    if (!container) return;
+
+    if (violations.length === 0) {
+      container.innerHTML = `
+        <div style="font-size: 0.8rem; color: #10b981; padding: 0.5rem 0;">
+          ✨ 行頭・行末禁則違反なし（組版正常）
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = violations
+      .map(
+        (v) => `
+        <div class="diagnostic-card">
+          <div class="diagnostic-header">
+            <span>⚠️ ${v.type === 'line-head' ? '行頭禁則' : '行末禁則'}: 「${v.char}」</span>
+            <span style="font-size: 0.7rem; color: var(--text-dim);">行 ${v.lineIndex + 1}, 列 ${v.colIndex + 1}</span>
+          </div>
+          <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 0.4rem;">
+            推奨措置: ${v.suggestedAction === 'push-down' ? '追い出し' : v.suggestedAction === 'hang' ? 'ぶら下げ' : '追い込み'}（${v.offset}文字目）
+          </p>
+          <button class="tool-btn kinsoku-jump-btn" data-offset="${v.offset}" style="font-size: 0.75rem; background: rgba(207, 168, 92, 0.2);">
+            該当箇所へジャンプ
+          </button>
+        </div>
+      `
+      )
+      .join('');
+
+    container.querySelectorAll('.kinsoku-jump-btn').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const offset = parseInt(target.dataset.offset || '0', 10);
+        this.jumpToTarget({ charOffset: offset });
+      });
+    });
   }
 
   private renderStyleDiagnostics(diagnostics: StyleDiagnostic[]): void {

@@ -82,6 +82,13 @@
                 <small>ルビ・傍点を反映してクリップボードにコピー</small>
               </div>
             </div>
+            <div class="dropdown-item" id="menuExportMultiSite">
+              <span>🌐</span>
+              <div>
+                <strong>マルチサイト小説出力</strong>
+                <small>カクヨム・小説家になろう・電書協EPUB3出力</small>
+              </div>
+            </div>
             <div class="dropdown-item" id="menuExportPoP">
               <span>🛡️</span>
               <div>
@@ -490,6 +497,40 @@
             </div>
             <div>
               <button class="ide-btn" id="btnCopyActiveChapterAozora">コピー</button>
+            </div>
+          </div>
+
+          <!-- 5. Kakuyomu Format Export -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📖 カクヨム投稿形式 (KADOKAWA)</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">カクヨム独自記法（｜漢字《るび》、傍点《《…》》）へ自動変換してコピー</div>
+            </div>
+            <div>
+              <button class="ide-btn btn-primary" id="btnCopyKakuyomu">カクヨム形式コピー</button>
+            </div>
+          </div>
+
+          <!-- 6. Shousetsuka ni Narou Format Export -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📗 小説家になろう投稿形式 (ヒナプロジェクト)</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">なろう記法（｜漢字《るび》、空行・段落最適化）へ自動変換してコピー</div>
+            </div>
+            <div>
+              <button class="ide-btn" id="btnCopyNarou">なろう形式コピー</button>
+            </div>
+          </div>
+
+          <!-- 7. Denshokyo EPUB3 XHTML Export -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📑 電書協 EPUB3 XHTML 出力 (商業電子出版規格)</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">日本電子書籍出版社協会仕様セマンティック縦書きXHTML（rubyタグ・em-sesame傍点）</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="ide-btn" id="btnCopyDenshokyoEpub">XHTMLコピー</button>
+              <button class="ide-btn btn-primary" id="btnDownloadDenshokyoEpub">DL (.xhtml)</button>
             </div>
           </div>
         </div>

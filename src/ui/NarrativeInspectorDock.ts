@@ -4,6 +4,7 @@ import type {
   ZeroPronounItem,
   ZeroPronounCandidate,
 } from '../core/editor/NarrativeLinterEngine.js';
+import type { KinsokuViolation } from '../core/editor/KinsokuEngine.js';
 
 export interface NarrativeInspectorDockOptions {
   onJumpToTarget?: (from: number, to: number) => void;
@@ -18,7 +19,8 @@ export class NarrativeInspectorDock {
     totalWarnings: 0,
   };
 
-  private activeFilter: 'all' | 'syntactic' | 'zero-pronoun' = 'all';
+  private kinsokuViolations: KinsokuViolation[] = [];
+  private activeFilter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' = 'all';
   private onJumpToTarget?: (from: number, to: number) => void;
   private onInsertSubject?: (from: number, candidateText: string) => void;
 
@@ -31,11 +33,19 @@ export class NarrativeInspectorDock {
     this.currentResult = result;
   }
 
+  public updateKinsokuViolations(violations: KinsokuViolation[]): void {
+    this.kinsokuViolations = violations;
+  }
+
+  public getKinsokuViolations(): KinsokuViolation[] {
+    return this.kinsokuViolations;
+  }
+
   public getResult(): NarrativeAnalysisResult {
     return this.currentResult;
   }
 
-  public setFilter(filter: 'all' | 'syntactic' | 'zero-pronoun'): void {
+  public setFilter(filter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku'): void {
     this.activeFilter = filter;
   }
 
@@ -50,6 +60,7 @@ export class NarrativeInspectorDock {
 
     const showSyntactic = this.activeFilter === 'all' || this.activeFilter === 'syntactic';
     const showZP = this.activeFilter === 'all' || this.activeFilter === 'zero-pronoun';
+    const showKinsoku = this.activeFilter === 'all' || this.activeFilter === 'kinsoku';
 
     let html = `
       <div class="narrative-inspector-dock" data-testid="narrative-inspector-dock">
@@ -66,6 +77,7 @@ export class NarrativeInspectorDock {
             <div class="linter-metric-row">
               <span>構文警告: <strong>${res.syntacticItems.length} 件</strong></span>
               <span>主語抜け: <strong>${res.zeroPronounItems.length} 件</strong></span>
+              ${this.kinsokuViolations.length > 0 ? `<span>禁則違反: <strong>${this.kinsokuViolations.length} 件</strong></span>` : ''}
             </div>
             <div class="score-criteria-hint" style="font-size: 11px; color: var(--color-text-dim); margin-top: 6px; padding: 4px 8px; background: rgba(0, 0, 0, 0.04); border-radius: 4px; line-height: 1.4;">
               💡 <strong>採点基準:</strong> 基礎点100点からの減点方式（構文・文体指摘: −8点/件、主語抜け: −5点/件）
@@ -76,7 +88,7 @@ export class NarrativeInspectorDock {
         <!-- Filter Sub-tabs (Inline within Dock) -->
         <div class="dock-filter-bar">
           <button class="filter-btn ${this.activeFilter === 'all' ? 'active' : ''}" data-action="filter" data-filter="all">
-            すべて (${res.totalWarnings})
+            すべて (${res.totalWarnings + this.kinsokuViolations.length})
           </button>
           <button class="filter-btn ${this.activeFilter === 'syntactic' ? 'active' : ''}" data-action="filter" data-filter="syntactic">
             文体・構文 (${res.syntacticItems.length})
@@ -84,16 +96,21 @@ export class NarrativeInspectorDock {
           <button class="filter-btn ${this.activeFilter === 'zero-pronoun' ? 'active' : ''}" data-action="filter" data-filter="zero-pronoun">
             主語抜け (${res.zeroPronounItems.length})
           </button>
+          ${this.kinsokuViolations.length > 0 ? `
+          <button class="filter-btn ${this.activeFilter === 'kinsoku' ? 'active' : ''}" data-action="filter" data-filter="kinsoku">
+            組版禁則 (${this.kinsokuViolations.length})
+          </button>
+          ` : ''}
         </div>
     `;
 
-    if (res.totalWarnings === 0) {
+    if (res.totalWarnings === 0 && this.kinsokuViolations.length === 0) {
       html += `
         <div class="dock-empty-state">
           <div style="font-size: 24px; margin-bottom: 8px;">✨</div>
           <p><strong>文章構成は極めて清澄です</strong></p>
           <p style="font-size: 11px; color: var(--color-text-dim); margin-top: 4px;">
-            助詞重複・二重否定・受身連続・主語省略の不備は見つかりませんでした。
+            助詞重複・二重否定・受身連続・主語省略・組版禁則の不備は見つかりませんでした。
           </p>
         </div>
       `;
@@ -199,6 +216,36 @@ export class NarrativeInspectorDock {
           `;
         }
       }
+
+      // 3. Kinsoku Shori (Prohibition & Hanging Rules) Section
+      if (showKinsoku && this.kinsokuViolations.length > 0) {
+        html += `
+          <div class="dock-section-title" style="margin-top: 14px;">
+            <span>📐 組版・禁則違反（Kinsoku Violations）</span>
+            <span class="section-count">${this.kinsokuViolations.length}</span>
+          </div>
+        `;
+
+        for (const viol of this.kinsokuViolations) {
+          const violTypeLabel = viol.type === 'line-head' ? '行頭禁則' : '行末禁則';
+          const badgeClass = viol.type === 'line-head' ? 'tag-danger' : 'tag-warning';
+          const actionText = viol.suggestedAction === 'push-down' ? '追い出し' : viol.suggestedAction === 'hang' ? 'ぶら下げ' : '追い込み';
+
+          html += `
+            <div class="linter-issue-card cursor-pointer" data-action="jump" data-from="${viol.offset}" data-to="${viol.offset + 1}" title="クリックしてエディタの該当箇所へジャンプ">
+              <div class="issue-header">
+                <div style="display: flex; gap: 4px; align-items: center;">
+                  <span class="issue-tag ${badgeClass}">${violTypeLabel}</span>
+                  <span class="issue-tag" style="background: rgba(207,168,92,0.15); color: var(--color-gold); border: 1px solid rgba(207,168,92,0.3);">推奨: ${actionText}</span>
+                </div>
+                <span class="issue-pos">行 ${viol.lineIndex + 1}, 列 ${viol.colIndex + 1}</span>
+              </div>
+              <div class="issue-message">禁則文字: <strong>「${this.escapeHtml(viol.char)}」</strong>（${viol.type === 'line-head' ? '行頭に配置できない文字です' : '行末に配置できない文字です'}）</div>
+              <div class="issue-jump-hint">➜ エディタへジャンプ（${viol.offset}文字目）</div>
+            </div>
+          `;
+        }
+      }
     }
 
     html += `</div>`;
@@ -238,7 +285,7 @@ export class NarrativeInspectorDock {
     container.querySelectorAll('[data-action="filter"]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const target = e.currentTarget as HTMLElement;
-        const filter = target.dataset.filter as 'all' | 'syntactic' | 'zero-pronoun';
+        const filter = target.dataset.filter as 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku';
         if (filter) {
           this.setFilter(filter);
           container.innerHTML = this.renderHTML();
