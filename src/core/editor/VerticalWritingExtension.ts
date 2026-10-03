@@ -15,6 +15,7 @@
 
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import { Extension } from '@codemirror/state';
+import { VerticalKeyNavigationEngine } from './VerticalKeyNavigationEngine.js';
 
 /**
  * Checks whether the editor is currently rendered in vertical-rl writing mode.
@@ -399,10 +400,12 @@ function handleVerticalArrow(
       }
     }
     if (!moved) {
-      if (currentLine.number < doc.lines) {
-        const nextLine = doc.line(currentLine.number + 1);
-        targetPos = nextLine.from + Math.min(offsetInLine, nextLine.length);
-      }
+      const nav = VerticalKeyNavigationEngine.calculateNavigation({
+        text: doc.toString(),
+        cursorOffset: currentPos,
+        key: 'ArrowLeft',
+      });
+      targetPos = nav.newOffset;
     }
   } else if (key === 'ArrowRight') {
     // 視覚的な右＝右隣の列（前の行/列）の同位置へ幾何学的に移動
@@ -420,10 +423,12 @@ function handleVerticalArrow(
       }
     }
     if (!moved) {
-      if (currentLine.number > 1) {
-        const prevLine = doc.line(currentLine.number - 1);
-        targetPos = prevLine.from + Math.min(offsetInLine, prevLine.length);
-      }
+      const nav = VerticalKeyNavigationEngine.calculateNavigation({
+        text: doc.toString(),
+        cursorOffset: currentPos,
+        key: 'ArrowRight',
+      });
+      targetPos = nav.newOffset;
     }
   }
 

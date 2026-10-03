@@ -302,7 +302,10 @@ export class NarrativeInspectorDock {
       case 'particle-repetition':
         return '助詞重複';
       case 'consecutive-passive':
-        return '受身の連続';
+      case 'passive-voice':
+        return '受動態過多';
+      case 'demonstrative-overuse':
+        return '指示語多用';
       case 'subject-predicate-mismatch':
         return '主述不整合';
       default:
@@ -317,7 +320,10 @@ export class NarrativeInspectorDock {
       case 'particle-repetition':
         return 'tag-particle';
       case 'consecutive-passive':
+      case 'passive-voice':
         return 'tag-passive';
+      case 'demonstrative-overuse':
+        return 'tag-warning';
       case 'subject-predicate-mismatch':
         return 'tag-mismatch';
       default:

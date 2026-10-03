@@ -14,6 +14,7 @@ export default defineConfig({
       '@core': path.resolve(__dirname, '../worldcraft/src/index.ts'),
       '@editor': path.resolve(__dirname, 'src/index.ts'),
       '@editor/*': path.resolve(__dirname, 'src/*'),
+      '@nano': path.resolve(__dirname, '../narrative-nano/src/index.ts'),
     },
   },
 });

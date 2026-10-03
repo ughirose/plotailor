@@ -1,4 +1,5 @@
 import { LiteraryExporter, normalizeAozoraMarkup } from '../../core/export/LiteraryExporter.js';
+import { Epub3PackageBuilder } from '../../core/export/Epub3PackageBuilder.js';
 import type { LoreEntity } from '../../core/lore/LoreEntityManager.js';
 
 export interface ChapterData {
@@ -159,5 +160,37 @@ export class ExportController {
       }, 1000);
     }
     this.deps.showToast('🛡️ 創作プロセス証明書（PoP）を発行・保存しました！');
+  }
+
+  public exportEpub3Package(): { opf: string; nav: string } {
+    const title = this.deps.getWorkTitle();
+    const chapters = this.deps.getChapters();
+    const opf = Epub3PackageBuilder.generateOpf({
+      title,
+      direction: this.deps.isVertical() ? 'rtl' : 'ltr',
+      items: chapters.map((ch, idx) => ({
+        id: `chap-${idx + 1}`,
+        href: `chapter-${idx + 1}.xhtml`,
+        mediaType: 'application/xhtml+xml',
+      })),
+      spine: chapters.map((_, idx) => `chap-${idx + 1}`),
+      tocItems: chapters.map((ch, idx) => ({
+        id: `toc-${idx + 1}`,
+        title: ch.title,
+        href: `chapter-${idx + 1}.xhtml`,
+      })),
+    });
+
+    const nav = Epub3PackageBuilder.generateNavXhtml({
+      title,
+      tocItems: chapters.map((ch, idx) => ({
+        id: `toc-${idx + 1}`,
+        title: ch.title,
+        href: `chapter-${idx + 1}.xhtml`,
+      })),
+    });
+
+    this.deps.showToast(`📦「${title}」のEPUB3パッケージ定義を生成しました`);
+    return { opf, nav };
   }
 }

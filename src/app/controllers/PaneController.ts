@@ -1,3 +1,5 @@
+import { NarrativeTermLocalizer } from '../../core/editor/NarrativeTermLocalizer.js';
+
 export interface PaneControllerDependencies {
   isLeftPaneOpen: () => boolean;
   setLeftPaneOpen: (open: boolean) => void;
@@ -20,9 +22,18 @@ export type PaneToggleListener = (pane: 'left' | 'right', open: boolean) => void
 export class PaneController {
   private deps: PaneControllerDependencies;
   private toggleListeners: PaneToggleListener[] = [];
+  private localizer = new NarrativeTermLocalizer();
 
   constructor(deps: PaneControllerDependencies) {
     this.deps = deps;
+  }
+
+  public getLocalizer(): NarrativeTermLocalizer {
+    return this.localizer;
+  }
+
+  public localizeTerm(keyOrTerm: string): string {
+    return this.localizer.translateTerm(keyOrTerm);
   }
 
   public registerPaneToggleListener(listener: PaneToggleListener): void {

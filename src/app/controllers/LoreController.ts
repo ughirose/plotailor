@@ -13,6 +13,9 @@ import {
   reconcileEntityLifecycles,
   findShelvedCandidates,
 } from '../../core/lore/ShelvedLoreLifecycle.js';
+import { CharacterEmotionalArcTracker } from '../../core/editor/CharacterEmotionalArcTracker.js';
+import { CharacterInteractionMatrix } from '../../core/editor/CharacterInteractionMatrix.js';
+import { DECORATION_LEGEND_DICTIONARY, generateAllLegendCardsHtml } from '../../core/editor/DecorationLegendDictionary.js';
 import type { ChapterData } from './ExportController.js';
 
 export interface LoreControllerDependencies {
@@ -658,6 +661,52 @@ export class LoreController {
               </tr>
               ${rows}
             </table>
+          </div>
+        </div>
+      `;
+    } else if (activeRightTab === 'analytics') {
+      const cm = this.deps.getEditorView();
+      const text = cm ? cm.state.doc.toString() : '';
+      const chars = this.deps.getLoreManager().getEntities('character').map((c) => ({
+        id: c.id,
+        name: c.name,
+        aliases: c.aliases,
+      }));
+
+      const matrixCalc = new CharacterInteractionMatrix();
+      const matrixSummary = matrixCalc.analyze(text, chars);
+
+      const arcTracker = new CharacterEmotionalArcTracker();
+      const arcResult = arcTracker.analyze(text, chars);
+      const arcSvg = arcTracker.renderSvgArcChart(arcResult, { width: 280, height: 160 });
+
+      const topPairsHtml = matrixSummary.topPairs.length === 0
+        ? '<div style="color: var(--color-text-dim); font-size: 11px;">登場人物間の対話・共起がまだありません。</div>'
+        : matrixSummary.topPairs.slice(0, 5).map((p) =>
+            `<div style="display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; border-bottom: 1px dashed var(--color-border);">
+              <span>${p.char1.name} ↔ ${p.char2.name}</span>
+              <span style="color: var(--color-gold); font-weight: 600;">親密度 ${p.relationshipScore.toFixed(0)}</span>
+            </div>`
+          ).join('');
+
+      container.innerHTML = `
+        <div class="dock-card">
+          <div class="dock-card-header">
+            <span class="dock-card-title">🎭 人物感情曲線（Emotional Arc）</span>
+          </div>
+          <div class="dock-card-body" style="padding: 4px; overflow-x: auto;">
+            ${arcSvg}
+          </div>
+        </div>
+        <div class="dock-card" style="margin-top: 10px;">
+          <div class="dock-card-header">
+            <span class="dock-card-title">👥 人物関係・共起マトリクス</span>
+          </div>
+          <div class="dock-card-body">
+            <div style="font-size: 11px; color: var(--color-text-dim); margin-bottom: 6px;">
+              会話ターン・同一場面共起による結びつき上位:
+            </div>
+            ${topPairsHtml}
           </div>
         </div>
       `;

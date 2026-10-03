@@ -8,6 +8,9 @@ import {
   type AntecedentCandidate,
   type ContextSentence,
 } from '@worldcraft/narrative-nano';
+import { DemonstrativeOveruseDetector } from './DemonstrativeOveruseDetector.js';
+import { PassiveVoiceDetector } from './PassiveVoiceDetector.js';
+import { SensoryLexiconScorer, type SensoryAnalysisResult } from './SensoryLexiconScorer.js';
 
 export interface SyntacticLinterItem {
   id: string;
@@ -52,10 +55,14 @@ export interface NarrativeAnalysisResult {
   syntacticScore: number; // 0 to 100
   totalWarnings: number;
   analyzedWindow?: { from: number; to: number };
+  sensoryAnalysis?: SensoryAnalysisResult;
 }
 
 export class NarrativeLinterEngine {
   private zpResolver: ZeroPronounResolver;
+  private demonstrativeDetector = new DemonstrativeOveruseDetector();
+  private passiveDetector = new PassiveVoiceDetector();
+  private sensoryScorer = new SensoryLexiconScorer();
   private defaultKnownEntities: AntecedentCandidate[] = [
     { id: 'ent-valerius', text: 'ヴァレリウス', entityType: 'character', sentenceDistance: 0, caseRole: 'ガ', salienceScore: 1.5 },
     { id: 'ent-selene', text: 'セレネ', entityType: 'character', sentenceDistance: 0, caseRole: 'ガ', salienceScore: 1.3 },
@@ -298,6 +305,56 @@ export class NarrativeLinterEngine {
       });
     }
 
+    // 1.6 Demonstrative overuse analysis (こそあど言葉過多)
+    try {
+      const demoDiags = this.demonstrativeDetector.detect(syntaxCleanText);
+      for (const d of demoDiags) {
+        if (window && (d.to < window.from || d.from > window.to)) continue;
+        const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, d.from);
+        syntacticItems.push({
+          id: `syn-demo-${d.from}`,
+          from: d.from,
+          to: d.to,
+          line,
+          col,
+          severity: d.severity,
+          ruleType: 'demonstrative-overuse',
+          message: d.message,
+          source: 'demonstrative-detector',
+          previewText: d.demonstrative,
+          snippet: NarrativeLinterEngine.extractContextSnippet(targetText, d.from, d.to),
+        });
+      }
+    } catch {}
+
+    // 1.7 Passive voice overuse analysis (受動態・使役受動態過多)
+    try {
+      const passiveDiags = this.passiveDetector.detect(syntaxCleanText);
+      for (const p of passiveDiags) {
+        if (window && (p.to < window.from || p.from > window.to)) continue;
+        const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, p.from);
+        syntacticItems.push({
+          id: `syn-passive-${p.from}`,
+          from: p.from,
+          to: p.to,
+          line,
+          col,
+          severity: p.severity,
+          ruleType: 'passive-voice',
+          message: p.message,
+          source: 'passive-detector',
+          previewText: p.matches[0]?.text,
+          snippet: NarrativeLinterEngine.extractContextSnippet(targetText, p.from, p.to),
+        });
+      }
+    } catch {}
+
+    // 1.8 Sensory lexicon score analysis (五感描写スコアリング)
+    let sensoryAnalysis: SensoryAnalysisResult | undefined;
+    try {
+      sensoryAnalysis = this.sensoryScorer.analyze(syntaxCleanText);
+    } catch {}
+
     // 2. Zero Pronoun Resolution analysis on clean text
     const zeroPronounItems = this.detectZeroPronouns(syntaxCleanText, options?.entities, window);
 
@@ -330,6 +387,7 @@ export class NarrativeLinterEngine {
       syntacticScore: finalScore,
       totalWarnings: syntacticItems.length + zeroPronounItems.length,
       analyzedWindow: window,
+      sensoryAnalysis,
     };
   }
 

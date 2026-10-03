@@ -1,6 +1,7 @@
 import type { EditorView } from '@codemirror/view';
 import type { EditorState } from '@codemirror/state';
 import { showInlineConfirm } from '../InlineDialog.js';
+import { SlashMentionCommandParser, type SlashCommandDefinition } from '../../core/editor/SlashMentionCommandParser.js';
 import type { ChapterData } from './ExportController.js';
 import type { ProjectManager } from '../../core/project/index.js';
 
@@ -29,9 +30,14 @@ export type ChapterChangeListener = (action: 'load' | 'add' | 'delete' | 'rename
 export class ChapterController {
   private deps: ChapterControllerDependencies;
   private changeListeners: ChapterChangeListener[] = [];
+  private commandParser = new SlashMentionCommandParser();
 
   constructor(deps: ChapterControllerDependencies) {
     this.deps = deps;
+  }
+
+  public getCommandParser(): SlashMentionCommandParser {
+    return this.commandParser;
   }
 
   public registerChapterChangeListener(listener: ChapterChangeListener): void {

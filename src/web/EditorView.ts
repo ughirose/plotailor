@@ -11,6 +11,7 @@ import { ForeshadowingEngine, type ForeshadowingJumpTarget } from '../core/edito
 import { ForeshadowingProgressPanel } from '../core/editor/ForeshadowingProgressPanel.js';
 import { KinsokuEngine, type KinsokuViolation } from '../core/editor/KinsokuEngine.js';
 import { WritingVelocityWidget } from '../core/editor/WritingVelocityWidget.js';
+import { ManuscriptSheetCalculator } from '../core/editor/ManuscriptSheetCalculator.js';
 import { MultiSiteNovelFormatter } from '../core/exporters/multisite-novel-formatter.js';
 import { FullscreenStatusBar } from '../ui/FullscreenStatusBar.js';
 import { ColumnGuideline } from '../ui/ColumnGuideline.js';
@@ -381,12 +382,17 @@ export class EditorView {
       manuscript.innerHTML = AozoraParser.toHtml(this.rawText);
     }
 
-    // 2. Word count & Writing Velocity
+    // 2. Word count & Writing Velocity (with ManuscriptSheetCalculator)
     const wordCount = this.rawText.length;
-    const pages = (wordCount / 400).toFixed(1);
+    const sheetMetrics = ManuscriptSheetCalculator.calculate(this.rawText, {
+      preset: '400',
+      kinsokuShori: this.kinsokuEngine.getConfig().allowHanging,
+    });
+    const pages = sheetMetrics.sheets;
+    const pubPages = sheetMetrics.publicationPages;
     const wordCountDisplay = this.container.querySelector('#word-count-display');
     if (wordCountDisplay) {
-      wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰)`;
+      wordCountDisplay.textContent = `文字数: ${wordCount.toLocaleString()}字 / 原稿用紙 約${pages}枚 (400字詰) / 出版換算 約${pubPages}頁`;
     }
 
     this.velocityWidget.recordKeystroke(this.rawText);

@@ -10,6 +10,10 @@ export interface SettingsState {
   isAutoRuby: boolean;
   isRealtimeLinter: boolean;
   rubyMode: RubyDisplayMode;
+  isAutoTcy: boolean;
+  isAutoBouten: boolean;
+  isJapaneseBeautify: boolean;
+  manuscriptPreset: '400' | '200' | 'bunko' | 'custom';
 }
 
 export interface SettingsControllerDependencies {
@@ -31,6 +35,10 @@ export class SettingsController {
     isAutoRuby: true,
     isRealtimeLinter: true,
     rubyMode: 'normal',
+    isAutoTcy: true,
+    isAutoBouten: true,
+    isJapaneseBeautify: true,
+    manuscriptPreset: '400',
   };
   private listeners: SettingChangeListener[] = [];
 
@@ -170,6 +178,36 @@ export class SettingsController {
       this.applyFontPreferences();
       this.notifyListeners('fontFamily', val);
       this.deps.showToast(`本文フォントを変更しました`);
+    });
+
+    document.getElementById('settingAutoTcy')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this.state.isAutoTcy = checked;
+      try {
+        localStorage.setItem('plotailor_auto_tcy', checked.toString());
+      } catch {}
+      this.notifyListeners('isAutoTcy', checked);
+      this.deps.showToast(`縦中横（TCY）自動検出を ${checked ? 'ON' : 'OFF'} に設定しました`);
+    });
+
+    document.getElementById('settingAutoBouten')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this.state.isAutoBouten = checked;
+      try {
+        localStorage.setItem('plotailor_auto_bouten', checked.toString());
+      } catch {}
+      this.notifyListeners('isAutoBouten', checked);
+      this.deps.showToast(`傍点強調レンダリングを ${checked ? 'ON' : 'OFF'} に設定しました`);
+    });
+
+    document.getElementById('settingJapaneseBeautify')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this.state.isJapaneseBeautify = checked;
+      try {
+        localStorage.setItem('plotailor_japanese_beautify', checked.toString());
+      } catch {}
+      this.notifyListeners('isJapaneseBeautify', checked);
+      this.deps.showToast(`約物自動補正・括弧自動閉じを ${checked ? 'ON' : 'OFF'} に設定しました`);
     });
   }
 }

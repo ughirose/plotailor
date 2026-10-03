@@ -1,6 +1,8 @@
 import { EditorView } from '@codemirror/view';
 import { EditorState } from '@codemirror/state';
 import { undoDepth, redoDepth } from '@codemirror/commands';
+import { NonDestructiveRevisionGraph } from '../../core/storage/NonDestructiveRevisionGraph.js';
+import { RevisionGranularityManager } from '../../core/editor/RevisionGranularityManager.js';
 import type { ChapterData } from './ExportController.js';
 
 export interface SnapshotItem {
@@ -29,9 +31,19 @@ export class HistoryController {
   private deps: HistoryControllerDependencies;
   private lastSnapshotTime = 0;
   private snapshotListeners: SnapshotListener[] = [];
+  private revisionGraph = new NonDestructiveRevisionGraph<string>();
+  private granularityManager = new RevisionGranularityManager();
 
   constructor(deps: HistoryControllerDependencies) {
     this.deps = deps;
+  }
+
+  public getRevisionGraph(): NonDestructiveRevisionGraph<string> {
+    return this.revisionGraph;
+  }
+
+  public getGranularityManager(): RevisionGranularityManager {
+    return this.granularityManager;
   }
 
   public registerSnapshotListener(listener: SnapshotListener): void {
@@ -54,8 +66,24 @@ export class HistoryController {
     const len = text.replace(/\s+/g, '').length;
     // Do not record if text is identical to last recorded snapshot
     if (list.length > 0 && list[list.length - 1].text === text) return;
-    list.push({ time: Date.now(), text, length: len });
+    const now = Date.now();
+    list.push({ time: now, text, length: len });
     if (list.length > 500) list.shift();
+
+    // Sync to NonDestructiveRevisionGraph & GranularityManager
+    try {
+      if (!this.revisionGraph.getCurrentNode()) {
+        this.revisionGraph.createRootNode(text, '初回ドラフト', 'initial');
+      } else {
+        this.revisionGraph.commit(text, `スナップショット (${len}字)`, 'auto');
+      }
+      this.granularityManager.addSnapshot({
+        timestamp: now,
+        content: text,
+        trigger: 'timer',
+      });
+    } catch {}
+
     this.notifySnapshot(chapterId, list.length);
   }
 
