@@ -590,4 +590,34 @@ export class EditorView {
       rawTextarea.setSelectionRange(target.charOffset, target.charOffset);
     }
   }
+
+  public setKinsokuColumns(cols: number): void {
+    this.kinsokuEngine.updateConfig({ columnsPerLine: cols });
+    this.updateEditorState();
+  }
+
+  public setAllowHanging(allow: boolean): void {
+    this.kinsokuEngine.updateConfig({ allowHanging: allow });
+    this.updateEditorState();
+  }
+
+  public setTargetWordCount(target: number): void {
+    this.fullscreenStatusBar?.setTargetWordCount(target);
+  }
+
+  public setIdleThreshold(ms: number): void {
+    this.velocityWidget.setIdleThreshold(ms);
+  }
+
+  public getKinsokuEngine(): KinsokuEngine {
+    return this.kinsokuEngine;
+  }
+
+  public getVelocityWidget(): WritingVelocityWidget {
+    return this.velocityWidget;
+  }
+
+  public getFullscreenStatusBar(): FullscreenStatusBar | null {
+    return this.fullscreenStatusBar;
+  }
 }

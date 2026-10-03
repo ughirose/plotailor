@@ -139,6 +139,10 @@ export class PlotailorApp {
   private velocityWidget = new WritingVelocityWidget();
   private fullscreenStatusBar: FullscreenStatusBar | null = null;
   private kinsokuEngine = new KinsokuEngine({ columnsPerLine: 40, allowHanging: true });
+  private kinsokuColumns: number = 40;
+  private kinsokuHanging: boolean = true;
+  private targetWordCount: number = 5000;
+  private idleThresholdMs: number = 60000;
 
   constructor() {
     this.editorBody = (document.getElementById('editorBody') || document.getElementById('editor-body')) as HTMLDivElement;
@@ -209,6 +213,8 @@ export class PlotailorApp {
 
     const currentCh = this.chapters.find((c) => c.id === this.currentChapterId) || this.chapters[0];
     const initialContent = currentCh ? currentCh.content : '';
+    this.kinsokuEngine.updateConfig({ columnsPerLine: this.kinsokuColumns, allowHanging: this.kinsokuHanging });
+    this.velocityWidget.setIdleThreshold(this.idleThresholdMs);
     this.velocityWidget.startSession(initialContent.length);
     const canvasWrapper = document.getElementById('canvasWrapper');
     if (canvasWrapper) {
@@ -216,8 +222,11 @@ export class PlotailorApp {
         container: canvasWrapper,
         initialText: initialContent,
         isFullscreen: this.isFullscreen,
+        targetWordCount: this.targetWordCount,
       });
     }
+    const initialViolations = this.kinsokuEngine.detectViolations(initialContent);
+    this.narrativeDock.updateKinsokuViolations(initialViolations);
   }
 
   private loadStateFromStorage() {
@@ -353,6 +362,30 @@ export class PlotailorApp {
         this.isVerticalUpright = savedVerticalUpright === 'true';
       }
       document.body.classList.toggle('vertical-upright', this.isVerticalUpright);
+
+      // 7.5. Kinsoku and Regulation Preferences
+      const savedKinsokuCols = localStorage.getItem('plotailor_kinsoku_columns');
+      if (savedKinsokuCols) {
+        const num = parseInt(savedKinsokuCols, 10);
+        if (!isNaN(num) && num >= 30 && num <= 50) this.kinsokuColumns = num;
+      }
+
+      const savedKinsokuHanging = localStorage.getItem('plotailor_kinsoku_hanging');
+      if (savedKinsokuHanging !== null) {
+        this.kinsokuHanging = savedKinsokuHanging === 'true';
+      }
+
+      const savedTargetCount = localStorage.getItem('plotailor_target_word_count');
+      if (savedTargetCount) {
+        const num = parseInt(savedTargetCount, 10);
+        if (!isNaN(num) && num > 0) this.targetWordCount = num;
+      }
+
+      const savedIdleThreshold = localStorage.getItem('plotailor_idle_threshold_ms');
+      if (savedIdleThreshold) {
+        const num = parseInt(savedIdleThreshold, 10);
+        if (!isNaN(num) && num > 0) this.idleThresholdMs = num;
+      }
 
       // 8. Restore chapter snapshots
       const savedSnaps = localStorage.getItem(`plotailor_snapshots_${this.currentProjectId}`);
@@ -2072,6 +2105,22 @@ export class PlotailorApp {
 
     const inpSecs = document.getElementById('settingSnapshotCustomSeconds') as HTMLInputElement | null;
     if (inpSecs) inpSecs.value = this.snapshotCustomSeconds.toString();
+
+    // Regulation & Velocity Settings
+    const rngKinsokuCols = document.getElementById('settingKinsokuColumns') as HTMLInputElement | null;
+    if (rngKinsokuCols) rngKinsokuCols.value = this.kinsokuColumns.toString();
+
+    const spanKinsokuColsVal = document.getElementById('settingKinsokuColumnsVal');
+    if (spanKinsokuColsVal) spanKinsokuColsVal.textContent = `${this.kinsokuColumns}字`;
+
+    const chkKinsokuHanging = document.getElementById('settingKinsokuHanging') as HTMLInputElement | null;
+    if (chkKinsokuHanging) chkKinsokuHanging.checked = this.kinsokuHanging;
+
+    const inpTargetWordCount = document.getElementById('settingTargetWordCount') as HTMLInputElement | null;
+    if (inpTargetWordCount) inpTargetWordCount.value = this.targetWordCount.toString();
+
+    const selIdleThreshold = document.getElementById('settingIdleThreshold') as HTMLSelectElement | null;
+    if (selIdleThreshold) selIdleThreshold.value = this.idleThresholdMs.toString();
   }
 
   public setVerticalUpright(enabled: boolean): void {
@@ -2265,6 +2314,89 @@ export class PlotailorApp {
         localStorage.setItem('plotailor_snapshot_custom_seconds', num.toString());
       } catch {}
     });
+
+    // 7. Kinsoku Columns Slider
+    const inputKinsokuCols = document.getElementById('settingKinsokuColumns') as HTMLInputElement | null;
+    const spanKinsokuColsVal = document.getElementById('settingKinsokuColumnsVal');
+    const onKinsokuColsChange = (e: Event) => {
+      const val = parseInt((e.target as HTMLInputElement).value, 10) || 40;
+      this.kinsokuColumns = val;
+      if (spanKinsokuColsVal) spanKinsokuColsVal.textContent = `${val}字`;
+      this.kinsokuEngine.updateConfig({ columnsPerLine: val });
+      const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
+      const violations = this.kinsokuEngine.detectViolations(currentText);
+      this.narrativeDock.updateKinsokuViolations(violations);
+      try {
+        localStorage.setItem('plotailor_kinsoku_columns', val.toString());
+      } catch {}
+    };
+    inputKinsokuCols?.addEventListener('input', onKinsokuColsChange);
+    inputKinsokuCols?.addEventListener('change', onKinsokuColsChange);
+
+    // 8. Kinsoku Hanging Toggle
+    document.getElementById('settingKinsokuHanging')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      this.kinsokuHanging = checked;
+      this.kinsokuEngine.updateConfig({ allowHanging: checked });
+      const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
+      const violations = this.kinsokuEngine.detectViolations(currentText);
+      this.narrativeDock.updateKinsokuViolations(violations);
+      try {
+        localStorage.setItem('plotailor_kinsoku_hanging', checked.toString());
+      } catch {}
+    });
+
+    // 9. Target Word Count Input
+    const inputTargetWordCount = document.getElementById('settingTargetWordCount') as HTMLInputElement | null;
+    const onTargetWordCountChange = (e: Event) => {
+      const val = parseInt((e.target as HTMLInputElement).value, 10) || 5000;
+      if (val <= 0) return;
+      this.targetWordCount = val;
+      this.fullscreenStatusBar?.setTargetWordCount(val);
+      try {
+        localStorage.setItem('plotailor_target_word_count', val.toString());
+      } catch {}
+    };
+    inputTargetWordCount?.addEventListener('input', onTargetWordCountChange);
+    inputTargetWordCount?.addEventListener('change', onTargetWordCountChange);
+
+    // 10. Idle Threshold Select
+    document.getElementById('settingIdleThreshold')?.addEventListener('change', (e) => {
+      const val = parseInt((e.target as HTMLSelectElement).value, 10) || 60000;
+      this.idleThresholdMs = val;
+      this.velocityWidget.setIdleThreshold(val);
+      try {
+        localStorage.setItem('plotailor_idle_threshold_ms', val.toString());
+      } catch {}
+    });
+  }
+
+  public getKinsokuColumns(): number {
+    return this.kinsokuColumns;
+  }
+
+  public getKinsokuHanging(): boolean {
+    return this.kinsokuHanging;
+  }
+
+  public getTargetWordCount(): number {
+    return this.targetWordCount;
+  }
+
+  public getIdleThresholdMs(): number {
+    return this.idleThresholdMs;
+  }
+
+  public getKinsokuEngine(): KinsokuEngine {
+    return this.kinsokuEngine;
+  }
+
+  public getVelocityWidget(): WritingVelocityWidget {
+    return this.velocityWidget;
+  }
+
+  public getFullscreenStatusBar(): FullscreenStatusBar | null {
+    return this.fullscreenStatusBar;
   }
 
   private initHelpModal(): void {

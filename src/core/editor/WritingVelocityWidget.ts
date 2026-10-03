@@ -171,6 +171,32 @@ export class WritingVelocityWidget {
   }
 
   /**
+   * Updates idle detection threshold in milliseconds.
+   */
+  public setIdleThreshold(idleThresholdMs: number): void {
+    this.config.idleThresholdMs = idleThresholdMs;
+  }
+
+  /**
+   * Gets current idle detection threshold in milliseconds.
+   */
+  public getIdleThreshold(): number {
+    return this.config.idleThresholdMs;
+  }
+
+  /**
+   * Updates configuration properties.
+   */
+  public updateConfig(config: Partial<WritingVelocityConfig>): void {
+    if (config.idleThresholdMs !== undefined) {
+      this.config.idleThresholdMs = config.idleThresholdMs;
+    }
+    if (config.slidingWindowMs !== undefined) {
+      this.config.slidingWindowMs = config.slidingWindowMs;
+    }
+  }
+
+  /**
    * Resets session to current state.
    */
   public reset(timestamp: number = Date.now()): void {
