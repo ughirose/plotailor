@@ -1,5 +1,6 @@
 import { LiteraryExporter, normalizeAozoraMarkup } from '../../core/export/LiteraryExporter.js';
 import { Epub3PackageBuilder } from '../../core/export/Epub3PackageBuilder.js';
+import { MultiSiteNovelFormatter } from '../../core/exporters/multisite-novel-formatter.js';
 import type { LoreEntity } from '../../core/lore/LoreEntityManager.js';
 
 export interface ChapterData {
@@ -192,5 +193,58 @@ export class ExportController {
 
     this.deps.showToast(`📦「${title}」のEPUB3パッケージ定義を生成しました`);
     return { opf, nav };
+  }
+
+  public exportKakuyomu(): void {
+    const title = this.deps.getWorkTitle();
+    const fullText = LiteraryExporter.exportAozoraFullText(title, this.deps.getChapters());
+    const res = MultiSiteNovelFormatter.format(fullText, { platform: 'kakuyomu' });
+    this.copyTextToClipboard(res.formattedContent, `✅ カクヨム形式（${res.stats.characterCount}文字）をコピーしました`);
+  }
+
+  public exportNarou(): void {
+    const title = this.deps.getWorkTitle();
+    const fullText = LiteraryExporter.exportAozoraFullText(title, this.deps.getChapters());
+    const res = MultiSiteNovelFormatter.format(fullText, { platform: 'narou' });
+    this.copyTextToClipboard(res.formattedContent, `✅ 小説家になろう形式（${res.stats.characterCount}文字）をコピーしました`);
+  }
+
+  public exportDenshokyoEpub(action: 'copy' | 'download'): void {
+    const title = this.deps.getWorkTitle();
+    const fullText = LiteraryExporter.exportAozoraFullText(title, this.deps.getChapters());
+    const res = MultiSiteNovelFormatter.format(fullText, {
+      platform: 'denshokyo_epub',
+      title,
+      author: 'Author',
+    });
+    if (action === 'copy') {
+      this.copyTextToClipboard(res.formattedContent, '✅ 電書協 EPUB3 XHTML をコピーしました');
+    } else {
+      LiteraryExporter.downloadFile(`${title}_denshokyo.xhtml`, res.formattedContent, 'application/xhtml+xml;charset=utf-8');
+      this.deps.showToast(`📥「${title}_denshokyo.xhtml」をダウンロードしました`);
+    }
+  }
+
+  public initExportModal(): void {
+    const btnExport = document.getElementById('btnExportAozora');
+    btnExport?.addEventListener('click', () => this.openExportModal());
+
+    document.getElementById('btnCloseExportModal')?.addEventListener('click', () => this.closeExportModal());
+    document.getElementById('btnCopyAozoraFull')?.addEventListener('click', () => this.exportFullAozora('copy'));
+    document.getElementById('btnDownloadAozoraTxt')?.addEventListener('click', () => this.exportFullAozora('download'));
+    document.getElementById('btnOpenPrintPreview')?.addEventListener('click', () => this.exportPrintPreview());
+    document.getElementById('btnDownloadLoreBible')?.addEventListener('click', () => this.exportLoreBible());
+    document.getElementById('btnCopyActiveChapterAozora')?.addEventListener('click', () => this.exportActiveChapterAozora());
+    document.getElementById('btnCopyKakuyomu')?.addEventListener('click', () => this.exportKakuyomu());
+    document.getElementById('btnCopyNarou')?.addEventListener('click', () => this.exportNarou());
+    document.getElementById('btnCopyDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('copy'));
+    document.getElementById('btnDownloadDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('download'));
+
+    const modal = document.getElementById('exportModal');
+    modal?.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        this.closeExportModal();
+      }
+    });
   }
 }

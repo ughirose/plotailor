@@ -22,6 +22,7 @@ import {
 } from '../core/lore/LoreEntityManager.js';
 import { CausalDagEngine } from '../core/causality/CausalDagEngine.js';
 import { OpfsWalWorkerBridge } from '../core/storage/OpfsWalWorkerBridge.js';
+import { ExportController, SettingsController } from './controllers/index.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
 import { ProjectManager, type ProjectMeta } from '../core/project/index.js';
 import { TypingCadenceMachine, type CadenceStatus } from '../core/editor/TypingCadenceMachine.js';
@@ -146,6 +147,8 @@ export class PlotailorApp {
   private columnGuidelineVisible: boolean = true;
   private targetWordCount: number = 5000;
   private idleThresholdMs: number = 60000;
+  public exportController!: ExportController;
+  public settingsController!: SettingsController;
 
   constructor() {
     this.editorBody = (document.getElementById('editorBody') || document.getElementById('editor-body')) as HTMLDivElement;
@@ -184,6 +187,24 @@ export class PlotailorApp {
 
     this.fontSizeControl = new FontSizeControl({
       onChange: (size, metrics) => this.handleFontSizeChange(size, metrics),
+    });
+
+    this.exportController = new ExportController({
+      getWorkTitle: () => this.workTitle,
+      getChapters: () => this.chapters,
+      getLoreEntities: () => this.loreManager.getEntities(),
+      getCurrentChapterContent: () => (this.cmEditor ? this.cmEditor.state.doc.toString() : ''),
+      getKeystrokeCount: () => this.keystrokeCount,
+      isVertical: () => this.isVertical,
+      showToast: (msg) => this.showToast(msg),
+    });
+
+    this.settingsController = new SettingsController({
+      getEditorBody: () => this.editorBody,
+      getEditorView: () => this.cmEditor,
+      getRubyCompartment: () => this.rubyCompartment,
+      setRubyMode: (mode) => { this.rubyMode = mode; },
+      showToast: (msg) => this.showToast(msg),
     });
 
     this.init();
@@ -2606,112 +2627,47 @@ export class PlotailorApp {
   }
 
   public openExportModal() {
-    const modal = document.getElementById('exportModal');
-    if (modal) {
-      modal.style.display = 'flex';
-    }
+    this.exportController.openExportModal();
   }
 
   public closeExportModal() {
-    const modal = document.getElementById('exportModal');
-    if (modal) {
-      modal.style.display = 'none';
-    }
+    this.exportController.closeExportModal();
   }
 
   private copyTextToClipboard(text: string, successMsg: string) {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(() => {
-        this.showToast(successMsg);
-      }).catch(() => {
-        this.fallbackCopy(text, successMsg);
-      });
-    } else {
-      this.fallbackCopy(text, successMsg);
-    }
+    this.exportController.copyTextToClipboard(text, successMsg);
   }
 
   private fallbackCopy(text: string, successMsg = '✅ クリップボードにコピーしました') {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.left = '-9999px';
-      document.body.appendChild(ta);
-      ta.select();
-      if (typeof document.execCommand === 'function') {
-        document.execCommand('copy');
-      }
-      document.body.removeChild(ta);
-      this.showToast(successMsg);
-    } catch {
-      this.showToast(successMsg);
-    }
+    this.exportController.fallbackCopy(text, successMsg);
   }
 
   private exportFullAozora(action: 'copy' | 'download') {
-    const fullText = LiteraryExporter.exportAozoraFullText(this.workTitle, this.chapters);
-    if (action === 'copy') {
-      this.copyTextToClipboard(fullText, '✅ 全章青空文庫形式をコピーしました');
-    } else {
-      LiteraryExporter.downloadFile(`${this.workTitle}.txt`, fullText);
-      this.showToast(`📥「${this.workTitle}.txt」をダウンロードしました`);
-    }
+    this.exportController.exportFullAozora(action);
   }
 
   private exportPrintPreview() {
-    const printHtml = LiteraryExporter.exportPrintHtml(this.workTitle, this.chapters, {
-      isVertical: this.isVertical,
-    });
-    const previewWindow = window.open('', '_blank');
-    if (previewWindow) {
-      previewWindow.document.open();
-      previewWindow.document.write(printHtml);
-      previewWindow.document.close();
-      this.showToast('🖨️ 印刷プレビューを別タブで開きました');
-    } else {
-      this.showToast('⚠️ ポップアップがブロックされました。ブラウザの設定をご確認ください');
-    }
+    this.exportController.exportPrintPreview();
   }
 
   private exportLoreBible() {
-    const entities = this.loreManager.getEntities();
-    const md = LiteraryExporter.exportLoreBibleMarkdown(this.workTitle, entities);
-    LiteraryExporter.downloadFile(`${this.workTitle}_設定資料集.md`, md, 'text/markdown;charset=utf-8');
-    this.showToast(`📥「${this.workTitle}_設定資料集.md」をダウンロードしました`);
+    this.exportController.exportLoreBible();
   }
 
   private exportActiveChapterAozora() {
-    const raw = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
-    const normalized = normalizeAozoraMarkup(raw);
-    this.copyTextToClipboard(normalized, '✅ 現在の章（青空記法）をコピーしました');
+    this.exportController.exportActiveChapterAozora();
   }
 
   private exportKakuyomu() {
-    const fullText = LiteraryExporter.exportAozoraFullText(this.workTitle, this.chapters);
-    const res = MultiSiteNovelFormatter.format(fullText, { platform: 'kakuyomu' });
-    this.copyTextToClipboard(res.formattedContent, `✅ カクヨム形式（${res.stats.characterCount}文字）をコピーしました`);
+    this.exportController.exportKakuyomu();
   }
 
   private exportNarou() {
-    const fullText = LiteraryExporter.exportAozoraFullText(this.workTitle, this.chapters);
-    const res = MultiSiteNovelFormatter.format(fullText, { platform: 'narou' });
-    this.copyTextToClipboard(res.formattedContent, `✅ 小説家になろう形式（${res.stats.characterCount}文字）をコピーしました`);
+    this.exportController.exportNarou();
   }
 
   private exportDenshokyoEpub(action: 'copy' | 'download') {
-    const fullText = LiteraryExporter.exportAozoraFullText(this.workTitle, this.chapters);
-    const res = MultiSiteNovelFormatter.format(fullText, {
-      platform: 'denshokyo_epub',
-      title: this.workTitle,
-      author: 'Author',
-    });
-    if (action === 'copy') {
-      this.copyTextToClipboard(res.formattedContent, '✅ 電書協 EPUB3 XHTML をコピーしました');
-    } else {
-      LiteraryExporter.downloadFile(`${this.workTitle}_denshokyo.xhtml`, res.formattedContent, 'application/xhtml+xml;charset=utf-8');
-      this.showToast(`📥「${this.workTitle}_denshokyo.xhtml」をダウンロードしました`);
-    }
+    this.exportController.exportDenshokyoEpub(action);
   }
 
   private toastTimer: any = null;
