@@ -26,6 +26,7 @@ import { ParagraphIndenter } from '../editor/ParagraphIndenter.js';
 import { SceneOutliner, type SceneNode } from '../editor/SceneOutliner.js';
 import { TaigenRhythmEngine, type RhythmAnalysisResult } from '../nlp/TaigenRhythmEngine.js';
 import { RubySyntaxParser, type RubyFormat, type NormalizeOptions } from '../editor/RubySyntaxParser.js';
+import { RubyBatchConverter, type ConversionResult, type BatchConverterOptions } from '../editor/RubyBatchConverter.js';
 import { EmotionalArcAnalyzer, type EmotionalArcResult } from '../nlp/EmotionalArcAnalyzer.js';
 import { EmotionalArcChart } from '../nlp/EmotionalArcChart.js';
 import { ExclamationSpacingFormatter, type ExclamationSpacingDiagnostic } from '../editor/ExclamationSpacingFormatter.js';
@@ -318,6 +319,31 @@ export class ThreePaneWorkspace {
 
   public setRightTab(tab: WorkspaceState['activeRightTab']): void {
     this.state.activeRightTab = tab;
+  }
+
+  /**
+   * Batch normalizes ruby and bouten markup in current rawText.
+   */
+  public batchNormalizeRuby(): ConversionResult {
+    const res = RubyBatchConverter.normalizeText(this.state.rawText);
+    this.onTextChange(res.convertedText, false);
+    return res;
+  }
+
+  /**
+   * Import text into workspace with format detection and normalization.
+   */
+  public importText(text: string, defaultFormat?: RubyFormat): ConversionResult {
+    const res = RubyBatchConverter.importText(text, { defaultFormat });
+    this.onTextChange(res.convertedText, false);
+    return res;
+  }
+
+  /**
+   * Export workspace rawText into requested target format.
+   */
+  public exportText(targetFormat: RubyFormat, convertBoutenToNarouDots?: boolean): ConversionResult {
+    return RubyBatchConverter.exportText(this.state.rawText, targetFormat, { convertBoutenToNarouDots });
   }
 
   /**

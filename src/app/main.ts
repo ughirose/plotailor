@@ -1945,7 +1945,7 @@ export class PlotailorApp {
 
     document.getElementById('menuToggleFullscreenMobile')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
-      this.toggleFullscreen();
+      this.toggleFullscreen(!this.isFullscreen);
     });
 
     document.getElementById('menuOpenSettings')?.addEventListener('click', () => {

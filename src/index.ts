@@ -7,6 +7,8 @@ import { OPFSStorage, WriteAheadLog, CrashRecoveryManager, type RecoveryReport }
 import { NarrativeBridge } from './core/ipc/NarrativeBridge.js';
 import type { NarrativeRpcResponse } from './core/ipc/NarrativeRpcProtocol.js';
 import { VerticalViewport } from './core/editor/VerticalViewport.js';
+import type { RubyFormat } from './core/editor/RubySyntaxParser.js';
+import { RubyBatchConverter, type BatchConverterOptions, type ConversionResult } from './core/editor/RubyBatchConverter.js';
 
 export class PlotailorIDE {
   private engine = new WorldOntologyEngine();
@@ -113,6 +115,34 @@ export class PlotailorIDE {
   renderThreePaneLayout(): ThreePaneView {
     return this.threePaneAuditView.render();
   }
+
+  /**
+   * Batch normalize variant ruby/bouten notations into standard Aozora format.
+   */
+  batchNormalizeRuby(text: string): ConversionResult {
+    return RubyBatchConverter.normalizeText(text);
+  }
+
+  /**
+   * Convert text between Aozora, Kakuyomu, and Narou ruby formats.
+   */
+  convertRubyFormat(text: string, options: BatchConverterOptions): ConversionResult {
+    return RubyBatchConverter.convertFormat(text, options);
+  }
+
+  /**
+   * Import text pipeline with auto format detection and normalization.
+   */
+  importText(text: string, options?: { defaultFormat?: RubyFormat }): ConversionResult {
+    return RubyBatchConverter.importText(text, options);
+  }
+
+  /**
+   * Export text pipeline into requested target format.
+   */
+  exportText(text: string, targetFormat: RubyFormat, options?: { convertBoutenToNarouDots?: boolean }): ConversionResult {
+    return RubyBatchConverter.exportText(text, targetFormat, options);
+  }
 }
 
 export * from './core/ipc/SharedMemoryProtocol.js';
@@ -195,5 +225,11 @@ export * from './lib/parser/frontmatter-parser.js';
 export * from './types/vertical-layout.js';
 export * from './core/editor/VerticalCanvasCompositor.js';
 export { EditorView } from './web/EditorView.js';
-
-
+export * from './core/editor/RubyBatchConverter.js';
+export * from './types/literature-ast.js';
+export * from './lib/ast/literature-ast-parser.js';
+export * from './ui/FullscreenStatusBar.js';
+export * from './core/editor/KinsokuEngine.js';
+export * from './core/editor/WritingVelocityWidget.js';
+export * from './core/types/multisite-export.js';
+export * from './core/exporters/multisite-novel-formatter.js';
