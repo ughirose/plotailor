@@ -29,6 +29,7 @@ import {
   HistoryController,
   ChapterController,
   LoreController,
+  ViewController,
 } from './controllers/index.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
 import { ProjectManager, type ProjectMeta } from '../core/project/index.js';
@@ -104,11 +105,15 @@ export class PlotailorApp {
   private chapters: ChapterData[] = [];
   private currentChapterId = 'ch1';
   private workTitle = '星辰の境界線';
-  private isVertical = false;
-  private isLineWrapping = true;
-  private rubyMode: RubyDisplayMode = 'normal';
-  private isNightTheme = false;
-  private isFullscreen = false;
+  public get isVertical(): boolean { return this.viewController ? this.viewController.getIsVertical() : false; }
+  public set isVertical(val: boolean) { if (this.viewController) this.viewController.setIsVertical(val); }
+  public get isLineWrapping(): boolean { return this.viewController ? this.viewController.getIsLineWrapping() : true; }
+  public set isLineWrapping(val: boolean) { if (this.viewController) this.viewController.setIsLineWrapping(val); }
+  public get rubyMode(): RubyDisplayMode { return this.viewController ? this.viewController.getRubyMode() : 'normal'; }
+  public set rubyMode(val: RubyDisplayMode) { if (this.viewController) this.viewController.setRubyMode(val); }
+  public get isNightTheme(): boolean { return this.viewController ? this.viewController.getIsNightTheme() : false; }
+  public set isNightTheme(val: boolean) { if (this.viewController) this.viewController.setIsNightTheme(val); }
+  public get isFullscreen(): boolean { return this.viewController ? this.viewController.getIsFullscreen() : false; }
   private isAutoIndent = true;
   private isAutoRuby = true;
   private isRealtimeLinter = true;
@@ -158,9 +163,22 @@ export class PlotailorApp {
   public historyController!: HistoryController;
   public chapterController!: ChapterController;
   public loreController!: LoreController;
+  public viewController!: ViewController;
 
   constructor() {
     this.editorBody = (document.getElementById('editorBody') || document.getElementById('editor-body')) as HTMLDivElement;
+    this.viewController = new ViewController({
+      getEditorView: () => this.cmEditor,
+      getEditorBody: () => this.editorBody,
+      getWrapCompartment: () => this.wrapCompartment,
+      getRubyCompartment: () => this.rubyCompartment,
+      getColumnGuideline: () => this.columnGuideline,
+      getFullscreenStatusBar: () => this.fullscreenStatusBar,
+      getFontSize: () => this.fontSize,
+      getKinsokuColumns: () => this.kinsokuColumns,
+      saveToStorage: () => this.saveToStorage(),
+      showToast: (msg) => this.showToast(msg),
+    });
     if (window.innerWidth <= 768) {
       this.leftPaneOpen = false;
       this.rightPaneOpen = false;
@@ -833,11 +851,11 @@ export class PlotailorApp {
       }
     });
 
-    this.initPaneResizers();
-    this.initQuickFormatButtons();
+    this.paneController.initPaneResizers();
+    this.viewController.initQuickFormatButtons();
     this.initHamburgerMenu();
     this.initPaneCollapseButtons();
-    this.initDecorationLegend();
+    this.viewController.initDecorationLegend();
     this.initSettingsModal();
     this.initHelpModal();
     this.initHistoryModal();
@@ -1611,170 +1629,35 @@ export class PlotailorApp {
   }
 
   private applyOrientation() {
-    const center = document.getElementById('paneCenter');
-    const btn = document.getElementById('btnToggleOrientation');
-    const wrapper = document.getElementById('canvasWrapper');
-
-    const btnIndent = document.getElementById('btnQuickIndent');
-    if (this.isVertical) {
-      center?.classList.add('vertical-rl');
-      this.editorBody.classList.add('vertical-rl');
-      if (btn) btn.textContent = '横書き';
-      if (btnIndent) btnIndent.textContent = '⤓ 字下げ';
-      if (this.cmEditor) {
-        this.cmEditor.dom.classList.add('cm-vertical-rl');
-        this.cmEditor.requestMeasure();
-      }
-      if (wrapper) {
-        requestAnimationFrame(() => {
-          wrapper.scrollLeft = wrapper.scrollWidth;
-        });
-      }
-    } else {
-      center?.classList.remove('vertical-rl');
-      this.editorBody.classList.remove('vertical-rl');
-      if (btn) btn.textContent = '縦書き';
-      if (btnIndent) btnIndent.textContent = '⇥ 字下げ';
-      if (this.cmEditor) {
-        this.cmEditor.dom.classList.remove('cm-vertical-rl');
-        this.cmEditor.requestMeasure();
-      }
-      if (wrapper) {
-        requestAnimationFrame(() => {
-          wrapper.scrollLeft = 0;
-        });
-      }
-    }
-    if (this.columnGuideline) {
-      this.columnGuideline.setVertical(this.isVertical);
-    }
-    this.updateEditorWidth();
+    this.viewController.applyOrientation();
   }
 
   private toggleOrientation() {
-    this.isVertical = !this.isVertical;
-    this.applyOrientation();
-    this.saveToStorage();
-    this.showToast(`執筆方向を「${this.isVertical ? '縦書き' : '横書き'}」に切り替えました`);
+    this.viewController.toggleOrientation();
   }
 
   private toggleWrap() {
-    this.isLineWrapping = !this.isLineWrapping;
-    if (this.cmEditor) {
-      this.cmEditor.dispatch({
-        effects: this.wrapCompartment.reconfigure(this.isLineWrapping ? EditorView.lineWrapping : []),
-      });
-    }
-
-    this.editorBody.classList.toggle('wrap-active', this.isLineWrapping);
-    this.editorBody.classList.toggle('no-wrap', !this.isLineWrapping);
-
-    const btn = document.getElementById('btnToggleWrap');
-    if (btn) {
-      btn.textContent = `折り返し: ${this.isLineWrapping ? 'ON' : 'OFF'}`;
-    }
-
-    this.saveToStorage();
-    this.showToast(`📐 文字折り返しを「${this.isLineWrapping ? 'ON' : 'OFF'}」に設定しました`);
+    this.viewController.toggleWrap();
   }
 
   private getRubyButtonLabel(): string {
-    switch (this.rubyMode) {
-      case 'normal':
-        return 'ルビ: 通常';
-      case 'raw':
-        return 'ルビ: 記法直接';
-      case 'off':
-        return 'ルビ: OFF';
-    }
+    return this.viewController.getRubyButtonLabel();
   }
 
   private toggleRuby() {
-    if (this.rubyMode === 'normal') {
-      this.rubyMode = 'raw';
-    } else if (this.rubyMode === 'raw') {
-      this.rubyMode = 'off';
-    } else {
-      this.rubyMode = 'normal';
-    }
-
-    if (this.cmEditor) {
-      this.cmEditor.dispatch({
-        effects: [
-          this.rubyCompartment.reconfigure(
-            this.rubyMode === 'raw'
-              ? []
-              : rubyDecorationExtension({ mode: this.rubyMode, expandOnCursor: true })
-          ),
-          setRubyDisplayMode.of(this.rubyMode),
-        ],
-      });
-      this.cmEditor.requestMeasure();
-    }
-
-    const btn = document.getElementById('btnToggleRuby');
-    if (btn) {
-      btn.textContent = this.getRubyButtonLabel();
-    }
-
-    this.saveToStorage();
-
-    const desc =
-      this.rubyMode === 'normal'
-        ? '通常ルビ (リッチ表示)'
-        : this.rubyMode === 'raw'
-        ? '青空文庫ルビ表記 (直接入力)'
-        : 'ルビOFF (隠蔽モード・親文字のみ)';
-    this.showToast(`📖 ルビ表示を「${desc}」に設定しました`);
+    this.viewController.toggleRuby();
   }
 
   private toggleTheme() {
-    this.isNightTheme = !this.isNightTheme;
-    this.applyTheme();
-    this.saveToStorage();
+    this.viewController.toggleTheme();
   }
 
   private applyTheme() {
-    const center = document.getElementById('paneCenter');
-    const btn = document.getElementById('btnToggleTheme');
-    const container = document.querySelector('.app-container');
-
-    if (this.isNightTheme) {
-      document.body.classList.remove('theme-washi');
-      document.body.classList.add('theme-night');
-      container?.classList.remove('theme-washi');
-      container?.classList.add('theme-night');
-      center?.classList.add('theme-night');
-      if (btn) btn.textContent = '📜 和紙色';
-    } else {
-      document.body.classList.remove('theme-night');
-      document.body.classList.add('theme-washi');
-      container?.classList.remove('theme-night');
-      container?.classList.add('theme-washi');
-      center?.classList.remove('theme-night');
-      if (btn) btn.textContent = '🌙 夜間色';
-    }
-
-    const btnWrap = document.getElementById('btnToggleWrap');
-    if (btnWrap) {
-      btnWrap.textContent = `折り返し: ${this.isLineWrapping ? 'ON' : 'OFF'}`;
-    }
+    this.viewController.applyTheme();
   }
 
   private toggleFullscreen(enable: boolean) {
-    this.isFullscreen = enable;
-    this.fullscreenStatusBar?.setFullscreen(enable);
-    if (enable) {
-      document.body.classList.add('fullscreen-active');
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
-      }
-    } else {
-      document.body.classList.remove('fullscreen-active');
-      if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
-      }
-    }
+    this.viewController.toggleFullscreen(enable);
   }
 
   private toggleLeftPane() {
@@ -1947,15 +1830,7 @@ export class PlotailorApp {
   }
 
   private initDecorationLegend(): void {
-    const btnLegend = document.getElementById('btnToggleLegendCard');
-    const panel = document.getElementById('decorationLegendPanel');
-    if (!btnLegend || !panel) return;
-
-    btnLegend.addEventListener('click', () => {
-      const isHidden = panel.style.display === 'none';
-      panel.style.display = isHidden ? 'block' : 'none';
-      btnLegend.textContent = isHidden ? '凡例 ▴' : '凡例 ▾';
-    });
+    this.viewController.initDecorationLegend();
   }
 
   public openExportModal() {
@@ -2062,68 +1937,11 @@ export class PlotailorApp {
   }
 
   private initQuickFormatButtons(): void {
-    document.getElementById('btnQuickRuby')?.addEventListener('click', () => {
-      if (this.cmEditor) {
-        wrapSelectionWithRuby(this.cmEditor);
-        this.cmEditor.focus();
-      }
-    });
-
-    document.getElementById('btnQuickBouten')?.addEventListener('click', () => {
-      if (this.cmEditor) {
-        const state = this.cmEditor.state;
-        const sel = state.selection.main;
-        const selectedText = state.sliceDoc(sel.from, sel.to) || '';
-        if (selectedText) {
-          this.cmEditor.dispatch({
-            changes: { from: sel.from, to: sel.to, insert: `《《${selectedText}》》` },
-            selection: { anchor: sel.from + selectedText.length + 4 },
-          });
-        } else {
-          this.cmEditor.dispatch({
-            changes: { from: sel.from, to: sel.to, insert: `《《》》` },
-            selection: { anchor: sel.from + 2 },
-          });
-        }
-        this.cmEditor.focus();
-      }
-    });
-
-    document.getElementById('btnQuickBold')?.addEventListener('click', () => {
-      if (this.cmEditor) {
-        const state = this.cmEditor.state;
-        const sel = state.selection.main;
-        const selectedText = state.sliceDoc(sel.from, sel.to) || '';
-        this.cmEditor.dispatch({
-          changes: { from: sel.from, to: sel.to, insert: `**${selectedText}**` },
-          selection: { anchor: sel.from + (selectedText ? selectedText.length + 4 : 2) },
-        });
-        this.cmEditor.focus();
-      }
-    });
-
-    document.getElementById('btnQuickIndent')?.addEventListener('click', () => {
-      if (this.cmEditor) {
-        this.cmEditor.dispatch(this.cmEditor.state.replaceSelection('　'));
-        this.cmEditor.focus();
-      }
-    });
+    this.viewController.initQuickFormatButtons();
   }
 
   public updateEditorWidth(): void {
-    if (!this.editorBody) return;
-    if (this.isVertical) {
-      this.editorBody.style.maxWidth = '';
-      this.editorBody.style.width = 'max-content';
-      return;
-    }
-    const currentSize = FontSizeControl.clampFontSize(this.fontSize);
-    // Character width is base font size * 1.03 (matching ColumnGuideline pitch)
-    const pitchWidth = currentSize * 1.03;
-    // Left and right padding: 48px + 48px = 96px, plus 16px buffer for caret / hanging punctuation
-    const totalWidthPx = Math.ceil(this.kinsokuColumns * pitchWidth + 96 + 16);
-    this.editorBody.style.maxWidth = `${totalWidthPx}px`;
-    this.editorBody.style.width = '100%';
+    this.viewController.updateEditorWidth();
   }
 
   public getColumnGuideline(): ColumnGuideline | null {

@@ -7,6 +7,7 @@ import {
   HistoryController,
   ChapterController,
   LoreController,
+  ViewController,
   type ChapterData,
 } from '../src/app/controllers/index.js';
 import { LoreEntityManager } from '../src/core/lore/LoreEntityManager.js';
@@ -303,4 +304,60 @@ describe('Plotailor Controllers Refactoring & Extension Points', () => {
       expect(document.getElementById('dockContent')?.innerHTML).toBeDefined();
     });
   });
+
+  describe('ViewController', () => {
+    it('manages orientation, theme, fullscreen, wrapping, and format buttons', () => {
+      const editorBody = document.getElementById('editorBody') as HTMLDivElement;
+      let saved = false;
+      const showToast = vi.fn();
+
+      const viewCtrl = new ViewController({
+        getEditorView: () => null,
+        getEditorBody: () => editorBody,
+        getWrapCompartment: () => ({ of: vi.fn(), reconfigure: vi.fn() } as any),
+        getRubyCompartment: () => ({ of: vi.fn(), reconfigure: vi.fn() } as any),
+        getColumnGuideline: () => null,
+        getFullscreenStatusBar: () => null,
+        getFontSize: () => '16px',
+        getKinsokuColumns: () => 40,
+        saveToStorage: () => { saved = true; },
+        showToast,
+      });
+
+      // Default state
+      expect(viewCtrl.getIsVertical()).toBe(true);
+      expect(viewCtrl.getIsNightTheme()).toBe(false);
+
+      // Orientation toggle
+      viewCtrl.toggleOrientation();
+      expect(viewCtrl.getIsVertical()).toBe(false);
+      expect(saved).toBe(true);
+      expect(showToast).toHaveBeenCalledWith(expect.stringContaining('横書き'));
+
+      // Theme toggle
+      viewCtrl.toggleTheme();
+      expect(viewCtrl.getIsNightTheme()).toBe(true);
+      expect(document.body.classList.contains('theme-night')).toBe(true);
+
+      // Fullscreen toggle
+      viewCtrl.toggleFullscreen(true);
+      expect(viewCtrl.getIsFullscreen()).toBe(true);
+      expect(document.body.classList.contains('fullscreen-active')).toBe(true);
+
+      viewCtrl.toggleFullscreen(false);
+      expect(viewCtrl.getIsFullscreen()).toBe(false);
+      expect(document.body.classList.contains('fullscreen-active')).toBe(false);
+
+      // Wrapping toggle
+      viewCtrl.toggleWrap();
+      expect(viewCtrl.getIsLineWrapping()).toBe(false);
+
+      // Ruby toggle
+      expect(viewCtrl.getRubyMode()).toBe('normal');
+      viewCtrl.toggleRuby();
+      expect(viewCtrl.getRubyMode()).toBe('raw');
+      expect(viewCtrl.getRubyButtonLabel()).toBe('ルビ: 記法直接');
+    });
+  });
 });
+
