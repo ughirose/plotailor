@@ -146,7 +146,10 @@ export class NarrativeLinterEngine {
       return '  ' + content + '  ';
     });
 
-    // 3. Bouten tag: ［＃傍点］...［＃傍点終わり］
+    // 3. Bouten tag: ［＃「...」に傍点］ and ［＃傍点］...［＃傍点終わり］
+    masked = masked.replace(/[［\[]＃「[^」\n]+?」に傍点[］\]]/g, (match) => {
+      return ' '.repeat(match.length);
+    });
     masked = masked.replace(/([［\[]＃傍点[］\]])([^\n［］\[\]]+?)([［\[]＃傍点終わり[］\]])/g, (_m, open, content, close) => {
       return ' '.repeat(open.length) + content + ' '.repeat(close.length);
     });

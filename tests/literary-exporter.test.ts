@@ -27,7 +27,7 @@ describe('LiteraryExporter & Markup Converter', () => {
     const html = convertAozoraToHtml(aozora);
 
     expect(html).toContain('<ruby>星辰<rt>せいしん</rt></ruby>');
-    expect(html).toContain('<span class="bouten">凶兆</span>');
+    expect(html).toMatch(/<span class="bouten(?:\s+bouten-dot)?">凶兆<\/span>/);
     expect(html).toContain('<p>');
   });
 
@@ -104,5 +104,30 @@ describe('LiteraryExporter & Markup Converter', () => {
     expect(html).toContain('@page');
     expect(html).toContain('運命の円環');
     expect(html).toContain('<ruby>太陽<rt>たいよう</rt></ruby>');
+  });
+
+  it('TASK-439: should convert Kakuyomu bouten and official Aozora bouten into HTML bouten spans without leaking symbols', () => {
+    const raw = '彼は《《真実》》を知り、［＃「奇跡」に傍点］を目撃した。親文字<<るび>>も展開される。';
+    const html = convertAozoraToHtml(raw);
+
+    expect(html).toContain('<span class="bouten bouten-dot">真実</span>');
+    expect(html).toContain('<span class="bouten bouten-dot">奇跡</span>');
+    expect(html).toContain('<ruby>親文字<rt>るび</rt></ruby>');
+    expect(html).not.toContain('《《');
+    expect(html).not.toContain('》》');
+    expect(html).not.toContain('［＃');
+    expect(html).not.toContain('<<');
+  });
+
+  it('TASK-439: exportPrintPreview should generate self-contained vertical manuscript preview with bouten-dot CSS', () => {
+    const chapters = [
+      { id: 'ch1', title: '序章', content: '《《始まり》》の鐘が鳴る。' },
+    ];
+    const previewHtml = LiteraryExporter.exportPrintPreview('星霜の書', chapters, { isVertical: true });
+
+    expect(previewHtml).toContain('<span class="bouten bouten-dot">始まり</span>');
+    expect(previewHtml).toContain('.bouten, .bouten-dot');
+    expect(previewHtml).toContain('text-emphasis: filled dot');
+    expect(previewHtml).toContain('writing-mode: vertical-rl');
   });
 });
