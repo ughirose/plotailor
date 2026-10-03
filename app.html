@@ -232,7 +232,12 @@
     <!-- Bottom Status Bar -->
     <footer class="ide-footer">
       <div class="ide-footer-left">
-        <span>行: <strong id="cursorLine">1</strong>, 列: <strong id="cursorCol">1</strong></span>
+        <span id="cursorPosBadge" class="cursor-pos-badge" title="キャレット位置 (行 / 行内文字数 / 設定文字数)">
+          <span class="cursor-badge-prefix">L</span><strong id="cursorLine">1</strong>
+          <span class="cursor-badge-sep"> </span>
+          <span class="cursor-badge-prefix">C</span><strong id="cursorCol">1</strong>/<span id="cursorMaxCol">40</span>
+          <span id="cursorOverflowBadge" class="cursor-overflow-badge" style="display: none;"></span>
+        </span>
         <span>|</span>
         <span>選択: <strong id="selectionLength">0</strong></span>
         <span>|</span>

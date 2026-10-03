@@ -33,6 +33,32 @@ describe('FullscreenStatusBar (非侵襲全画面ステータスバー)', () => 
       expect(state.characterCount).toBe(1200);
       expect(state.manuscriptPages).toBe(3.0); // 1200 / 400 = 3.0
     });
+
+    it('updateText supports customCharCount to ensure dynamic synchronization with footer stats', () => {
+      const statusBar = new FullscreenStatusBar({ initialText: '吾輩は猫である。' });
+      // Text with spaces: 12 chars including spaces, but 8 net chars
+      const textWithSpaces = '吾輩は 猫で ある。  ';
+      statusBar.updateText(textWithSpaces, 8);
+
+      const state = statusBar.getState();
+      expect(state.rawText).toBe(textWithSpaces);
+      expect(state.characterCount).toBe(8);
+      expect(state.manuscriptPages).toBe(0.0); // 8 / 400 = 0.02 -> 0.0
+    });
+
+    it('syncMetrics updates character count, manuscript pages, and writing speed directly', () => {
+      const statusBar = new FullscreenStatusBar();
+      statusBar.syncMetrics({
+        characterCount: 800,
+        manuscriptPages: 2.0,
+        writingSpeedCpm: 120,
+      });
+
+      const state = statusBar.getState();
+      expect(state.characterCount).toBe(800);
+      expect(state.manuscriptPages).toBe(2.0);
+      expect(state.writingSpeedCpm).toBe(120);
+    });
   });
 
   describe('セッション執筆速度 (文字/分: CPM)', () => {

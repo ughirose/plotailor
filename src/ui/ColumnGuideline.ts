@@ -43,6 +43,8 @@ export class ColumnGuideline {
   private fontSize: number;
   private visible: boolean;
   private showTicks: boolean;
+  private isOverflowState: boolean = false;
+  private isHangingState: boolean = false;
 
   constructor(options: ColumnGuidelineOptions) {
     this.container = options.container;
@@ -331,6 +333,31 @@ export class ColumnGuideline {
 
   public isVisible(): boolean {
     return this.visible;
+  }
+
+  public setOverflow(isOverflow: boolean, isHanging: boolean = false): void {
+    this.isOverflowState = isOverflow;
+    this.isHangingState = isHanging;
+
+    if (this.primaryLineEl) {
+      this.primaryLineEl.classList.toggle('is-overflow', isOverflow && !isHanging);
+      this.primaryLineEl.classList.toggle('is-hanging', isHanging);
+    }
+    if (this.primaryBadgeEl) {
+      this.primaryBadgeEl.classList.toggle('is-overflow', isOverflow && !isHanging);
+      this.primaryBadgeEl.classList.toggle('is-hanging', isHanging);
+    }
+    if (this.hangingLineEl) {
+      this.hangingLineEl.classList.toggle('is-hanging-active', isHanging);
+    }
+  }
+
+  public getIsOverflow(): boolean {
+    return this.isOverflowState;
+  }
+
+  public getIsHanging(): boolean {
+    return this.isHangingState;
   }
 
   public getRootElement(): HTMLElement | null {

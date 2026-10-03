@@ -1775,6 +1775,15 @@ export class PlotailorApp {
       const countEl = document.querySelector(`.chapter-item[data-id="${this.currentChapterId}"] .chapter-char-count`);
       if (countEl) countEl.textContent = `${charCount.toLocaleString()} 字`;
     }
+
+    // Dynamic synchronization with FullscreenStatusBar
+    if (this.fullscreenStatusBar) {
+      this.fullscreenStatusBar.updateText(rawText, charCount);
+      const metrics = this.velocityWidget.getMetrics();
+      if (metrics.cpm > 0) {
+        this.fullscreenStatusBar.syncMetrics({ writingSpeedCpm: metrics.cpm });
+      }
+    }
   }
 
   private updateCursorStats() {
@@ -1784,11 +1793,50 @@ export class PlotailorApp {
     const lineObj = this.cmEditor.state.doc.lineAt(head);
     const line = lineObj.number;
     const col = head - lineObj.from + 1;
+    const lineLength = lineObj.length;
+    const maxCols = this.kinsokuColumns;
 
     const lineEl = document.getElementById('cursorLine');
     if (lineEl) lineEl.textContent = line.toString();
     const colEl = document.getElementById('cursorCol');
     if (colEl) colEl.textContent = col.toString();
+
+    const maxColEl = document.getElementById('cursorMaxCol');
+    if (maxColEl) maxColEl.textContent = maxCols.toString();
+
+    // Overflow & hanging punctuation detection
+    // A line or caret column is considered exceeding if it exceeds maxCols.
+    const currentCharPos = Math.max(col - 1, lineLength);
+    const isExceeding = currentCharPos > maxCols;
+    const isHanging = isExceeding && this.kinsokuHanging && currentCharPos === maxCols + 1;
+    const isDefiniteOverflow = isExceeding && !isHanging;
+
+    const posBadge = document.getElementById('cursorPosBadge');
+    const overflowBadge = document.getElementById('cursorOverflowBadge');
+
+    if (posBadge) {
+      posBadge.classList.toggle('is-overflow', isDefiniteOverflow);
+      posBadge.classList.toggle('is-hanging', isHanging);
+    }
+
+    if (overflowBadge) {
+      if (isDefiniteOverflow) {
+        const excess = currentCharPos - maxCols;
+        overflowBadge.textContent = `+${excess}字超過`;
+        overflowBadge.style.display = 'inline-flex';
+        overflowBadge.title = `設定行長(${maxCols}字)を${excess}文字超過しています`;
+      } else if (isHanging) {
+        overflowBadge.textContent = `ぶら下げ(+1)`;
+        overflowBadge.style.display = 'inline-flex';
+        overflowBadge.title = `句読点・閉じ括弧のぶら下げ組み許容範囲内です`;
+      } else {
+        overflowBadge.textContent = '';
+        overflowBadge.style.display = 'none';
+      }
+    }
+
+    // Synchronize ColumnGuideline border/badge overflow visual state
+    this.columnGuideline?.setOverflow(isDefiniteOverflow, isHanging);
 
     const selLengthEl = document.getElementById('selectionLength');
     if (selLengthEl) selLengthEl.textContent = Math.abs(mainSel.to - mainSel.from).toString();
@@ -1797,9 +1845,8 @@ export class PlotailorApp {
     this.keystrokeCount++;
     const metrics = this.velocityWidget.getMetrics();
     const speedEl = document.getElementById('typingSpeed');
+    const displaySpeed = metrics.cpm > 0 ? metrics.cpm : Math.round(this.keystrokeCount / Math.max(0.1, (Date.now() - this.typingStartTime) / 60000));
     if (speedEl) {
-      // Show CPM or fallback to keystrokes/minute if CPM is 0 in short tests
-      const displaySpeed = metrics.cpm > 0 ? metrics.cpm : Math.round(this.keystrokeCount / Math.max(0.1, (Date.now() - this.typingStartTime) / 60000));
       speedEl.textContent = displaySpeed.toString();
     }
 
@@ -1809,6 +1856,11 @@ export class PlotailorApp {
       const idleText = metrics.isCurrentlyIdle ? ' [休憩中]' : '';
       extraInfoEl.textContent = `(${metrics.cph}字/時 | 純増:${deltaSign}${metrics.netCharacterDelta}${idleText})`;
       extraInfoEl.title = `打鍵数: ${metrics.totalKeystrokes} / CPM: ${metrics.cpm} / CPH: ${metrics.cph} / 純増: ${deltaSign}${metrics.netCharacterDelta}文字`;
+    }
+
+    // Also sync writing speed to FullscreenStatusBar
+    if (this.fullscreenStatusBar && displaySpeed > 0) {
+      this.fullscreenStatusBar.syncMetrics({ writingSpeedCpm: displaySpeed });
     }
   }
 
@@ -2356,6 +2408,7 @@ export class PlotailorApp {
       const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
       const violations = this.kinsokuEngine.detectViolations(currentText);
       this.narrativeDock.updateKinsokuViolations(violations);
+      this.updateCursorStats();
       try {
         localStorage.setItem('plotailor_kinsoku_columns', val.toString());
       } catch {}
@@ -2372,6 +2425,7 @@ export class PlotailorApp {
       const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
       const violations = this.kinsokuEngine.detectViolations(currentText);
       this.narrativeDock.updateKinsokuViolations(violations);
+      this.updateCursorStats();
       try {
         localStorage.setItem('plotailor_kinsoku_hanging', checked.toString());
       } catch {}

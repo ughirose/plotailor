@@ -694,6 +694,104 @@ html, body {
   font-family: var(--font-mono, monospace);
 }
 
+/* Column Guideline Overflow Warning & Hanging Feedback */
+.column-guideline-line.is-overflow {
+  border-color: rgba(239, 68, 68, 0.75) !important;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.4);
+}
+
+.column-guideline-badge.is-overflow {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: rgba(239, 68, 68, 0.7) !important;
+  color: #fca5a5 !important;
+  font-weight: 600;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.35);
+}
+
+.column-guideline-line.is-hanging {
+  border-color: rgba(245, 158, 11, 0.7) !important;
+}
+
+.column-guideline-badge.is-hanging {
+  background: rgba(245, 158, 11, 0.25) !important;
+  border-color: rgba(245, 158, 11, 0.6) !important;
+  color: #fde68a !important;
+}
+
+.column-guideline-line.is-hanging-active {
+  border-color: rgba(245, 158, 11, 0.8) !important;
+  box-shadow: 0 0 5px rgba(245, 158, 11, 0.3);
+}
+
+/* Footer Cursor Position & Column Guideline Integration */
+.cursor-pos-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  transition: all 0.15s ease;
+}
+
+.cursor-pos-badge .cursor-badge-prefix {
+  color: var(--color-text-dim, #8b949e);
+  font-size: 10px;
+}
+
+.cursor-pos-badge.is-hanging {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.45);
+  color: #f59e0b;
+}
+
+.cursor-pos-badge.is-hanging strong {
+  color: #fbbf24;
+}
+
+.cursor-pos-badge.is-overflow {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #f87171;
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
+  animation: pulseOverflow 1.5s infinite ease-in-out;
+}
+
+.cursor-pos-badge.is-overflow strong {
+  color: #fca5a5;
+}
+
+@keyframes pulseOverflow {
+  0%, 100% {
+    border-color: rgba(239, 68, 68, 0.55);
+  }
+  50% {
+    border-color: rgba(239, 68, 68, 0.85);
+    box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  }
+}
+
+.cursor-overflow-badge {
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+.cursor-pos-badge.is-hanging .cursor-overflow-badge {
+  background: rgba(245, 158, 11, 0.25);
+  color: #fde68a;
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
 /* Vertical Writing Mode - Reliable Horizontal Scroll on Long Text */
 .pane-center.vertical-rl .canvas-wrapper {
   overflow-x: scroll !important;

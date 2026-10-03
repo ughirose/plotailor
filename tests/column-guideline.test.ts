@@ -152,6 +152,40 @@ describe('ColumnGuideline & Ruler Component', () => {
       expect(localStorage.getItem(STORAGE_KEY_GUIDELINE_VISIBLE)).toBe('true');
     });
 
+    it('toggles overflow warning and hanging styles on guideline lines and badges', () => {
+      const guideline = new ColumnGuideline({ container, columns: 40 });
+      const primaryLine = container.querySelector('.column-guideline-line.primary') as HTMLElement;
+      const primaryBadge = container.querySelector('.column-guideline-badge') as HTMLElement;
+      const hangingLine = container.querySelector('.column-guideline-line.hanging') as HTMLElement;
+
+      expect(guideline.getIsOverflow()).toBe(false);
+      expect(guideline.getIsHanging()).toBe(false);
+      expect(primaryLine.classList.contains('is-overflow')).toBe(false);
+
+      // Definite overflow
+      guideline.setOverflow(true, false);
+      expect(guideline.getIsOverflow()).toBe(true);
+      expect(guideline.getIsHanging()).toBe(false);
+      expect(primaryLine.classList.contains('is-overflow')).toBe(true);
+      expect(primaryBadge.classList.contains('is-overflow')).toBe(true);
+      expect(primaryLine.classList.contains('is-hanging')).toBe(false);
+
+      // Hanging tolerance overflow
+      guideline.setOverflow(true, true);
+      expect(guideline.getIsHanging()).toBe(true);
+      expect(primaryLine.classList.contains('is-overflow')).toBe(false);
+      expect(primaryLine.classList.contains('is-hanging')).toBe(true);
+      expect(primaryBadge.classList.contains('is-hanging')).toBe(true);
+      expect(hangingLine.classList.contains('is-hanging-active')).toBe(true);
+
+      // Reset
+      guideline.setOverflow(false, false);
+      expect(guideline.getIsOverflow()).toBe(false);
+      expect(guideline.getIsHanging()).toBe(false);
+      expect(primaryLine.classList.contains('is-overflow')).toBe(false);
+      expect(primaryLine.classList.contains('is-hanging')).toBe(false);
+    });
+
     it('cleans up DOM on destroy', () => {
       const guideline = new ColumnGuideline({ container });
       expect(container.querySelector('.column-guideline-container')).not.toBeNull();

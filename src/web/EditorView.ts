@@ -399,7 +399,16 @@ export class EditorView {
       velEl.textContent = `⚡ 速度: ${vel.cpm} CPM (${vel.cph}字/時 | 純増:${deltaSign}${vel.netCharacterDelta}字${idleText})`;
     }
 
-    // 3. Kinsoku Typesetting Diagnostics
+    // 3. Kinsoku Typesetting Diagnostics & Line Overflow Warning
+    const lines = this.rawText.split('\n');
+    const cols = this.kinsokuEngine.getConfig().columnsPerLine;
+    const allowHanging = this.kinsokuEngine.getConfig().allowHanging;
+    const maxLineLength = Math.max(0, ...lines.map((l) => l.length));
+    const isExceeding = maxLineLength > cols;
+    const isHanging = isExceeding && allowHanging && maxLineLength === cols + 1;
+    const isDefiniteOverflow = isExceeding && !isHanging;
+    this.columnGuideline?.setOverflow(isDefiniteOverflow, isHanging);
+
     const kinsokuViolations = this.kinsokuEngine.detectViolations(this.rawText);
     this.renderKinsokuDiagnostics(kinsokuViolations);
 

@@ -107,9 +107,9 @@ export class FullscreenStatusBar {
   /**
    * Updates current text and recalculates word count, manuscript pages, target progress, and CPM.
    */
-  public updateText(newText: string): void {
+  public updateText(newText: string, customCharCount?: number): void {
     const prevCount = this.state.characterCount;
-    const newCount = newText.length;
+    const newCount = typeof customCharCount === 'number' ? customCharCount : newText.length;
     const addedChars = Math.max(0, newCount - prevCount);
 
     this.state.rawText = newText;
@@ -126,6 +126,26 @@ export class FullscreenStatusBar {
 
     this.recalculateWritingSpeed();
     this.onUserActivity();
+  }
+
+  /**
+   * Direct synchronization with external metrics (e.g. editor footer / velocity widget).
+   */
+  public syncMetrics(metrics: { characterCount?: number; manuscriptPages?: number; writingSpeedCpm?: number }): void {
+    if (typeof metrics.characterCount === 'number') {
+      this.state.characterCount = metrics.characterCount;
+      this.state.manuscriptPages = typeof metrics.manuscriptPages === 'number'
+        ? metrics.manuscriptPages
+        : this.calculateManuscriptPages(metrics.characterCount);
+      this.state.progressPercent = this.calculateProgressPercent(
+        this.state.characterCount,
+        this.targetWordCount
+      );
+    }
+    if (typeof metrics.writingSpeedCpm === 'number') {
+      this.state.writingSpeedCpm = metrics.writingSpeedCpm;
+    }
+    this.updateDOM();
   }
 
   /**
