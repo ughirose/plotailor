@@ -75,7 +75,10 @@ export class NarrativeInspectorDock {
         <!-- Top Score & Health Metric -->
         <div class="dock-card dock-score-card">
           <div class="dock-card-header" style="display: flex; justify-content: space-between; align-items: center;">
-            <span class="dock-card-title">🖋️ リアルタイム推敲・構文スコア</span>
+            <span class="dock-card-title" style="display: inline-flex; align-items: center; gap: 6px;">
+              <span>🖋️ リアルタイム推敲・構文スコア</span>
+              <span class="model-badge" style="font-size: 10px; background: rgba(56, 139, 253, 0.15); color: var(--color-primary, #58a6ff); padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(56, 139, 253, 0.3); font-weight: 600;">Ultra v15 (1M QAT)</span>
+            </span>
             <span class="score-badge" style="color: ${scoreColor}; font-weight: 700; font-size: 15px; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 3px;">
               <span>${score}</span>
               <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">/ 100点</span>

@@ -3,3 +3,5 @@ test-results/
 playwright-report/
 *.log
 scratch/
+public/models/*.onnx
+
