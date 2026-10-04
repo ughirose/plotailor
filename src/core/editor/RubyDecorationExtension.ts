@@ -26,14 +26,17 @@ export const rubyConfigFacet = Facet.define<RubyDecorationConfig, Required<RubyD
       (acc, cur) => ({
         mode: cur.mode ?? acc.mode,
         expandOnCursor: cur.expandOnCursor ?? acc.expandOnCursor,
+        compositionRange: cur.compositionRange !== undefined ? cur.compositionRange : acc.compositionRange,
       }),
       {
         mode: 'normal',
         expandOnCursor: false,
+        compositionRange: null,
       }
     );
   },
 });
+
 
 export interface RubyMatch {
   type: 'ruby';

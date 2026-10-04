@@ -432,9 +432,26 @@ export class LoreController {
 
     if (activeRightTab === 'linter') {
       const narrativeDock = this.deps.getNarrativeDock();
+      const dagEngine = this.deps.getDagEngine();
+      const cycleReport = dagEngine.detectCycles();
+      const loreManager = this.deps.getLoreManager();
+      const shelvedEntities = loreManager.getEntities().filter((e) => e.status === 'shelved');
+      const strayLores = shelvedEntities.map((e) => ({
+        entityId: e.id,
+        canonicalName: e.name,
+        manualScore: 4.5,
+        status: 'shelved' as const,
+        evacuationTimestamp: e.updatedAt || Date.now(),
+        evacuationContext: e.description || '',
+      }));
+      narrativeDock.updateContinuityState({
+        dagCycleReport: cycleReport,
+        strayLoreItems: strayLores,
+      });
       container.innerHTML = narrativeDock.renderHTML();
       narrativeDock.bindEvents(container);
     } else if (activeRightTab === 'lore') {
+
       const cm = this.deps.getEditorView();
       const docText = cm ? cm.state.doc.toString() : '';
       const cursorPos = cm ? cm.state.selection.main.head : 0;

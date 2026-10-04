@@ -13,6 +13,9 @@ import { PassiveVoiceDetector } from './PassiveVoiceDetector.js';
 import { SensoryLexiconScorer, type SensoryAnalysisResult } from './SensoryLexiconScorer.js';
 import { ParticleRepetitionLinterEngine } from './ParticleRepetitionLinter.js';
 import { KanjiHirakuDictionaryEngine } from './KanjiHirakuDictionary.js';
+import { EllipsisDashLinterEngine } from './EllipsisDashLinter.js';
+import { BracketPairChecker } from './BracketPairChecker.js';
+import { QwertyTypoDetector } from './QwertyTypoDetector.js';
 
 export interface SyntacticLinterItem {
   id: string;
@@ -21,13 +24,15 @@ export interface SyntacticLinterItem {
   line: number;
   col: number;
   severity: 'error' | 'warning' | 'info';
-  ruleType: 'double-negation' | 'particle-repetition' | 'consecutive-passive' | 'subject-predicate-mismatch' | string;
+  tier?: 1 | 2 | 3;
+  ruleType: 'double-negation' | 'particle-repetition' | 'consecutive-passive' | 'subject-predicate-mismatch' | 'ellipsis-dash' | 'bracket-pair' | 'qwerty-typo' | string;
   message: string;
   source: string;
   previewText?: string;
   replacementText?: string;
   snippet?: string;
 }
+
 
 export interface ZeroPronounCandidate {
   text: string;
@@ -123,6 +128,9 @@ export class NarrativeLinterEngine {
   private sensoryScorer = new SensoryLexiconScorer();
   private particleRepetitionEngine = new ParticleRepetitionLinterEngine();
   private hirakuEngine = new KanjiHirakuDictionaryEngine();
+  private ellipsisLinter = new EllipsisDashLinterEngine();
+  private bracketChecker = new BracketPairChecker();
+  private typoDetector = new QwertyTypoDetector();
   private defaultKnownEntities: AntecedentCandidate[] = [
     { id: 'ent-valerius', text: 'ヴァレリウス', entityType: 'character', sentenceDistance: 0, caseRole: 'ガ', salienceScore: 1.5 },
     { id: 'ent-selene', text: 'セレネ', entityType: 'character', sentenceDistance: 0, caseRole: 'ガ', salienceScore: 1.3 },
@@ -144,6 +152,19 @@ export class NarrativeLinterEngine {
   public getHirakuEngine(): KanjiHirakuDictionaryEngine {
     return this.hirakuEngine;
   }
+
+  public getEllipsisLinter(): EllipsisDashLinterEngine {
+    return this.ellipsisLinter;
+  }
+
+  public getBracketChecker(): BracketPairChecker {
+    return this.bracketChecker;
+  }
+
+  public getTypoDetector(): QwertyTypoDetector {
+    return this.typoDetector;
+  }
+
 
   /**
    * Helper to convert character offset to 1-indexed line and column.
@@ -457,6 +478,7 @@ export class NarrativeLinterEngine {
           line,
           col,
           severity: h.severity,
+          tier: 1,
           ruleType: 'kanji-hiraku',
           message: h.message,
           source: 'kanji-hiraku-dictionary',
@@ -466,6 +488,85 @@ export class NarrativeLinterEngine {
         });
       }
     } catch {}
+
+    // 1.11 Tier 1: Ellipsis & Dash even-parity rule (三点リーダー・ダッシュ偶数対)
+    try {
+      const ellipsisDiags = this.ellipsisLinter.lint(targetText);
+      for (const ed of ellipsisDiags) {
+        if (window && (ed.to < window.from || ed.from > window.to)) continue;
+        const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, ed.from);
+        syntacticItems.push({
+          id: `syn-ellipsis-${ed.from}`,
+          from: ed.from,
+          to: ed.to,
+          line,
+          col,
+          severity: ed.severity,
+          tier: 1,
+          ruleType: 'ellipsis-dash',
+          message: ed.message,
+          source: 'ellipsis-dash-linter',
+          previewText: ed.found,
+          replacementText: ed.replacement,
+          snippet: NarrativeLinterEngine.extractContextSnippet(targetText, ed.from, ed.to),
+        });
+      }
+    } catch {}
+
+    // 1.12 Tier 1: Bracket Pair Consistency (括弧整合性チェック)
+    try {
+      const bracketDiags = this.bracketChecker.check(targetText);
+      for (const b of bracketDiags) {
+        if (window && (b.to < window.from || b.from > window.to)) continue;
+        syntacticItems.push({
+          id: `syn-bracket-${b.from}`,
+          from: b.from,
+          to: b.to,
+          line: b.line,
+          col: b.column,
+          severity: b.severity,
+          tier: 1,
+          ruleType: 'bracket-pair',
+          message: b.message,
+          source: 'bracket-pair-checker',
+          previewText: b.bracket,
+          replacementText: b.expectedBracket,
+          snippet: NarrativeLinterEngine.extractContextSnippet(targetText, b.from, b.to),
+        });
+      }
+    } catch {}
+
+    // 1.13 Tier 1: QWERTY Typo & Phonological Transposition (和文タイピング誤入力検知)
+    try {
+      const typos = this.typoDetector.detectTyposInText(targetText);
+      for (const typo of typos) {
+        const from = targetText.indexOf(typo.original);
+        if (from !== -1) {
+          const to = from + typo.original.length;
+          if (window && (to < window.from || from > window.to)) continue;
+          const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, from);
+          const msg = typo.isTransposition
+            ? `音韻反転タイポ「${typo.original}」を検出しました。`
+            : `誤打鍵タイポ「${typo.original}」を検出しました。`;
+          syntacticItems.push({
+            id: `syn-typo-${from}`,
+            from,
+            to,
+            line,
+            col,
+            severity: 'warning',
+            tier: 1,
+            ruleType: 'qwerty-typo',
+            message: `${msg}（推奨: 「${typo.candidate}」）`,
+            source: 'qwerty-typo-detector',
+            previewText: typo.original,
+            replacementText: typo.candidate,
+            snippet: NarrativeLinterEngine.extractContextSnippet(targetText, from, to),
+          });
+        }
+      }
+    } catch {}
+
 
     // 1.10 Sensory lexicon score analysis (五感描写スコアリング)
     let sensoryAnalysis: SensoryAnalysisResult | undefined;

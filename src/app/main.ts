@@ -9,7 +9,9 @@ import { EditorState, Compartment } from '@codemirror/state';
 import { history, defaultKeymap, historyKeymap, undo, redo, undoDepth, redoDepth } from '@codemirror/commands';
 import { rubyDecorationExtension, setRubyDisplayMode, type RubyDisplayMode } from '../core/editor/RubyDecorationExtension.js';
 import { cm6ImeGuard } from '../core/editor/cm6ImeGuard.js';
+import { createCompositionGuardExtension } from '../core/editor/compositionGuardPlugin.js';
 import { verticalWritingExtension, setAutoIndentEnabled } from '../core/editor/VerticalWritingExtension.js';
+
 import { wrapSelectionWithRuby } from '../core/editor/RubyShortcutExtension.js';
 import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
 import { narrativeLinterExtension } from '../core/editor/CodeMirrorNarrativeExtension.js';
@@ -199,7 +201,22 @@ export class PlotailorApp {
         this.cmEditor.focus();
         this.showToast(`✨「${orig}」を「${replacement}」に置換しました`);
       },
+      onRestoreStrayLore: (entityId) => {
+        this.loreManager.updateEntity(entityId, { status: 'active' });
+        this.saveLoreData();
+        this.renderRightPane();
+        this.renderLeftPane();
+        this.showToast('✨ 迷子設定を復元しました');
+      },
+      onPurgeStrayLore: (entityId) => {
+        this.loreManager.deleteEntity(entityId);
+        this.saveLoreData();
+        this.renderRightPane();
+        this.renderLeftPane();
+        this.showToast('🗑️ 迷子設定を完全に破棄しました');
+      },
     });
+
 
     this.loreManager = new LoreEntityManager(this.projectManager.getVFS());
     this.loreDock = new LoreInspectorDock({
@@ -694,7 +711,9 @@ export class PlotailorApp {
         verticalWritingExtension(),
         markdownBoldExtension(),
         cm6ImeGuard(),
+        createCompositionGuardExtension({ debounceMs: 150 }),
         multiLayerDecorationField,
+
         narrativeLinterExtension({
           debounceMs: 80,
           onAnalysisResult: (result) => {
