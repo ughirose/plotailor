@@ -54,6 +54,24 @@ export interface PassiveDetectorOptions {
 const GODAN_SA_STEMS = new Set(['殺', '壊', '話', '押', '残', '出', '起', '流', '逃', '探', '指', '生み出']);
 const GODAN_RA_STEMS = new Set(['作', '取', '叱', '送', '切', '売', '語', '守', '折', '知']);
 
+const NON_PASSIVE_WORDS = new Set([
+  'これ',
+  'それ',
+  'あれ',
+  'どれ',
+  'かれ',
+  'だれ',
+  'だれか',
+  'だれも',
+  'おのれ',
+  'われ',
+  'われわれ',
+  'けれども',
+  'けれど',
+  'だからといって',
+  'それなら',
+]);
+
 export class PassiveVoiceDetector {
   private threshold: number;
   private consecutiveThreshold: number;
@@ -85,24 +103,24 @@ export class PassiveVoiceDetector {
   public convertPassiveToActive(phrase: string): string {
     if (!phrase) return phrase;
 
-    // 1. 使役受動態 (Causative Passive) handling: 〜させられた, 〜させられる, 〜せられた, 〜せられる, 〜らさせられた
+    // 1. 使役受動態 (Causative Passive) handling
     if (phrase.endsWith('らさせられた')) {
-      return phrase.slice(0, -6) + 'させた';
-    }
-    if (phrase.endsWith('らさせられる')) {
-      return phrase.slice(0, -6) + 'させる';
-    }
-    if (phrase.endsWith('させられた')) {
       return phrase.slice(0, -5) + 'させた';
     }
-    if (phrase.endsWith('させられる')) {
+    if (phrase.endsWith('らさせられる')) {
       return phrase.slice(0, -5) + 'させる';
     }
+    if (phrase.endsWith('させられた')) {
+      return phrase.slice(0, -4) + 'させた';
+    }
+    if (phrase.endsWith('させられる')) {
+      return phrase.slice(0, -4) + 'させる';
+    }
     if (phrase.endsWith('せられた')) {
-      return phrase.slice(0, -4) + 'せた';
+      return phrase.slice(0, -3) + 'せた';
     }
     if (phrase.endsWith('せられる')) {
-      return phrase.slice(0, -4) + 'せる';
+      return phrase.slice(0, -3) + 'せる';
     }
 
     // 2. サ変 / 五段サ行 handling
@@ -300,7 +318,6 @@ export class PassiveVoiceDetector {
     const totalCount = matches.length;
     const causativePassiveCount = matches.filter((m) => m.type === 'causative_passive').length;
 
-    // Count maximum consecutive sentence passive occurrences
     let consecutiveCount = 0;
     let currentChain = 0;
     let lastSentenceIdx = -2;
@@ -326,15 +343,14 @@ export class PassiveVoiceDetector {
   private detectMatches(text: string): PassiveMatch[] {
     const matches: PassiveMatch[] = [];
 
-    // Causative passive regex:
+    // Specific verb stem + causative passive suffix
     const causativeRegex =
-      /([一-龠々ぁ-んァ-ヶa-zA-Z0-9]+?(?:させられ|せられ|らさせられ)(?:ている|ていた|た|て|ます|ました|り|る)?)/g;
+      /([一-龠々ぁ-ん]+?(?:させられ|せられ|らさせられ)(?:ている|ていた|た|て|ます|ました|り|る)?)/g;
 
-    // Passive regex:
+    // Specific verb stem + passive suffix
     const passiveRegex =
-      /([一-龠々ぁ-んァ-ヶa-zA-Z0-9]+?(?:され|こられ|来られ|られ|れ)(?:ている|ていた|た|て|ます|ました|り|る)?)/g;
+      /([一-龠々ぁ-ん]+?(?:され|こられ|来られ|られ|れ)(?:ている|ていた|た|て|ます|ました|り|る)?)/g;
 
-    // Split text into paragraphs and sentences
     const paragraphs = text.split(/\r?\n/);
     let overallOffset = 0;
     let sentenceGlobalIdx = 0;
@@ -342,13 +358,12 @@ export class PassiveVoiceDetector {
     for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
       const paragraphText = paragraphs[pIdx];
       const pStart = overallOffset;
-      overallOffset += paragraphText.length + 1; // +1 for newline
+      overallOffset += paragraphText.length + 1;
 
       if (!paragraphText.trim()) {
         continue;
       }
 
-      // Sentence splitting
       let sStartInP = 0;
       for (let i = 0; i < paragraphText.length; i++) {
         const char = paragraphText[i];
@@ -360,35 +375,44 @@ export class PassiveVoiceDetector {
           const sentenceText = paragraphText.substring(sStartInP, sEndInP);
           const sGlobalStart = pStart + sStartInP;
 
-          // Find matches in this sentence
           const foundRanges: Array<{ start: number; end: number }> = [];
 
           // 1. Causative passive
           causativeRegex.lastIndex = 0;
           let match: RegExpExecArray | null;
           while ((match = causativeRegex.exec(sentenceText)) !== null) {
-            const phrase = match[1];
-            const start = sGlobalStart + match.index;
-            const end = start + phrase.length;
-            foundRanges.push({ start, end });
+            const rawPhrase = match[1];
+            const verbPhrase = this.trimToVerbPhrase(rawPhrase);
+            const offsetInPhrase = rawPhrase.length - verbPhrase.length;
 
+            const start = sGlobalStart + match.index + offsetInPhrase;
+            const end = start + verbPhrase.length;
+
+            if (NON_PASSIVE_WORDS.has(verbPhrase)) continue;
+
+            foundRanges.push({ start, end });
             matches.push({
               from: start,
               to: end,
-              text: phrase,
+              text: verbPhrase,
               type: 'causative_passive',
-              activeSuggestion: this.convertPassiveToActive(phrase),
+              activeSuggestion: this.convertPassiveToActive(verbPhrase),
               paragraphIndex: pIdx,
               sentenceIndex: sentenceGlobalIdx,
             });
           }
 
-          // 2. Passive voice (avoiding overlapping with causative matches)
+          // 2. Passive voice
           passiveRegex.lastIndex = 0;
           while ((match = passiveRegex.exec(sentenceText)) !== null) {
-            const phrase = match[1];
-            const start = sGlobalStart + match.index;
-            const end = start + phrase.length;
+            const rawPhrase = match[1];
+            const verbPhrase = this.trimToVerbPhrase(rawPhrase);
+            const offsetInPhrase = rawPhrase.length - verbPhrase.length;
+
+            const start = sGlobalStart + match.index + offsetInPhrase;
+            const end = start + verbPhrase.length;
+
+            if (NON_PASSIVE_WORDS.has(verbPhrase)) continue;
 
             const isOverlap = foundRanges.some((r) => Math.max(start, r.start) < Math.min(end, r.end));
             if (!isOverlap) {
@@ -396,9 +420,9 @@ export class PassiveVoiceDetector {
               matches.push({
                 from: start,
                 to: end,
-                text: phrase,
+                text: verbPhrase,
                 type: 'passive',
-                activeSuggestion: this.convertPassiveToActive(phrase),
+                activeSuggestion: this.convertPassiveToActive(verbPhrase),
                 paragraphIndex: pIdx,
                 sentenceIndex: sentenceGlobalIdx,
               });
@@ -412,6 +436,24 @@ export class PassiveVoiceDetector {
     }
 
     return matches.sort((a, b) => a.from - b.from);
+  }
+
+  /**
+   * Trims captured phrase to start at the actual Kanji or Kana verb stem.
+   */
+  private trimToVerbPhrase(phrase: string): string {
+    // If phrase contains Kanji, start from the last Kanji before suffix or particle boundary
+    const kanjiMatches = Array.from(phrase.matchAll(/[一-龠々]/g));
+    if (kanjiMatches.length > 0) {
+      const lastKanji = kanjiMatches[kanjiMatches.length - 1];
+      if (lastKanji.index !== undefined) {
+        return phrase.slice(lastKanji.index);
+      }
+    }
+
+    // For pure hiragana verbs, strip particles like が, を, に, で, によって from the prefix if present
+    const cleanHiragana = phrase.replace(/^.*?(?:によって|により|から|で|に|を|が|は|と)/, '');
+    return cleanHiragana || phrase;
   }
 
   /**
@@ -433,7 +475,6 @@ export class PassiveVoiceDetector {
     const diagnostics: PassiveDiagnostic[] = [];
     const paragraphs = text.split(/\r?\n/);
 
-    // Group matches by paragraph
     const pMap = new Map<number, PassiveMatch[]>();
     for (const match of allMatches) {
       if (!pMap.has(match.paragraphIndex)) {
@@ -455,7 +496,6 @@ export class PassiveVoiceDetector {
       const causativeCount = pMatches.filter((m) => m.type === 'causative_passive').length;
       const passiveCount = pMatches.length;
 
-      // Calculate consecutive sentence occurrences inside paragraph
       let maxConsecutive = 0;
       let curConsecutive = 0;
       let prevSentenceIdx = -2;

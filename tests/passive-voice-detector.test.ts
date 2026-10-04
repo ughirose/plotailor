@@ -4,7 +4,7 @@ import { AozoraParser } from '../src/core/editor/AozoraParser.js';
 
 describe('PassiveVoiceDetector Unit Tests', () => {
   describe('Morphological Pattern Detection (Passive & Causative-Passive)', () => {
-    it('detects standard passive verbs (〜れる, 〜られる, 〜される)', () => {
+    it('detects standard passive verbs (〜れる, 〜られる, 〜される) and extracts verb phrase only', () => {
       const detector = new PassiveVoiceDetector({ threshold: 2 });
       const text = '扉が開けられた。宝箱が強盗によって壊された。秘密の書類が奪われた。';
 
@@ -13,8 +13,11 @@ describe('PassiveVoiceDetector Unit Tests', () => {
       expect(diagnostics[0].paragraphIndex).toBe(0);
       expect(diagnostics[0].passiveCount).toBe(3);
       expect(diagnostics[0].message).toContain('受動態');
-      expect(diagnostics[0].matches.length).toBe(3);
-      expect(diagnostics[0].suggestedRewrites.length).toBe(3);
+
+      // Verify captured text is strictly the verb phrase
+      expect(diagnostics[0].matches[0].text).toBe('開けられた');
+      expect(diagnostics[0].matches[1].text).toBe('壊された');
+      expect(diagnostics[0].matches[2].text).toBe('奪われた');
     });
 
     it('detects causative-passive verbs (〜させられる, 〜せられる)', () => {
@@ -24,7 +27,20 @@ describe('PassiveVoiceDetector Unit Tests', () => {
       const diagnostics = detector.detect(text);
       expect(diagnostics.length).toBe(1);
       expect(diagnostics[0].matches.some((m) => m.type === 'causative_passive')).toBe(true);
-      expect(diagnostics[0].suggestedRewrites[0]).toContain('能動態');
+
+      const matchCausative = diagnostics[0].matches.find((m) => m.type === 'causative_passive');
+      expect(matchCausative?.text).toBe('走らさせられた');
+      expect(matchCausative?.activeSuggestion).toBe('走らさせた');
+    });
+
+    it('ignores non-passive words containing れ (これ, それ, かれ, だれ, けれども)', () => {
+      const detector = new PassiveVoiceDetector({ threshold: 1 });
+      const text = 'これやそれ、かれやだれかの意見は尊重されるけれども。';
+
+      const diagnostics = detector.detect(text);
+      expect(diagnostics.length).toBe(1);
+      expect(diagnostics[0].matches.length).toBe(1);
+      expect(diagnostics[0].matches[0].text).toBe('尊重される');
     });
 
     it('handles multiple paragraphs independently', () => {
