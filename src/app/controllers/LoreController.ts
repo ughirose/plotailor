@@ -13,6 +13,7 @@ import {
   reconcileEntityLifecycles,
   findShelvedCandidates,
 } from '../../core/lore/ShelvedLoreLifecycle.js';
+import { StrayLoreEngine } from '../../core/lore/StrayLoreEngine.js';
 import { CharacterEmotionalArcTracker } from '../../core/editor/CharacterEmotionalArcTracker.js';
 import { CharacterInteractionMatrix } from '../../core/editor/CharacterInteractionMatrix.js';
 import { DECORATION_LEGEND_DICTIONARY, generateAllLegendCardsHtml } from '../../core/editor/DecorationLegendDictionary.js';
@@ -24,6 +25,7 @@ export interface LoreControllerDependencies {
   getDagEngine: () => CausalDagEngine;
   getTimelineEngine: () => DualTrackTimelineEngine;
   getNarrativeDock: () => NarrativeInspectorDock;
+  getPrhRules?: () => import('@worldcraft/schema').PlotailorPrhRule[];
   getEditorView: () => EditorView | null;
   getCurrentProjectId: () => string;
   getActiveLeftTab: () => string;
@@ -53,9 +55,14 @@ export type LoreChangeListener = (action: 'create' | 'update' | 'delete' | 'shel
 export class LoreController {
   private deps: LoreControllerDependencies;
   private changeListeners: LoreChangeListener[] = [];
+  private strayEngine = new StrayLoreEngine();
 
   constructor(deps: LoreControllerDependencies) {
     this.deps = deps;
+  }
+
+  public getStrayLoreEngine(): StrayLoreEngine {
+    return this.strayEngine;
   }
 
   public registerLoreChangeListener(listener: LoreChangeListener): void {
@@ -432,18 +439,19 @@ export class LoreController {
 
     if (activeRightTab === 'linter') {
       const narrativeDock = this.deps.getNarrativeDock();
+      if (this.deps.getPrhRules) {
+        narrativeDock.updatePrhRules(this.deps.getPrhRules());
+      }
       const dagEngine = this.deps.getDagEngine();
       const cycleReport = dagEngine.detectCycles();
       const loreManager = this.deps.getLoreManager();
-      const shelvedEntities = loreManager.getEntities().filter((e) => e.status === 'shelved');
-      const strayLores = shelvedEntities.map((e) => ({
-        entityId: e.id,
-        canonicalName: e.name,
-        manualScore: 4.5,
-        status: 'shelved' as const,
-        evacuationTimestamp: e.updatedAt || Date.now(),
-        evacuationContext: e.description || '',
-      }));
+      const cm = this.deps.getEditorView();
+      const docText = cm ? cm.state.doc.toString() : '';
+      const allEntities = loreManager.getEntities();
+      const { strayLores } = this.strayEngine.scanAndReconcile(docText, allEntities, {
+        isCommitted: false,
+        provenanceBlockId: this.deps.getCurrentChapterId(),
+      });
       narrativeDock.updateContinuityState({
         dagCycleReport: cycleReport,
         strayLoreItems: strayLores,

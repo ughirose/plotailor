@@ -101,4 +101,16 @@ export class NarrativeWorkerBridge {
   public analyzeImmediate(text: string): NarrativeAnalysisResult {
     return this.engine.analyzeDocument(text);
   }
+
+  public getEngine(): NarrativeLinterEngine {
+    return this.engine;
+  }
+
+  public setCadenceStatus(status?: import('./QwertyTypoDetector.js').CadenceStatusKind): void {
+    this.engine.setCadenceStatus(status);
+  }
+
+  public getPrhEngine(): import('./PrhRuleEngine.js').PrhRuleEngine {
+    return this.engine.getPrhEngine();
+  }
 }

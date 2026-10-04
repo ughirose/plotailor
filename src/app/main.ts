@@ -15,6 +15,8 @@ import { verticalWritingExtension, setAutoIndentEnabled } from '../core/editor/V
 import { wrapSelectionWithRuby } from '../core/editor/RubyShortcutExtension.js';
 import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
 import { narrativeLinterExtension } from '../core/editor/CodeMirrorNarrativeExtension.js';
+import { NarrativeWorkerBridge } from '../core/editor/NarrativeWorkerBridge.js';
+import { createCadenceListenerExtension } from '../core/editor/CadenceListenerExtension.js';
 import { NarrativeInspectorDock } from '../ui/NarrativeInspectorDock.js';
 import { LoreInspectorDock } from '../ui/LoreInspectorDock.js';
 import {
@@ -142,6 +144,7 @@ export class PlotailorApp {
   private walWorkerBridge: OpfsWalWorkerBridge = new OpfsWalWorkerBridge();
   private loreDock!: LoreInspectorDock;
   private activeLoreFilter: LoreCategory | 'all' | 'shelved' = 'all';
+  private narrativeWorkerBridge = new NarrativeWorkerBridge({ debounceMs: 80 });
   private cadenceMachine: TypingCadenceMachine;
   private povDetector = new PovBreachDetector();
   private timelineEngine = new DualTrackTimelineEngine();
@@ -203,6 +206,7 @@ export class PlotailorApp {
       },
       onRestoreStrayLore: (entityId) => {
         this.loreManager.updateEntity(entityId, { status: 'active' });
+        this.loreController?.getStrayLoreEngine().markRestored(entityId);
         this.saveLoreData();
         this.renderRightPane();
         this.renderLeftPane();
@@ -210,10 +214,34 @@ export class PlotailorApp {
       },
       onPurgeStrayLore: (entityId) => {
         this.loreManager.deleteEntity(entityId);
+        this.loreController?.getStrayLoreEngine().markPurged(entityId);
         this.saveLoreData();
         this.renderRightPane();
         this.renderLeftPane();
         this.showToast('🗑️ 迷子設定を完全に破棄しました');
+      },
+      onDeletePrhRule: (ruleId) => {
+        this.narrativeWorkerBridge.getPrhEngine().removeRule(ruleId);
+        this.narrativeDock.updatePrhRules(this.narrativeWorkerBridge.getPrhEngine().getRules());
+        this.renderRightPane();
+        this.showToast('🗑️ PRHルールを削除しました');
+      },
+      onAddPrhRule: (rule) => {
+        if (!rule.expected || !rule.patterns || rule.patterns.length === 0) return;
+        const fullRule = {
+          id: rule.id || crypto.randomUUID(),
+          expected: rule.expected,
+          patterns: rule.patterns,
+          scope: rule.scope || 'all',
+          action: rule.action || 'suggest',
+          syntaxType: rule.syntaxType || 'general',
+          description: rule.description,
+          characterId: rule.characterId,
+        };
+        this.narrativeWorkerBridge.getPrhEngine().addRule(fullRule);
+        this.narrativeDock.updatePrhRules(this.narrativeWorkerBridge.getPrhEngine().getRules());
+        this.renderRightPane();
+        this.showToast(`✨ PRHルール「${fullRule.expected}」を登録しました`);
       },
     });
 
@@ -358,6 +386,7 @@ export class PlotailorApp {
       getDagEngine: () => this.dagEngine,
       getTimelineEngine: () => this.timelineEngine,
       getNarrativeDock: () => this.narrativeDock,
+      getPrhRules: () => this.narrativeWorkerBridge.getPrhEngine().getRules(),
       getEditorView: () => this.cmEditor,
       getCurrentProjectId: () => this.currentProjectId,
       getActiveLeftTab: () => this.activeLeftTab,
@@ -715,6 +744,7 @@ export class PlotailorApp {
         multiLayerDecorationField,
 
         narrativeLinterExtension({
+          workerBridge: this.narrativeWorkerBridge,
           debounceMs: 80,
           onAnalysisResult: (result) => {
             this.latestNarrativeResult = result;
@@ -723,6 +753,9 @@ export class PlotailorApp {
               this.renderRightPane();
             }
           },
+        }),
+        createCadenceListenerExtension({
+          cadenceMachine: this.cadenceMachine,
         }),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) {
@@ -1038,6 +1071,9 @@ export class PlotailorApp {
   }
 
   private handleCadenceState(status: CadenceStatus) {
+    const cadenceKind = this.narrativeWorkerBridge.getEngine().getTypoDetector().mapCadenceState(status.state);
+    this.narrativeWorkerBridge.setCadenceStatus(cadenceKind);
+
     if (this.editorBody) {
       this.cadenceMachine.applyToDom(this.editorBody);
     }

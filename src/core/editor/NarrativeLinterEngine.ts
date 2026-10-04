@@ -16,6 +16,7 @@ import { KanjiHirakuDictionaryEngine } from './KanjiHirakuDictionary.js';
 import { EllipsisDashLinterEngine } from './EllipsisDashLinter.js';
 import { BracketPairChecker } from './BracketPairChecker.js';
 import { QwertyTypoDetector } from './QwertyTypoDetector.js';
+import { PrhRuleEngine } from './PrhRuleEngine.js';
 
 export interface SyntacticLinterItem {
   id: string;
@@ -131,6 +132,7 @@ export class NarrativeLinterEngine {
   private ellipsisLinter = new EllipsisDashLinterEngine();
   private bracketChecker = new BracketPairChecker();
   private typoDetector = new QwertyTypoDetector();
+  private prhEngine = new PrhRuleEngine();
   private defaultKnownEntities: AntecedentCandidate[] = [
     { id: 'ent-valerius', text: 'ヴァレリウス', entityType: 'character', sentenceDistance: 0, caseRole: 'ガ', salienceScore: 1.5 },
     { id: 'ent-selene', text: 'セレネ', entityType: 'character', sentenceDistance: 0, caseRole: 'ガ', salienceScore: 1.3 },
@@ -163,6 +165,20 @@ export class NarrativeLinterEngine {
 
   public getTypoDetector(): QwertyTypoDetector {
     return this.typoDetector;
+  }
+
+  public getPrhEngine(): PrhRuleEngine {
+    return this.prhEngine;
+  }
+
+  private currentCadenceStatus?: import('./QwertyTypoDetector.js').CadenceStatusKind;
+
+  public setCadenceStatus(status?: import('./QwertyTypoDetector.js').CadenceStatusKind): void {
+    this.currentCadenceStatus = status;
+  }
+
+  public getCadenceStatus(): import('./QwertyTypoDetector.js').CadenceStatusKind | undefined {
+    return this.currentCadenceStatus;
   }
 
 
@@ -538,7 +554,7 @@ export class NarrativeLinterEngine {
 
     // 1.13 Tier 1: QWERTY Typo & Phonological Transposition (和文タイピング誤入力検知)
     try {
-      const typos = this.typoDetector.detectTyposInText(targetText);
+      const typos = this.typoDetector.detectTyposInText(targetText, this.currentCadenceStatus);
       for (const typo of typos) {
         const from = targetText.indexOf(typo.original);
         if (from !== -1) {
@@ -564,6 +580,32 @@ export class NarrativeLinterEngine {
             snippet: NarrativeLinterEngine.extractContextSnippet(targetText, from, to),
           });
         }
+      }
+    } catch {}
+
+    // 1.14 Tier 1: PRH Proofreading Rule Violations (PRH表記揺れ・用字用語ルール)
+    try {
+      const prhMatches = this.prhEngine.scan(targetText);
+      for (const match of prhMatches) {
+        if (window && (match.to < window.from || match.from > window.to)) continue;
+        const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, match.from);
+        syntacticItems.push({
+          id: `syn-prh-${match.ruleId}-${match.from}`,
+          from: match.from,
+          to: match.to,
+          line,
+          col,
+          severity: match.action === 'replace' ? 'error' : 'warning',
+          tier: 1,
+          ruleType: 'prh-rule',
+          message: match.description
+            ? `用字用語ルール違反: 「${match.matchedText}」→「${match.expected}」（${match.description}）`
+            : `用字用語ルール違反: 「${match.matchedText}」→「${match.expected}」`,
+          source: 'prh-rule-engine',
+          previewText: match.matchedText,
+          replacementText: match.expected,
+          snippet: NarrativeLinterEngine.extractContextSnippet(targetText, match.from, match.to),
+        });
       }
     } catch {}
 

@@ -262,4 +262,6 @@ export {
 export * from './core/editor/ChunkedRangeSet.js';
 export * from './core/editor/VerticalWidthOracle.js';
 export * from './core/editor/QwertyTypoDetector.js';
-
+export * from './core/editor/CadenceListenerExtension.js';
+export * from './core/editor/PrhRuleEngine.js';
+export * from './core/lore/StrayLoreEngine.js';

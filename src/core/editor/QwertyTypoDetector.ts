@@ -337,7 +337,19 @@ export class QwertyTypoDetector {
           cadenceStatus,
           confidence: pattern.confidence,
         };
-        results.push(TypoCandidateSchema.parse(candidateObj));
+        const parsed = TypoCandidateSchema.parse(candidateObj);
+
+        // Cadence-linked noise suppression:
+        // - typing-burst: only high-confidence (>= 0.95) to prevent typing distraction
+        // - short-pause: confidence >= 0.70
+        // - deep-pause / none: confidence >= threshold (0.50)
+        if (cadenceStatus === 'typing-burst') {
+          if (parsed.confidence >= 0.95) results.push(parsed);
+        } else if (cadenceStatus === 'short-pause') {
+          if (parsed.confidence >= 0.70) results.push(parsed);
+        } else {
+          if (parsed.confidence >= this.confidenceThreshold) results.push(parsed);
+        }
       }
     }
 

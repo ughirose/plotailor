@@ -7,7 +7,7 @@ import type {
 import type { KinsokuViolation } from '../core/editor/KinsokuEngine.js';
 import type { DagCycleReport } from '../core/causality/CausalDagEngine.js';
 import type { ForeshadowingItem } from '../core/editor/ForeshadowingEngine.js';
-import type { StrayLoreState } from '@worldcraft/schema';
+import type { StrayLoreState, PlotailorPrhRule } from '@worldcraft/schema';
 
 export interface NarrativeInspectorDockOptions {
   onJumpToTarget?: (from: number, to: number) => void;
@@ -15,6 +15,8 @@ export interface NarrativeInspectorDockOptions {
   onReplaceText?: (from: number, to: number, replacement: string) => void;
   onRestoreStrayLore?: (entityId: string) => void;
   onPurgeStrayLore?: (entityId: string) => void;
+  onAddPrhRule?: (rule: Partial<PlotailorPrhRule>) => void;
+  onDeletePrhRule?: (ruleId: string) => void;
 }
 
 export type InspectionTier = 'all' | 'tier1' | 'tier2' | 'tier3';
@@ -28,6 +30,7 @@ export class NarrativeInspectorDock {
   };
 
   private kinsokuViolations: KinsokuViolation[] = [];
+  private prhRules: PlotailorPrhRule[] = [];
   private activeFilter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' | 'pov' | 'events' = 'all';
   private activeTier: InspectionTier = 'all';
 
@@ -41,6 +44,8 @@ export class NarrativeInspectorDock {
   private onReplaceText?: (from: number, to: number, replacement: string) => void;
   private onRestoreStrayLore?: (entityId: string) => void;
   private onPurgeStrayLore?: (entityId: string) => void;
+  private onAddPrhRule?: (rule: Partial<PlotailorPrhRule>) => void;
+  private onDeletePrhRule?: (ruleId: string) => void;
 
   constructor(options: NarrativeInspectorDockOptions = {}) {
     this.onJumpToTarget = options.onJumpToTarget;
@@ -48,6 +53,12 @@ export class NarrativeInspectorDock {
     this.onReplaceText = options.onReplaceText;
     this.onRestoreStrayLore = options.onRestoreStrayLore;
     this.onPurgeStrayLore = options.onPurgeStrayLore;
+    this.onAddPrhRule = options.onAddPrhRule;
+    this.onDeletePrhRule = options.onDeletePrhRule;
+  }
+
+  public updatePrhRules(rules: PlotailorPrhRule[]): void {
+    this.prhRules = rules;
   }
 
   public updateResult(result: NarrativeAnalysisResult): void {
@@ -277,6 +288,22 @@ export class NarrativeInspectorDock {
               <div class="issue-jump-hint">➜ エディタへジャンプ</div>
             </div>
           `;
+        }
+
+        if (this.prhRules.length > 0) {
+          html += `
+            <div style="margin-top: 10px; padding: 6px 8px; background: rgba(0, 0, 0, 0.03); border-radius: 4px;">
+              <div style="font-size: 11px; font-weight: 600; color: var(--color-text-dim); margin-bottom: 4px;">登録済み用字用語(PRH)ルール (${this.prhRules.length}件):</div>
+          `;
+          for (const rule of this.prhRules) {
+            html += `
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 2px 0;">
+                <span>「${this.escapeHtml(rule.patterns.join('/'))}」➜ <strong>「${this.escapeHtml(rule.expected)}」</strong> [${rule.scope}]</span>
+                <button class="btn-delete-prh" data-action="delete-prh" data-id="${rule.id}" style="padding: 1px 4px; font-size: 10px; background: none; border: 1px solid rgba(248, 81, 73, 0.3); color: var(--color-danger, #f85149); border-radius: 2px; cursor: pointer;">削除</button>
+              </div>
+            `;
+          }
+          html += `</div>`;
         }
       }
 
@@ -657,6 +684,18 @@ export class NarrativeInspectorDock {
         }
       });
     });
+
+    // Delete PRH Rule
+    container.querySelectorAll('[data-action="delete-prh"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = e.currentTarget as HTMLElement;
+        const id = target.dataset.id;
+        if (id && this.onDeletePrhRule) {
+          this.onDeletePrhRule(id);
+        }
+      });
+    });
   }
 
   private getRuleLabel(ruleType: string): string {
@@ -680,6 +719,8 @@ export class NarrativeInspectorDock {
         return '括弧不整合';
       case 'qwerty-typo':
         return 'タイポ検知';
+      case 'prh-rule':
+        return '用字用語(PRH)';
       case 'consecutive-punctuation':
         return '句読点連続';
       case 'char-repetition':
@@ -703,6 +744,8 @@ export class NarrativeInspectorDock {
       case 'subject-predicate-mismatch':
         return 'tag-mismatch';
       case 'kanji-hiraku':
+        return 'tag-gold';
+      case 'prh-rule':
         return 'tag-gold';
       case 'ellipsis-dash':
         return 'tag-ellipsis';
