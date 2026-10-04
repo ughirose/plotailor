@@ -6,7 +6,9 @@
   "types": "src/index.ts",
   "dependencies": {
     "@codemirror/state": "^6.4.0",
-    "@codemirror/view": "^6.23.0"
+    "@codemirror/view": "^6.23.0",
+    "@worldcraft/core": "workspace:*",
+    "@worldcraft/schema": "workspace:*"
   },
   "scripts": {
     "dev": "vite",
