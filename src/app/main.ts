@@ -52,6 +52,7 @@ import { WritingVelocityWidget } from '../core/editor/WritingVelocityWidget.js';
 import { MultiSiteNovelFormatter } from '../core/exporters/multisite-novel-formatter.js';
 import { FullscreenStatusBar } from '../ui/FullscreenStatusBar.js';
 import { ColumnGuideline } from '../ui/ColumnGuideline.js';
+import { ManuscriptSheetCalculator } from '../core/editor/ManuscriptSheetCalculator.js';
 
 interface ChapterData {
   id: string;
@@ -1277,16 +1278,23 @@ export class PlotailorApp {
   private updateStats() {
     const rawText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
     const charCount = rawText.replace(/\s+/g, '').length;
-    const genkoSheets = (charCount / 400).toFixed(1);
+    
+    // Calculate typesetting metrics using Japanese manuscript layout rules (20x20 grid + Kinsoku)
+    const sheetResult = ManuscriptSheetCalculator.calculate(rawText, {
+      preset: '400',
+      kinsokuShori: this.kinsokuHanging,
+    });
+    const genkoSheets = sheetResult.exactSheets.toFixed(1);
+    const bunkoPages = sheetResult.exactPublicationPages.toFixed(1);
 
     const headerChar = document.getElementById('charCountHeader');
     if (headerChar) {
-      headerChar.textContent = `${charCount.toLocaleString()} 文字（原稿用紙 ${genkoSheets} 枚）`;
+      headerChar.textContent = `${charCount.toLocaleString()} 文字（原稿用紙 ${genkoSheets} 枚 / 文庫 ${bunkoPages} P）`;
     }
 
     const footerChar = document.getElementById('charCountFooter');
     if (footerChar) {
-      footerChar.innerHTML = `<strong>${charCount.toLocaleString()}</strong> 文字（原稿用紙 <strong>${genkoSheets}</strong> 枚）`;
+      footerChar.innerHTML = `<strong>${charCount.toLocaleString()}</strong> 文字（原稿用紙 <strong>${genkoSheets}</strong> 枚 / 文庫 <strong>${bunkoPages}</strong> P）`;
     }
 
     const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
