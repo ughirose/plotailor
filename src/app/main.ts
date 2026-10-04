@@ -187,6 +187,17 @@ export class PlotailorApp {
     this.narrativeDock = new NarrativeInspectorDock({
       onJumpToTarget: (from, to) => this.jumpToEditor(from, to),
       onInsertSubject: (from, subject) => this.insertSubjectAt(from, subject),
+      onReplaceText: (from, to, replacement) => {
+        if (!this.cmEditor) return;
+        const orig = this.cmEditor.state.doc.sliceString(from, to);
+        this.cmEditor.dispatch({
+          changes: { from, to, insert: replacement },
+          selection: { anchor: from + replacement.length },
+          scrollIntoView: true,
+        });
+        this.cmEditor.focus();
+        this.showToast(`✨「${orig}」を「${replacement}」に置換しました`);
+      },
     });
 
     this.loreManager = new LoreEntityManager(this.projectManager.getVFS());

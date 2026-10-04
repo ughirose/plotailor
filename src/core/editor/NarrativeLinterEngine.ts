@@ -11,6 +11,8 @@ import {
 import { DemonstrativeOveruseDetector } from './DemonstrativeOveruseDetector.js';
 import { PassiveVoiceDetector } from './PassiveVoiceDetector.js';
 import { SensoryLexiconScorer, type SensoryAnalysisResult } from './SensoryLexiconScorer.js';
+import { ParticleRepetitionLinterEngine } from './ParticleRepetitionLinter.js';
+import { KanjiHirakuDictionaryEngine } from './KanjiHirakuDictionary.js';
 
 export interface SyntacticLinterItem {
   id: string;
@@ -23,6 +25,7 @@ export interface SyntacticLinterItem {
   message: string;
   source: string;
   previewText?: string;
+  replacementText?: string;
   snippet?: string;
 }
 
@@ -63,6 +66,8 @@ export class NarrativeLinterEngine {
   private demonstrativeDetector = new DemonstrativeOveruseDetector();
   private passiveDetector = new PassiveVoiceDetector();
   private sensoryScorer = new SensoryLexiconScorer();
+  private particleRepetitionEngine = new ParticleRepetitionLinterEngine();
+  private hirakuEngine = new KanjiHirakuDictionaryEngine();
   private defaultKnownEntities: AntecedentCandidate[] = [
     { id: 'ent-valerius', text: 'ヴァレリウス', entityType: 'character', sentenceDistance: 0, caseRole: 'ガ', salienceScore: 1.5 },
     { id: 'ent-selene', text: 'セレネ', entityType: 'character', sentenceDistance: 0, caseRole: 'ガ', salienceScore: 1.3 },
@@ -75,6 +80,14 @@ export class NarrativeLinterEngine {
 
   constructor(customResolver?: ZeroPronounResolver) {
     this.zpResolver = customResolver ?? new ZeroPronounResolver();
+  }
+
+  public getParticleRepetitionEngine(): ParticleRepetitionLinterEngine {
+    return this.particleRepetitionEngine;
+  }
+
+  public getHirakuEngine(): KanjiHirakuDictionaryEngine {
+    return this.hirakuEngine;
   }
 
   /**
@@ -349,7 +362,57 @@ export class NarrativeLinterEngine {
       }
     } catch {}
 
-    // 1.8 Sensory lexicon score analysis (五感描写スコアリング)
+    // 1.8 Particle repetition analysis (助詞重複・連続検知)
+    try {
+      const particleDiags = this.particleRepetitionEngine.lint(syntaxCleanText);
+      for (const p of particleDiags) {
+        if (window && (p.to < window.from || p.from > window.to)) continue;
+        const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, p.from);
+        const alreadyExists = syntacticItems.some(
+          (item) => item.ruleType === 'particle-repetition' && item.line === line && item.previewText === p.particle
+        );
+        if (!alreadyExists) {
+          syntacticItems.push({
+            id: `syn-particle-${p.from}`,
+            from: p.from,
+            to: p.to,
+            line,
+            col,
+            severity: p.severity,
+            ruleType: 'particle-repetition',
+            message: p.message,
+            source: 'particle-repetition-detector',
+            previewText: p.particle,
+            snippet: NarrativeLinterEngine.extractContextSnippet(targetText, p.from, p.to),
+          });
+        }
+      }
+    } catch {}
+
+    // 1.9 Kanji Hiraku / Orthography analysis (ひらくべき漢字・表記揺れ候補検知)
+    try {
+      const hirakuDiags = this.hirakuEngine.lint(syntaxCleanText);
+      for (const h of hirakuDiags) {
+        if (window && (h.to < window.from || h.from > window.to)) continue;
+        const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, h.from);
+        syntacticItems.push({
+          id: `syn-hiraku-${h.from}`,
+          from: h.from,
+          to: h.to,
+          line,
+          col,
+          severity: h.severity,
+          ruleType: 'kanji-hiraku',
+          message: h.message,
+          source: 'kanji-hiraku-dictionary',
+          previewText: h.kanji,
+          replacementText: h.hiragana,
+          snippet: NarrativeLinterEngine.extractContextSnippet(targetText, h.from, h.to),
+        });
+      }
+    } catch {}
+
+    // 1.10 Sensory lexicon score analysis (五感描写スコアリング)
     let sensoryAnalysis: SensoryAnalysisResult | undefined;
     try {
       sensoryAnalysis = this.sensoryScorer.analyze(syntaxCleanText);

@@ -84,15 +84,36 @@ export class ParticleRepetitionLinterEngine {
       const prevWord = sentenceText.slice(Math.max(0, index - 1), index + 1);
       if (['だが', 'すが'].includes(prevWord)) return false;
     } else if (particle === 'と') {
-      // Exclude quoted literals and formal nouns starting with 'と' (とき, ところ, とおり)
+      // 1. Exclude quoted literals: 「と」, 『と』, "と", 'と'
       if (
         (index > 0 && ['「', '『', '“', '"', '‘', '`'].includes(prevChar)) ||
         (index + 1 < sentenceText.length && ['」', '』', '”', '"', '’', '`'].includes(nextChar))
       ) {
         return false;
       }
+
+      // 2. Exclude nouns starting with 'と' (formal nouns, time, place): とき, ところ, とおり, となり, とちゅう
       const rest = sentenceText.slice(index);
       if (/^と(?:き|ころ|おり|なり|ちゅう)/.test(rest)) {
+        return false;
+      }
+
+      // 3. Exclude adverbs ending in 'と':
+      const before12 = sentenceText.slice(Math.max(0, index - 10), index + particle.length);
+      if (
+        /ひょっとする?と$/.test(before12) ||
+        /(?:きっ|ふ|ふっ|そっ|じっ|やっ|もっ|ずっ|堂々|凛|忽然|パッ|スッ|ハッ|バッ|サッ|じっくり|はっきり|くっきり|ゆったり|しっかりと?|ちゃん|なんと|まったく)と$/.test(before12)
+      ) {
+        return false;
+      }
+
+      // 4. Exclude compound particles and auxiliaries: として, としては, とともに, という, といった, とする, とした
+      if (/^と(?:して|ともに|いう|いった|のこと|する|した|みる|みられる)/.test(rest)) {
+        return false;
+      }
+
+      // 5. Exclude quote/thought verbs: 〜と思う, 〜と考え, 〜と言う
+      if (/^と(?:は思|思|は考|考|は言|言|は聞|聞|は感|感)/.test(rest)) {
         return false;
       }
     }

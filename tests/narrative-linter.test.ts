@@ -356,5 +356,37 @@ describe('Narrative Linter & Zero Pronoun Integration', () => {
       );
       expect(toRepetition.length).toBe(0);
     });
+
+    it('detects 3+ occurrences of particle "の" via integrated ParticleRepetitionLinterEngine and triggers quick-replace for kanji hiraku', () => {
+      const text = '私の友達の家の猫の毛は白い。併し彼が来た。';
+      const result = engine.analyzeDocument(text);
+
+      // Particle "の" repetition (4 occurrences)
+      const noRep = result.syntacticItems.find((i) => i.ruleType === 'particle-repetition' && (i.previewText === 'の' || i.message.includes('「の」')));
+      expect(noRep).toBeDefined();
+      expect(noRep?.message).toContain('「の」が4回重複');
+
+      // Kanji hiraku: 「併し」 -> 「しかし」
+      const hirakuItem = result.syntacticItems.find((i) => i.ruleType === 'kanji-hiraku');
+      expect(hirakuItem).toBeDefined();
+      expect(hirakuItem?.previewText).toBe('併し');
+      expect(hirakuItem?.replacementText).toBe('しかし');
+
+      // Test quick-replace interaction in NarrativeInspectorDock
+      const onReplace = vi.fn();
+      const dock = new NarrativeInspectorDock({ onReplaceText: onReplace });
+      dock.updateResult(result);
+
+      const container = document.createElement('div');
+      container.innerHTML = dock.renderHTML();
+      dock.bindEvents(container);
+
+      const replaceBtn = container.querySelector('[data-action="quick-replace"]') as HTMLButtonElement;
+      expect(replaceBtn).not.toBeNull();
+      replaceBtn.click();
+
+      expect(onReplace).toHaveBeenCalledWith(hirakuItem?.from, hirakuItem?.to, 'しかし');
+    });
   });
 });
+

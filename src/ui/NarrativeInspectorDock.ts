@@ -9,6 +9,7 @@ import type { KinsokuViolation } from '../core/editor/KinsokuEngine.js';
 export interface NarrativeInspectorDockOptions {
   onJumpToTarget?: (from: number, to: number) => void;
   onInsertSubject?: (from: number, candidateText: string) => void;
+  onReplaceText?: (from: number, to: number, replacement: string) => void;
 }
 
 export class NarrativeInspectorDock {
@@ -23,10 +24,12 @@ export class NarrativeInspectorDock {
   private activeFilter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' = 'all';
   private onJumpToTarget?: (from: number, to: number) => void;
   private onInsertSubject?: (from: number, candidateText: string) => void;
+  private onReplaceText?: (from: number, to: number, replacement: string) => void;
 
   constructor(options: NarrativeInspectorDockOptions = {}) {
     this.onJumpToTarget = options.onJumpToTarget;
     this.onInsertSubject = options.onInsertSubject;
+    this.onReplaceText = options.onReplaceText;
   }
 
   public updateResult(result: NarrativeAnalysisResult): void {
@@ -146,7 +149,24 @@ export class NarrativeInspectorDock {
                   「${this.escapeHtml(item.snippet)}」
                 </div>
               ` : ''}
-              ${item.previewText ? `<div class="issue-preview">対象語句: <code>${this.escapeHtml(item.previewText)}</code></div>` : ''}
+              ${item.previewText ? `
+                <div class="issue-preview" style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                  <span>対象語句: <code>${this.escapeHtml(item.previewText)}</code>${item.replacementText ? ` ➜ 推奨: <strong style="color: var(--color-success);">${this.escapeHtml(item.replacementText)}</strong>` : ''}</span>
+                  ${item.replacementText ? `
+                    <button
+                      class="btn-quick-replace-linter"
+                      data-action="quick-replace"
+                      data-from="${item.from}"
+                      data-to="${item.to}"
+                      data-replacement="${this.escapeHtml(item.replacementText)}"
+                      style="padding: 2px 8px; font-size: 11px; background: var(--color-gold); color: #000; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;"
+                      title="この語句をひらがなに置換"
+                    >
+                      置換
+                    </button>
+                  ` : ''}
+                </div>
+              ` : ''}
               <div class="issue-jump-hint">➜ エディタへジャンプ</div>
             </div>
           `;
@@ -281,6 +301,20 @@ export class NarrativeInspectorDock {
       });
     });
 
+    // Quick replace candidate
+    container.querySelectorAll('[data-action="quick-replace"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = e.currentTarget as HTMLElement;
+        const from = parseInt(target.dataset.from || '0', 10);
+        const to = parseInt(target.dataset.to || '0', 10);
+        const replacement = target.dataset.replacement || '';
+        if (this.onReplaceText && replacement) {
+          this.onReplaceText(from, to, replacement);
+        }
+      });
+    });
+
     // Filter toggles
     container.querySelectorAll('[data-action="filter"]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
@@ -308,6 +342,8 @@ export class NarrativeInspectorDock {
         return '指示語多用';
       case 'subject-predicate-mismatch':
         return '主述不整合';
+      case 'kanji-hiraku':
+        return 'ひらく漢字';
       default:
         return '構文不備';
     }
@@ -326,6 +362,8 @@ export class NarrativeInspectorDock {
         return 'tag-warning';
       case 'subject-predicate-mismatch':
         return 'tag-mismatch';
+      case 'kanji-hiraku':
+        return 'tag-gold';
       default:
         return 'tag-default';
     }
