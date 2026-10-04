@@ -29,13 +29,21 @@ export const DEFAULT_TARGET_PARTICLES = [
   'して',
 ];
 
+export interface ParticleRepetitionOptions {
+  particles?: string[];
+  maxThreshold?: number;
+  particleThresholds?: Record<string, number>;
+}
+
 export class ParticleRepetitionLinterEngine {
   private targetParticles: Set<string>;
   private maxThreshold: number;
+  private particleThresholds: Record<string, number>;
 
-  constructor(particles: string[] = DEFAULT_TARGET_PARTICLES, maxThreshold: number = 3) {
+  constructor(particles: string[] = DEFAULT_TARGET_PARTICLES, maxThreshold: number = 3, particleThresholds: Record<string, number> = {}) {
     this.targetParticles = new Set(particles);
     this.maxThreshold = maxThreshold;
+    this.particleThresholds = { ...particleThresholds };
   }
 
   /**
@@ -43,6 +51,53 @@ export class ParticleRepetitionLinterEngine {
    */
   public setTargetParticles(particles: string[]): void {
     this.targetParticles = new Set(particles);
+  }
+
+  /**
+   * Sets custom threshold for a specific particle (e.g. 'の' => 3).
+   */
+  public setParticleThreshold(particle: string, threshold: number): void {
+    this.particleThresholds[particle] = threshold;
+  }
+
+  /**
+   * Validates if the matched particle occurrence is an actual case/binding particle
+   * and not part of a compound word, formal noun, or demonstrative.
+   */
+  private isValidParticleOccurrence(sentenceText: string, index: number, particle: string): boolean {
+    const prevChar = index > 0 ? sentenceText[index - 1] : '';
+    const nextChar = index + particle.length < sentenceText.length ? sentenceText[index + particle.length] : '';
+
+    if (particle === 'の') {
+      // Exclude formal nouns and compound particles: のみ, ので, のに, のは, のが, のを, のも, のだ, のか, のよ, のね
+      const rest = sentenceText.slice(index);
+      if (/^の(?:み|で|に|は|が|を|も|だ|か|よ|ね)/.test(rest)) {
+        return false;
+      }
+      // Exclude words ending in 'の' like 'ものの', 'この', 'その', 'あの', 'どの'
+      const prevWord = sentenceText.slice(Math.max(0, index - 2), index + 1);
+      if (['この', 'その', 'あの', 'どの', 'もの'].includes(prevWord)) {
+        return false;
+      }
+    } else if (particle === 'が') {
+      if (sentenceText.slice(Math.max(0, index - 2), index + 1) === 'および') return false;
+      const prevWord = sentenceText.slice(Math.max(0, index - 1), index + 1);
+      if (['だが', 'すが'].includes(prevWord)) return false;
+    } else if (particle === 'と') {
+      // Exclude quoted literals and formal nouns starting with 'と' (とき, ところ, とおり)
+      if (
+        (index > 0 && ['「', '『', '“', '"', '‘', '`'].includes(prevChar)) ||
+        (index + 1 < sentenceText.length && ['」', '』', '”', '"', '’', '`'].includes(nextChar))
+      ) {
+        return false;
+      }
+      const rest = sentenceText.slice(index);
+      if (/^と(?:き|ころ|おり|なり|ちゅう)/.test(rest)) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -68,15 +123,19 @@ export class ParticleRepetitionLinterEngine {
       const sentenceStart = sentenceMatch.index;
 
       for (const particle of this.targetParticles) {
+        const threshold = this.particleThresholds[particle] ?? this.maxThreshold;
+
         // Find all occurrences of the particle in this sentence
         const particleMatches: { index: number; text: string }[] = [];
         let pIdx = sentenceText.indexOf(particle);
         while (pIdx !== -1) {
-          particleMatches.push({ index: pIdx, text: particle });
+          if (this.isValidParticleOccurrence(sentenceText, pIdx, particle)) {
+            particleMatches.push({ index: pIdx, text: particle });
+          }
           pIdx = sentenceText.indexOf(particle, pIdx + particle.length);
         }
 
-        if (particleMatches.length >= this.maxThreshold) {
+        if (particleMatches.length >= threshold) {
           const first = particleMatches[0];
           const last = particleMatches[particleMatches.length - 1];
 

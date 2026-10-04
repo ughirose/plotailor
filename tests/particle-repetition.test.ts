@@ -81,4 +81,24 @@ describe('ParticleRepetitionLinterEngine', () => {
     expect(diagnostics[0].particle).toBe('が');
     expect(diagnostics[0].count).toBe(3);
   });
+
+  it('filters out false positive "の" in compound words like "この", "その", "ので", "のに"', () => {
+    const linter = new ParticleRepetitionLinterEngine();
+    // 「この」「その」や接続助詞「ので」が含まれていても、純粋な格助詞「の」が3回未満なら検知しない
+    const text = 'この街の夜は静かなので、その部屋で休んだ。';
+    const diagnostics = linter.lint(text);
+
+    expect(diagnostics.length).toBe(0);
+  });
+
+  it('detects 3 or more occurrences of "の" when configured with custom threshold', () => {
+    const linter = new ParticleRepetitionLinterEngine(undefined, 3, { の: 3 });
+    const text = '青い空の雲の向こうの光。';
+    const diagnostics = linter.lint(text);
+
+    expect(diagnostics.length).toBe(1);
+    expect(diagnostics[0].particle).toBe('の');
+    expect(diagnostics[0].count).toBe(3);
+  });
 });
+
