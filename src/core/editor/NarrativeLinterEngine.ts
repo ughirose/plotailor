@@ -52,6 +52,57 @@ export interface ZeroPronounItem {
   snippet?: string;
 }
 
+export interface PovDiagnosticItem {
+  id: string;
+  from: number;
+  to: number;
+  line: number;
+  col: number;
+  epistemicScore: number;
+  message: string;
+  snippet?: string;
+}
+
+export interface EventActionItem {
+  id: string;
+  from: number;
+  to: number;
+  actionType: 'None' | 'Acquire' | 'Drop' | 'Move' | 'Speak' | 'StateChange';
+  actionId: number;
+  text: string;
+}
+
+export interface EntitySpanItem {
+  id: string;
+  from: number;
+  to: number;
+  text: string;
+  type: string;
+}
+
+export interface ConnectiveRelationItem {
+  id: string;
+  from: number;
+  to: number;
+  relationType: 'None' | 'Causal' | 'Adversative' | 'Temporal' | 'Additive';
+  relationId: number;
+  text: string;
+}
+
+export interface ModelMultiTaskOutputs {
+  modality?: Float32Array | number[]; // [seqLen, 2]
+  offset?: Float32Array | number[];   // [seqLen, 65]
+  label?: Float32Array | number[];    // [seqLen, 8]
+  case?: Float32Array | number[];     // [seqLen, 10]
+  epistemic?: Float32Array | number[];// [seqLen, 1]
+  event_action?: Float32Array | number[]; // [seqLen, 6]
+  entity?: Float32Array | number[];   // [seqLen, 4]
+  connective?: Float32Array | number[]; // [seqLen, 5]
+  seqLen: number;
+  text: string;
+  offsetStart?: number;
+}
+
 export interface NarrativeAnalysisResult {
   syntacticItems: SyntacticLinterItem[];
   zeroPronounItems: ZeroPronounItem[];
@@ -59,6 +110,10 @@ export interface NarrativeAnalysisResult {
   totalWarnings: number;
   analyzedWindow?: { from: number; to: number };
   sensoryAnalysis?: SensoryAnalysisResult;
+  povItems?: PovDiagnosticItem[];
+  eventActionItems?: EventActionItem[];
+  entitySpanItems?: EntitySpanItem[];
+  connectiveItems?: ConnectiveRelationItem[];
 }
 
 export class NarrativeLinterEngine {
@@ -603,5 +658,169 @@ export class NarrativeLinterEngine {
     }
 
     return results;
+  }
+
+  /**
+   * Integrates raw multi-task inference tensor outputs from Narrative-Nano Pro v14
+   * into structured literary quality diagnostics and causal DAG events.
+   */
+  public integrateModelInference(
+    baseResult: NarrativeAnalysisResult,
+    outputs: ModelMultiTaskOutputs
+  ): NarrativeAnalysisResult {
+    const { text, seqLen, offsetStart = 0 } = outputs;
+    const povItems: PovDiagnosticItem[] = baseResult.povItems ? [...baseResult.povItems] : [];
+    const eventActionItems: EventActionItem[] = baseResult.eventActionItems ? [...baseResult.eventActionItems] : [];
+    const entitySpanItems: EntitySpanItem[] = baseResult.entitySpanItems ? [...baseResult.entitySpanItems] : [];
+    const connectiveItems: ConnectiveRelationItem[] = baseResult.connectiveItems ? [...baseResult.connectiveItems] : [];
+
+    const actionNames: Array<'None' | 'Acquire' | 'Drop' | 'Move' | 'Speak' | 'StateChange'> = [
+      'None', 'Acquire', 'Drop', 'Move', 'Speak', 'StateChange'
+    ];
+    const connNames: Array<'None' | 'Causal' | 'Adversative' | 'Temporal' | 'Additive'> = [
+      'None', 'Causal', 'Adversative', 'Temporal', 'Additive'
+    ];
+
+    // 1. Process Epistemic POV scores
+    if (outputs.epistemic) {
+      const epi = outputs.epistemic;
+      for (let i = 0; i < Math.min(seqLen, text.length); i++) {
+        const score = typeof epi[i] === 'number' ? epi[i] : (epi as any)[i];
+        if (score >= 0.6) {
+          const charOffset = offsetStart + i;
+          const { line, col } = NarrativeLinterEngine.offsetToLineCol(text, charOffset);
+          // Look for sentence snippet
+          const snippet = NarrativeLinterEngine.extractContextSnippet(text, charOffset, charOffset + 1);
+          povItems.push({
+            id: `pov-${charOffset}`,
+            from: charOffset,
+            to: charOffset + 1,
+            line,
+            col,
+            epistemicScore: score,
+            message: `強い内面描写・認識POV（スコア: ${(score * 100).toFixed(1)}%）が検出されました。視点の一貫性を確認してください。`,
+            snippet,
+          });
+        }
+      }
+    }
+
+    // 2. Process Event Action classes
+    if (outputs.event_action) {
+      const act = outputs.event_action;
+      for (let i = 0; i < Math.min(seqLen, text.length); i++) {
+        // Find argmax for the 6 action classes at position i
+        let maxAct = 0;
+        let maxScore = -Infinity;
+        for (let c = 0; c < 6; c++) {
+          const val = act[i * 6 + c] ?? 0;
+          if (val > maxScore) {
+            maxScore = val;
+            maxAct = c;
+          }
+        }
+        if (maxAct > 0) {
+          const charOffset = offsetStart + i;
+          eventActionItems.push({
+            id: `act-${charOffset}-${maxAct}`,
+            from: charOffset,
+            to: charOffset + 1,
+            actionType: actionNames[maxAct],
+            actionId: maxAct,
+            text: text[i] || '',
+          });
+        }
+      }
+    }
+
+    // 3. Process Entity spans (BIO)
+    if (outputs.entity) {
+      const ent = outputs.entity;
+      let currentEntityStart: number | null = null;
+      for (let i = 0; i < Math.min(seqLen, text.length); i++) {
+        let maxEnt = 0;
+        let maxScore = -Infinity;
+        for (let c = 0; c < 4; c++) {
+          const val = ent[i * 4 + c] ?? 0;
+          if (val > maxScore) {
+            maxScore = val;
+            maxEnt = c;
+          }
+        }
+        const charOffset = offsetStart + i;
+        if (maxEnt === 1) { // B-ENT
+          if (currentEntityStart !== null) {
+            entitySpanItems.push({
+              id: `ent-${currentEntityStart}`,
+              from: currentEntityStart,
+              to: charOffset,
+              text: text.slice(currentEntityStart - offsetStart, i),
+              type: 'NamedEntity',
+            });
+          }
+          currentEntityStart = charOffset;
+        } else if (maxEnt === 3 && currentEntityStart !== null) { // E-ENT
+          entitySpanItems.push({
+            id: `ent-${currentEntityStart}`,
+            from: currentEntityStart,
+            to: charOffset + 1,
+            text: text.slice(currentEntityStart - offsetStart, i + 1),
+            type: 'NamedEntity',
+          });
+          currentEntityStart = null;
+        } else if (maxEnt === 0 && currentEntityStart !== null) { // O
+          entitySpanItems.push({
+            id: `ent-${currentEntityStart}`,
+            from: currentEntityStart,
+            to: charOffset,
+            text: text.slice(currentEntityStart - offsetStart, i),
+            type: 'NamedEntity',
+          });
+          currentEntityStart = null;
+        }
+      }
+      if (currentEntityStart !== null) {
+        entitySpanItems.push({
+          id: `ent-${currentEntityStart}`,
+          from: currentEntityStart,
+          to: offsetStart + Math.min(seqLen, text.length),
+          text: text.slice(currentEntityStart - offsetStart, Math.min(seqLen, text.length)),
+          type: 'NamedEntity',
+        });
+      }
+    }
+
+    // 4. Process Discourse Connectives
+    if (outputs.connective) {
+      const conn = outputs.connective;
+      let maxConn = 0;
+      let maxScore = -Infinity;
+      for (let c = 0; c < 5; c++) {
+        const val = conn[c] ?? 0;
+        if (val > maxScore) {
+          maxScore = val;
+          maxConn = c;
+        }
+      }
+      if (maxConn > 0) {
+        connectiveItems.push({
+          id: `conn-${offsetStart}`,
+          from: offsetStart,
+          to: offsetStart + Math.min(10, text.length),
+          relationType: connNames[maxConn],
+          relationId: maxConn,
+          text: text.slice(0, 10),
+        });
+      }
+    }
+
+    return {
+      ...baseResult,
+      povItems,
+      eventActionItems,
+      entitySpanItems,
+      connectiveItems,
+      totalWarnings: baseResult.totalWarnings + povItems.length,
+    };
   }
 }

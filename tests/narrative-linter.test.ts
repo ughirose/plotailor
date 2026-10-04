@@ -387,6 +387,65 @@ describe('Narrative Linter & Zero Pronoun Integration', () => {
 
       expect(onReplace).toHaveBeenCalledWith(hirakuItem?.from, hirakuItem?.to, 'しかし');
     });
+
+    it('integrates raw multi-task model outputs (POV, actions, entities, connectives)', () => {
+      const text = '吾輩は猫である。名前はまだ無い。どこで生れたかとんと見当がつかぬ。';
+      const baseResult = engine.analyzeDocument(text);
+      const initialWarnings = baseResult.totalWarnings;
+
+      // Mock multi-task outputs matching Narrative-Nano Pro v14 specs
+      const seqLen = text.length;
+      const epistemic = new Float32Array(seqLen);
+      epistemic[0] = 0.85; // 吾: High epistemic score (POV internal sensation)
+
+      const eventAction = new Float32Array(seqLen * 6);
+      // Let index 1 ('輩') be Action 4 ('Speak')
+      eventAction[1 * 6 + 4] = 2.5;
+
+      const entity = new Float32Array(seqLen * 4);
+      // '猫' (index 3) is B-ENT (1), 'で' (index 4) is E-ENT (3)
+      entity[3 * 4 + 1] = 3.0; // B-ENT
+      entity[4 * 4 + 3] = 3.0; // E-ENT
+
+      const connective = new Float32Array(5);
+      connective[1] = 1.8; // Causal relation
+
+      const enriched = engine.integrateModelInference(baseResult, {
+        text,
+        seqLen,
+        epistemic,
+        event_action: eventAction,
+        entity,
+        connective,
+      });
+
+      // 1. POV item verification
+      expect(enriched.povItems).toBeDefined();
+      expect(enriched.povItems!.length).toBe(1);
+      expect(enriched.povItems![0].epistemicScore).toBeCloseTo(0.85);
+      expect(enriched.povItems![0].message).toContain('認識POV');
+      expect(enriched.totalWarnings).toBe(initialWarnings + 1);
+
+      // 2. Event Action verification
+      expect(enriched.eventActionItems).toBeDefined();
+      expect(enriched.eventActionItems!.length).toBe(1);
+      expect(enriched.eventActionItems![0].actionType).toBe('Speak');
+      expect(enriched.eventActionItems![0].actionId).toBe(4);
+
+      // 3. Entity Span verification
+      expect(enriched.entitySpanItems).toBeDefined();
+      expect(enriched.entitySpanItems!.length).toBe(1);
+      expect(enriched.entitySpanItems![0].from).toBe(3);
+      expect(enriched.entitySpanItems![0].to).toBe(5);
+      expect(enriched.entitySpanItems![0].text).toBe('猫で');
+
+      // 4. Discourse Connective verification
+      expect(enriched.connectiveItems).toBeDefined();
+      expect(enriched.connectiveItems!.length).toBe(1);
+      expect(enriched.connectiveItems![0].relationType).toBe('Causal');
+      expect(enriched.connectiveItems![0].relationId).toBe(1);
+    });
   });
 });
+
 
