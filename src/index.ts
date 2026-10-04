@@ -251,3 +251,6 @@ export * from './core/editor/PassiveVoiceDetector.js';
 export * from './core/editor/NarrativeTermLocalizer.js';
 export { LandingPageView } from './web/LandingPageView.js';
 export { NarrativeNanoDebugView } from './web/NarrativeNanoDebugView.js';
+export * from './core/editor/compositionGuardPlugin.js';
+export * from './core/editor/ChunkedRangeSet.js';
+export * from './core/editor/VerticalWidthOracle.js';

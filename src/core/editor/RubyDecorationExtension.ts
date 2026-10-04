@@ -7,7 +7,8 @@ import {
   WidgetType,
 } from '@codemirror/view';
 import { EditorState, Extension, Range, Facet, StateEffect } from '@codemirror/state';
-import { isComposing } from './cm6ImeGuard.js';
+import { isComposing, compositionStateField } from './cm6ImeGuard.js';
+import { isOverlappingComposition, type CompositionRange } from './compositionGuardPlugin.js';
 
 export type RubyDisplayMode = 'normal' | 'raw' | 'off';
 
@@ -16,6 +17,7 @@ export const setRubyDisplayMode = StateEffect.define<RubyDisplayMode>();
 export interface RubyDecorationConfig {
   mode?: RubyDisplayMode;
   expandOnCursor?: boolean;
+  compositionRange?: CompositionRange | null;
 }
 
 export const rubyConfigFacet = Facet.define<RubyDecorationConfig, Required<RubyDecorationConfig>>({
@@ -315,6 +317,10 @@ export function parseAndBuildDecorations(
       Boolean(config.expandOnCursor) &&
       selectionRanges.some((r) => r.from <= match.rawTo && r.to >= match.rawFrom);
 
+    const isComposingHere = config.compositionRange
+      ? isOverlappingComposition(match.rawFrom, match.rawTo, config.compositionRange)
+      : false;
+
     const displayFrom = match.rawFrom + accumulatedDelta;
 
     if (match.type === 'ruby') {
@@ -330,7 +336,7 @@ export function parseAndBuildDecorations(
         delta: accumulatedDelta,
       });
 
-      if (!isSelected) {
+      if (!isSelected && !isComposingHere) {
         const widget = Decoration.replace({
           widget:
             mode === 'off'
@@ -352,7 +358,7 @@ export function parseAndBuildDecorations(
         delta: accumulatedDelta,
       });
 
-      if (!isSelected) {
+      if (!isSelected && !isComposingHere) {
         if (mode !== 'off') {
           const widget = Decoration.replace({
             widget: new BoutenWidget(match.text),
@@ -485,9 +491,11 @@ export class RubyDecorationPlugin {
     }
     if (update.docChanged || update.selectionSet || modeChanged) {
       const config = update.state.facet(rubyConfigFacet);
+      const compState = update.state.field(compositionStateField, false);
       const result = parseAndBuildDecorations(update.state, {
         ...config,
         mode: this.currentMode,
+        compositionRange: compState?.range ?? null,
       });
       this.decorations = result.decorations;
       this.map = result.map;
