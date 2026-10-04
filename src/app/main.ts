@@ -274,7 +274,7 @@ export class PlotailorApp {
       isRightPaneOpen: () => this.rightPaneOpen,
       setRightPaneOpen: (open) => { this.rightPaneOpen = open; },
       openSettingsModal: () => this.openSettingsModal(),
-      exportFullAozora: (action) => this.exportFullAozora(action),
+      exportFullAozora: (action) => this.exportController.exportFullAozora(action),
       openExportModal: () => this.openExportModal(),
       exportPoPCertificate: () => this.exportPoPCertificate(),
       toggleRuby: () => this.toggleRuby(),
@@ -1574,9 +1574,6 @@ export class PlotailorApp {
     this.paneController.initPaneCollapseButtons();
   }
 
-  private initDecorationLegend(): void {
-    this.viewController.initDecorationLegend();
-  }
 
   public openExportModal() {
     this.exportController.openExportModal();
@@ -1584,42 +1581,6 @@ export class PlotailorApp {
 
   public closeExportModal() {
     this.exportController.closeExportModal();
-  }
-
-  private copyTextToClipboard(text: string, successMsg: string) {
-    this.exportController.copyTextToClipboard(text, successMsg);
-  }
-
-  private fallbackCopy(text: string, successMsg = '✅ クリップボードにコピーしました') {
-    this.exportController.fallbackCopy(text, successMsg);
-  }
-
-  private exportFullAozora(action: 'copy' | 'download') {
-    this.exportController.exportFullAozora(action);
-  }
-
-  private exportPrintPreview() {
-    this.exportController.exportPrintPreview();
-  }
-
-  private exportLoreBible() {
-    this.exportController.exportLoreBible();
-  }
-
-  private exportActiveChapterAozora() {
-    this.exportController.exportActiveChapterAozora();
-  }
-
-  private exportKakuyomu() {
-    this.exportController.exportKakuyomu();
-  }
-
-  private exportNarou() {
-    this.exportController.exportNarou();
-  }
-
-  private exportDenshokyoEpub(action: 'copy' | 'download') {
-    this.exportController.exportDenshokyoEpub(action);
   }
 
   private toastTimer: any = null;
@@ -1675,14 +1636,6 @@ export class PlotailorApp {
 
   public getNarrativeDock(): NarrativeInspectorDock {
     return this.narrativeDock;
-  }
-
-  private initPaneResizers(): void {
-    this.paneController.initPaneResizers();
-  }
-
-  private initQuickFormatButtons(): void {
-    this.viewController.initQuickFormatButtons();
   }
 
   public updateEditorWidth(): void {
