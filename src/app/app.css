@@ -1544,6 +1544,33 @@ body.theme-washi .fullscreen-exit-btn {
   background-color: rgba(248, 81, 73, 0.3) !important;
 }
 
+.cm-pov-warning {
+  text-decoration: underline wavy var(--color-purple, #bc8cff) !important;
+  text-decoration-thickness: 1.8px !important;
+  text-decoration-skip-ink: none !important;
+  background-color: rgba(188, 140, 255, 0.14);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cm-pov-warning:hover {
+  background-color: rgba(188, 140, 255, 0.28);
+}
+
+.cm-entity-span {
+  border-bottom: 1.5px dotted var(--color-accent, #58a6ff) !important;
+  background-color: rgba(88, 166, 255, 0.12);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.cm-entity-span:hover {
+  background-color: rgba(88, 166, 255, 0.25);
+}
+
+
 /* Narrative Inspector Dock (Right Pane) */
 .narrative-inspector-dock {
   display: flex;

@@ -205,7 +205,53 @@ describe('Narrative Linter & Zero Pronoun Integration', () => {
 
       view.destroy();
     });
+
+    it('attaches cm-pov-warning and cm-entity-span marks from model multi-task outputs', async () => {
+      const text = '吾輩は猫である。名前はまだ無い。';
+      const mockBridge = {
+        analyzeImmediate: vi.fn().mockReturnValue({
+          syntacticItems: [],
+          zeroPronounItems: [],
+          syntacticScore: 95,
+          totalWarnings: 1,
+          povItems: [{ id: 'pov-0', from: 0, to: 2, line: 1, col: 1, epistemicScore: 0.9, message: 'POV' }],
+          entitySpanItems: [{ id: 'ent-3', from: 3, to: 4, text: '猫', type: 'Entity' }],
+        }),
+        analyzeDebounced: vi.fn(),
+      } as unknown as NarrativeWorkerBridge;
+
+      const state = EditorState.create({
+        doc: text,
+        extensions: [
+          narrativeLinterExtension({
+            workerBridge: mockBridge,
+            debounceMs: 5,
+          }),
+        ],
+      });
+
+      const parentEl = document.createElement('div');
+      const view = new EditorView({ state, parent: parentEl });
+
+      await new Promise((r) => setTimeout(r, 30));
+
+      const decos = view.state.field(narrativeDecorationField);
+      let foundPov = false;
+      let foundEntity = false;
+
+      decos.between(0, text.length, (from, to, value) => {
+        const className = (value.spec as any)?.class;
+        if (className === 'cm-pov-warning') foundPov = true;
+        if (className === 'cm-entity-span') foundEntity = true;
+      });
+
+      expect(foundPov).toBe(true);
+      expect(foundEntity).toBe(true);
+
+      view.destroy();
+    });
   });
+
 
   describe('NarrativeInspectorDock (3-Pane Inline Right Inspector)', () => {
     it('renders non-modal inline dock adhering strictly to 3-Pane Constitution', () => {
@@ -387,6 +433,86 @@ describe('Narrative Linter & Zero Pronoun Integration', () => {
 
       expect(onReplace).toHaveBeenCalledWith(hirakuItem?.from, hirakuItem?.to, 'しかし');
     });
+
+    it('renders POV and Event Action / Connective items in NarrativeInspectorDock', () => {
+      const dock = new NarrativeInspectorDock();
+      const mockResult: NarrativeAnalysisResult = {
+        syntacticItems: [],
+        zeroPronounItems: [],
+        syntacticScore: 95,
+        totalWarnings: 1,
+        povItems: [
+          {
+            id: 'pov-1',
+            from: 0,
+            to: 5,
+            line: 1,
+            col: 1,
+            epistemicScore: 0.88,
+            message: '強い内面描写・認識POV（スコア: 88.0%）が検出されました。',
+            snippet: '吾輩は猫である',
+          },
+        ],
+        eventActionItems: [
+          {
+            id: 'act-1-4',
+            from: 10,
+            to: 11,
+            actionType: 'Speak',
+            actionId: 4,
+            text: '言った',
+          },
+        ],
+        entitySpanItems: [
+          {
+            id: 'ent-3',
+            from: 3,
+            to: 5,
+            text: '猫である',
+            type: 'NamedEntity',
+          },
+        ],
+        connectiveItems: [
+          {
+            id: 'conn-0',
+            from: 0,
+            to: 10,
+            relationType: 'Causal',
+            relationId: 1,
+            text: 'だから',
+          },
+        ],
+      };
+
+      dock.updateResult(mockResult);
+      const html = dock.renderHTML();
+
+      // Check Header Metrics
+      expect(html).toContain('POV注意: <strong>1 件</strong>');
+      expect(html).toContain('事象アクション: <strong>1 件</strong>');
+      expect(html).toContain('固有名詞: <strong>1 件</strong>');
+      expect(html).toContain('談話接続: <strong>1 件</strong>');
+
+      // Check Sections
+      expect(html).toContain('認識POV・内面描写');
+      expect(html).toContain('88%');
+      expect(html).toContain('吾輩は猫である');
+      expect(html).toContain('事象アクション・談話構造');
+      expect(html).toContain('Action: Speak');
+      expect(html).toContain('談話接続: Causal');
+
+      // Check Filter switching
+      dock.setFilter('pov');
+      const povHtml = dock.renderHTML();
+      expect(povHtml).toContain('認識POV・内面描写');
+      expect(povHtml).not.toContain('Action: Speak');
+
+      dock.setFilter('events');
+      const eventsHtml = dock.renderHTML();
+      expect(eventsHtml).toContain('Action: Speak');
+      expect(eventsHtml).not.toContain('認識POV・内面描写');
+    });
+
 
     it('integrates raw multi-task model outputs (POV, actions, entities, connectives)', () => {
       const text = '吾輩は猫である。名前はまだ無い。どこで生れたかとんと見当がつかぬ。';

@@ -50,6 +50,17 @@ export const lintMultipleMark = Decoration.mark({
   attributes: { title: '複数の推敲指摘が重複しています' },
 });
 
+export const povWarningMark = Decoration.mark({
+  class: 'cm-pov-warning',
+  attributes: { title: '内面描写・認識POV検知' },
+});
+
+export const entitySpanMark = Decoration.mark({
+  class: 'cm-entity-span',
+  attributes: { title: '固有表現・エンティティ' },
+});
+
+
 const EMPTY_RESULT: NarrativeAnalysisResult = {
   syntacticItems: [],
   zeroPronounItems: [],
@@ -165,7 +176,7 @@ class NarrativeViewPlugin {
     const docLength = this.view.state.doc.length;
 
     // Collect all raw diagnostic spans
-    const allSpans: Array<{ from: number; to: number; type: 'syntactic' | 'zp' }> = [];
+    const allSpans: Array<{ from: number; to: number; type: 'syntactic' | 'zp' | 'pov' | 'entity' }> = [];
     for (const item of result.syntacticItems) {
       const from = Math.max(0, Math.min(item.from, docLength));
       const to = Math.max(from, Math.min(item.to, docLength));
@@ -175,6 +186,20 @@ class NarrativeViewPlugin {
       const from = Math.max(0, Math.min(item.from, docLength));
       const to = Math.max(from, Math.min(item.to, docLength));
       if (from < to) allSpans.push({ from, to, type: 'zp' });
+    }
+    if (result.povItems) {
+      for (const item of result.povItems) {
+        const from = Math.max(0, Math.min(item.from, docLength));
+        const to = Math.max(from, Math.min(item.to, docLength));
+        if (from < to) allSpans.push({ from, to, type: 'pov' });
+      }
+    }
+    if (result.entitySpanItems) {
+      for (const item of result.entitySpanItems) {
+        const from = Math.max(0, Math.min(item.from, docLength));
+        const to = Math.max(from, Math.min(item.to, docLength));
+        if (from < to) allSpans.push({ from, to, type: 'entity' });
+      }
     }
 
     const ranges: Range<Decoration>[] = [];
@@ -189,10 +214,15 @@ class NarrativeViewPlugin {
         ranges.push(lintMultipleMark.range(span.from, span.to));
       } else if (span.type === 'syntactic') {
         ranges.push(lintWarningMark.range(span.from, span.to));
-      } else {
+      } else if (span.type === 'zp') {
         ranges.push(pronounMissingMark.range(span.from, span.to));
+      } else if (span.type === 'pov') {
+        ranges.push(povWarningMark.range(span.from, span.to));
+      } else {
+        ranges.push(entitySpanMark.range(span.from, span.to));
       }
     }
+
 
     // Sort ranges ascending by `from` offset as required by CodeMirror Decoration.set
     ranges.sort((a, b) => a.from - b.from || a.to - b.to);

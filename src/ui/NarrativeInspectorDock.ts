@@ -21,7 +21,7 @@ export class NarrativeInspectorDock {
   };
 
   private kinsokuViolations: KinsokuViolation[] = [];
-  private activeFilter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' = 'all';
+  private activeFilter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' | 'pov' | 'events' = 'all';
   private onJumpToTarget?: (from: number, to: number) => void;
   private onInsertSubject?: (from: number, candidateText: string) => void;
   private onReplaceText?: (from: number, to: number, replacement: string) => void;
@@ -48,7 +48,7 @@ export class NarrativeInspectorDock {
     return this.currentResult;
   }
 
-  public setFilter(filter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku'): void {
+  public setFilter(filter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' | 'pov' | 'events'): void {
     this.activeFilter = filter;
   }
 
@@ -64,6 +64,11 @@ export class NarrativeInspectorDock {
     const showSyntactic = this.activeFilter === 'all' || this.activeFilter === 'syntactic';
     const showZP = this.activeFilter === 'all' || this.activeFilter === 'zero-pronoun';
     const showKinsoku = this.activeFilter === 'all' || this.activeFilter === 'kinsoku';
+    const showPOV = this.activeFilter === 'all' || this.activeFilter === 'pov';
+    const showEvents = this.activeFilter === 'all' || this.activeFilter === 'events';
+
+    const povCount = res.povItems?.length || 0;
+    const eventCount = (res.eventActionItems?.length || 0) + (res.connectiveItems?.length || 0) + (res.entitySpanItems?.length || 0);
 
     let html = `
       <div class="narrative-inspector-dock" data-testid="narrative-inspector-dock">
@@ -80,10 +85,18 @@ export class NarrativeInspectorDock {
             <div class="linter-metric-row">
               <span>構文警告: <strong>${res.syntacticItems.length} 件</strong></span>
               <span>主語抜け: <strong>${res.zeroPronounItems.length} 件</strong></span>
+              ${povCount > 0 ? `<span>POV注意: <strong>${povCount} 件</strong></span>` : ''}
               ${this.kinsokuViolations.length > 0 ? `<span>禁則違反: <strong>${this.kinsokuViolations.length} 件</strong></span>` : ''}
             </div>
+            ${eventCount > 0 ? `
+            <div class="linter-metric-row" style="margin-top: 4px; font-size: 11px; opacity: 0.9;">
+              <span>事象アクション: <strong>${res.eventActionItems?.length || 0} 件</strong></span>
+              <span>固有名詞: <strong>${res.entitySpanItems?.length || 0} 件</strong></span>
+              <span>談話接続: <strong>${res.connectiveItems?.length || 0} 件</strong></span>
+            </div>
+            ` : ''}
             <div class="score-criteria-hint" style="font-size: 11px; color: var(--color-text-dim); margin-top: 6px; padding: 4px 8px; background: rgba(0, 0, 0, 0.04); border-radius: 4px; line-height: 1.4;">
-              💡 <strong>採点基準:</strong> 基礎点100点からの減点方式（構文・文体指摘: −8点/件、主語抜け: −5点/件）
+              💡 <strong>採点基準:</strong> 基礎点100点からの減点方式（構文・文体指摘: −8点/件、主語抜け: −5点/件、認識POV: −3点/件）
             </div>
           </div>
         </div>
@@ -91,17 +104,27 @@ export class NarrativeInspectorDock {
         <!-- Filter Sub-tabs (Inline within Dock) -->
         <div class="dock-filter-bar">
           <button class="filter-btn ${this.activeFilter === 'all' ? 'active' : ''}" data-action="filter" data-filter="all">
-            すべて (${res.totalWarnings + this.kinsokuViolations.length})
+            すべて (${res.totalWarnings + this.kinsokuViolations.length + eventCount})
           </button>
           <button class="filter-btn ${this.activeFilter === 'syntactic' ? 'active' : ''}" data-action="filter" data-filter="syntactic">
-            文体・構文 (${res.syntacticItems.length})
+            構文 (${res.syntacticItems.length})
           </button>
           <button class="filter-btn ${this.activeFilter === 'zero-pronoun' ? 'active' : ''}" data-action="filter" data-filter="zero-pronoun">
-            主語抜け (${res.zeroPronounItems.length})
+            主語 (${res.zeroPronounItems.length})
           </button>
+          ${povCount > 0 ? `
+          <button class="filter-btn ${this.activeFilter === 'pov' ? 'active' : ''}" data-action="filter" data-filter="pov">
+            POV (${povCount})
+          </button>
+          ` : ''}
+          ${eventCount > 0 ? `
+          <button class="filter-btn ${this.activeFilter === 'events' ? 'active' : ''}" data-action="filter" data-filter="events">
+            事象 (${eventCount})
+          </button>
+          ` : ''}
           ${this.kinsokuViolations.length > 0 ? `
           <button class="filter-btn ${this.activeFilter === 'kinsoku' ? 'active' : ''}" data-action="filter" data-filter="kinsoku">
-            組版禁則 (${this.kinsokuViolations.length})
+            禁則 (${this.kinsokuViolations.length})
           </button>
           ` : ''}
         </div>
@@ -266,6 +289,99 @@ export class NarrativeInspectorDock {
           `;
         }
       }
+
+      // 4. POV (Epistemic / Internal Sensation) Section
+      if (showPOV && res.povItems && res.povItems.length > 0) {
+        html += `
+          <div class="dock-section-title" style="margin-top: 14px;">
+            <span>👁️ 認識POV・内面描写（Epistemic POV）</span>
+            <span class="section-count">${res.povItems.length}</span>
+          </div>
+        `;
+
+        for (const item of res.povItems) {
+          html += `
+            <div class="linter-issue-card cursor-pointer" data-action="jump" data-from="${item.from}" data-to="${item.to}" title="クリックしてエディタの該当箇所へジャンプ">
+              <div class="issue-header">
+                <div style="display: flex; gap: 4px; align-items: center;">
+                  <span class="issue-tag" style="background: rgba(188, 140, 255, 0.15); color: var(--color-purple, #bc8cff); border: 1px solid rgba(188, 140, 255, 0.3);">認識POV</span>
+                  <span class="issue-tag" style="background: rgba(207, 168, 92, 0.15); color: var(--color-gold); border: 1px solid rgba(207, 168, 92, 0.3);">${(item.epistemicScore * 100).toFixed(0)}%</span>
+                </div>
+                <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
+              </div>
+              <div class="issue-message">${this.escapeHtml(item.message)}</div>
+              ${item.snippet ? `
+                <div class="issue-snippet" style="background: rgba(0, 0, 0, 0.05); border-left: 2px solid var(--color-purple, #bc8cff); padding: 5px 8px; margin: 6px 0; border-radius: 3px; font-size: 12px; line-height: 1.5; color: var(--color-text-main); font-family: var(--font-novel, 'Shippori Mincho', serif);">
+                  <span style="font-size: 10px; color: var(--color-text-dim); display: block; margin-bottom: 2px;">該当箇所の文脈:</span>
+                  「${this.escapeHtml(item.snippet)}」
+                </div>
+              ` : ''}
+              <div class="issue-jump-hint">➜ エディタへジャンプ</div>
+            </div>
+          `;
+        }
+      }
+
+      // 5. Events, Actions & Discourse Connectives Section
+      if (showEvents && ((res.eventActionItems && res.eventActionItems.length > 0) || (res.connectiveItems && res.connectiveItems.length > 0) || (res.entitySpanItems && res.entitySpanItems.length > 0))) {
+        html += `
+          <div class="dock-section-title" style="margin-top: 14px;">
+            <span>⚡ 事象アクション・談話構造（Event & Discourse DAG）</span>
+            <span class="section-count">${eventCount}</span>
+          </div>
+        `;
+
+        if (res.eventActionItems && res.eventActionItems.length > 0) {
+          for (const item of res.eventActionItems) {
+            html += `
+              <div class="linter-issue-card cursor-pointer" data-action="jump" data-from="${item.from}" data-to="${item.to}" title="クリックしてエディタの該当箇所へジャンプ">
+                <div class="issue-header">
+                  <div style="display: flex; gap: 4px; align-items: center;">
+                    <span class="issue-tag" style="background: rgba(56, 139, 253, 0.15); color: #58a6ff; border: 1px solid rgba(56, 139, 253, 0.3);">Action: ${item.actionType}</span>
+                  </div>
+                  <span class="issue-pos">オフセット ${item.from}</span>
+                </div>
+                <div class="issue-message">動詞・述語事象: <strong>「${this.escapeHtml(item.text)}」</strong></div>
+                <div class="issue-jump-hint">➜ エディタへジャンプ</div>
+              </div>
+            `;
+          }
+        }
+
+        if (res.connectiveItems && res.connectiveItems.length > 0) {
+          for (const item of res.connectiveItems) {
+            html += `
+              <div class="linter-issue-card cursor-pointer" data-action="jump" data-from="${item.from}" data-to="${item.to}" title="クリックしてエディタの該当箇所へジャンプ">
+                <div class="issue-header">
+                  <div style="display: flex; gap: 4px; align-items: center;">
+                    <span class="issue-tag" style="background: rgba(46, 160, 67, 0.15); color: #3fb950; border: 1px solid rgba(46, 160, 67, 0.3);">談話接続: ${item.relationType}</span>
+                  </div>
+                  <span class="issue-pos">オフセット ${item.from}</span>
+                </div>
+                <div class="issue-message">接続関係: <strong>「${this.escapeHtml(item.text)}」</strong></div>
+                <div class="issue-jump-hint">➜ エディタへジャンプ</div>
+              </div>
+            `;
+          }
+        }
+
+        if (res.entitySpanItems && res.entitySpanItems.length > 0) {
+          for (const item of res.entitySpanItems) {
+            html += `
+              <div class="linter-issue-card cursor-pointer" data-action="jump" data-from="${item.from}" data-to="${item.to}" title="クリックしてエディタの該当箇所へジャンプ">
+                <div class="issue-header">
+                  <div style="display: flex; gap: 4px; align-items: center;">
+                    <span class="issue-tag" style="background: rgba(210, 153, 34, 0.15); color: #d29922; border: 1px solid rgba(210, 153, 34, 0.3);">エンティティ</span>
+                  </div>
+                  <span class="issue-pos">${item.from} - ${item.to}</span>
+                </div>
+                <div class="issue-message">固有名詞: <strong>「${this.escapeHtml(item.text)}」</strong></div>
+                <div class="issue-jump-hint">➜ エディタへジャンプ</div>
+              </div>
+            `;
+          }
+        }
+      }
     }
 
     html += `</div>`;
@@ -319,7 +435,7 @@ export class NarrativeInspectorDock {
     container.querySelectorAll('[data-action="filter"]').forEach((btn) => {
       btn.addEventListener('click', (e) => {
         const target = e.currentTarget as HTMLElement;
-        const filter = target.dataset.filter as 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku';
+        const filter = target.dataset.filter as 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' | 'pov' | 'events';
         if (filter) {
           this.setFilter(filter);
           container.innerHTML = this.renderHTML();
