@@ -6,6 +6,7 @@ import {
   ChunkedRangeSetManager,
   calculateClampedViewport,
   isAtomicDecorationSafe,
+  createSimdRubyScanner,
   CHUNK_LINE_COUNT,
   OVERSCAN_MARGIN_CHARS,
 } from '../src/core/editor/ChunkedRangeSet.js';
@@ -97,4 +98,42 @@ describe('ChunkedRangeSet', () => {
     expect(manager.getChunkCount()).toBe(20);
     expect(duration).toBeLessThan(50); // Fast initial partitioning
   });
+
+  it('scans decorations locally with createSimdRubyScanner and WasmSimdTokenizer', () => {
+    const text = Text.of([
+      '第一行：｜魔法《マゴウ》の発動。',
+      '第二行：通常テキスト。',
+      '第三行：漢字《かんじ》の読経。',
+    ]);
+
+    const manager = new ChunkedRangeSetManager(500, 2000);
+    manager.synchronizeChunks(text);
+    const chunk0 = manager.getChunk(0)!;
+
+    const mockTokenizer = {
+      parseRubySpans: (rawText: string) => {
+        const spans: Array<{ rawFrom: number; rawTo: number; baseText: string; rubyText: string }> = [];
+        if (rawText.includes('｜魔法《マゴウ》')) {
+          const idx = rawText.indexOf('｜魔法《マゴウ》');
+          spans.push({ rawFrom: idx, rawTo: idx + 8, baseText: '魔法', rubyText: 'マゴウ' });
+        }
+        if (rawText.includes('漢字《かんじ》')) {
+          const idx = rawText.indexOf('漢字《かんじ》');
+          spans.push({ rawFrom: idx, rawTo: idx + 7, baseText: '漢字', rubyText: 'かんじ' });
+        }
+        return spans;
+      },
+    };
+
+    const scanner = createSimdRubyScanner(
+      mockTokenizer,
+      (base, ruby) => Decoration.mark({ class: `ruby-${base}` })
+    );
+
+    const decorations = scanner(chunk0, text);
+    expect(decorations.length).toBe(2);
+    expect(decorations[0].from).toBe(chunk0.startPos + 4);
+    expect(decorations[0].to).toBe(chunk0.startPos + 12);
+  });
 });
+

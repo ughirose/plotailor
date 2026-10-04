@@ -204,3 +204,29 @@ export class ChunkedRangeSetManager {
     return this.chunks[index];
   }
 }
+
+/**
+ * Creates a ChunkDecorationScanner accelerated by Wasm SIMD Tokenizer and DualOffsetTable.
+ * Scans ruby annotations locally within each chunk, avoiding full-document AST re-traversals.
+ */
+export function createSimdRubyScanner(
+  tokenizer: { parseRubySpans: (text: string) => Array<{ rawFrom: number; rawTo: number; baseText: string; rubyText: string }> },
+  createDecorationWidget: (baseText: string, rubyText: string, from: number, to: number) => Decoration
+): (chunk: DocumentChunk, doc: Text) => Range<Decoration>[] {
+  return (chunk: DocumentChunk, doc: Text): Range<Decoration>[] => {
+    const chunkText = doc.sliceString(chunk.startPos, chunk.endPos);
+    const spans = tokenizer.parseRubySpans(chunkText);
+    const decorations: Range<Decoration>[] = [];
+
+    for (const span of spans) {
+      const from = chunk.startPos + span.rawFrom;
+      const to = chunk.startPos + span.rawTo;
+      if (isAtomicDecorationSafe(from, to, doc)) {
+        const dec = createDecorationWidget(span.baseText, span.rubyText, from, to);
+        decorations.push(dec.range(from, to));
+      }
+    }
+
+    return decorations;
+  };
+}
