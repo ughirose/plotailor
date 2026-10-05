@@ -13,6 +13,7 @@ import { verticalWritingExtension, setAutoIndentEnabled } from '../core/editor/V
 import { wrapSelectionWithRuby } from '../core/editor/RubyShortcutExtension.js';
 import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
 import { narrativeLinterExtension } from '../core/editor/CodeMirrorNarrativeExtension.js';
+import { calculateManuscriptMetrics } from '../core/editor/JapaneseBeautifyExtension.js';
 import { NarrativeInspectorDock } from '../ui/NarrativeInspectorDock.js';
 import { LoreInspectorDock } from '../ui/LoreInspectorDock.js';
 import {
@@ -1323,17 +1324,19 @@ export class PlotailorApp {
 
   private updateStats() {
     const rawText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
-    const charCount = rawText.replace(/\s+/g, '').length;
-    const genkoSheets = (charCount / 400).toFixed(1);
+    const metrics = calculateManuscriptMetrics(rawText);
+    const charCount = metrics.trimmedCharacters;
+    const genkoSheets = metrics.genkoSheets.toFixed(1);
+    const readingMinutes = metrics.estimatedReadingMinutes;
 
     const headerChar = document.getElementById('charCountHeader');
     if (headerChar) {
-      headerChar.textContent = `${charCount.toLocaleString()} 文字（原稿用紙 ${genkoSheets} 枚）`;
+      headerChar.textContent = `${charCount.toLocaleString()} 文字（原稿用紙 ${genkoSheets} 枚 / 読了約 ${readingMinutes} 分）`;
     }
 
     const footerChar = document.getElementById('charCountFooter');
     if (footerChar) {
-      footerChar.innerHTML = `<strong>${charCount.toLocaleString()}</strong> 文字（原稿用紙 <strong>${genkoSheets}</strong> 枚）`;
+      footerChar.innerHTML = `<strong>${charCount.toLocaleString()}</strong> 文字（原稿用紙 <strong>${genkoSheets}</strong> 枚 / 読了約 <strong>${readingMinutes}</strong> 分）`;
     }
 
     const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);

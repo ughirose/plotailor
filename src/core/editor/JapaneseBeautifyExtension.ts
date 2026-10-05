@@ -156,9 +156,10 @@ export function japaneseBeautifyExtension(options: JapaneseBeautifyOptions = {})
         }
       }
 
+
       // 4. Snap Yakumono: '…' -> '……' and '―' -> '――'
       if (autoSnapYakumono) {
-        if (inserted === '…') {
+        if (inserted === '…' || inserted === '...' || inserted === '。。。') {
           const prevChar = fromA > 0 ? doc.sliceString(fromA - 1, fromA) : '';
           const nextChar = toA < docLen ? doc.sliceString(toA, toA + 1) : '';
           if (prevChar !== '…' && nextChar !== '…') {
@@ -169,7 +170,7 @@ export function japaneseBeautifyExtension(options: JapaneseBeautifyOptions = {})
               },
             ];
           }
-        } else if (inserted === '―' || inserted === '—') {
+        } else if (inserted === '―' || inserted === '—' || inserted === '-') {
           const prevChar = fromA > 0 ? doc.sliceString(fromA - 1, fromA) : '';
           const nextChar = toA < docLen ? doc.sliceString(toA, toA + 1) : '';
           if (prevChar !== '―' && prevChar !== '—' && nextChar !== '―' && nextChar !== '—') {
@@ -183,7 +184,31 @@ export function japaneseBeautifyExtension(options: JapaneseBeautifyOptions = {})
         }
       }
 
+      // 6. Exclamation/Question mark full-width space correction
+      if (inserted === '！' || inserted === '？' || inserted === '!' || inserted === '?') {
+        const fullWidthInserted = inserted === '!' ? '！' : inserted === '?' ? '？' : inserted;
+        const nextChar = toA < docLen ? doc.sliceString(toA, toA + 1) : '';
+        const closingChars = ['」', '』', '）', '】', '》', '〉', '\n', '\r', '　', ' '];
+
+        if (!closingChars.includes(nextChar)) {
+          return [
+            {
+              changes: { from: fromA, to: toA, insert: `${fullWidthInserted}　` },
+              selection: { anchor: fromA + 2 },
+            },
+          ];
+        } else if (inserted !== fullWidthInserted) {
+          return [
+            {
+              changes: { from: fromA, to: toA, insert: fullWidthInserted },
+              selection: { anchor: fromA + 1 },
+            },
+          ];
+        }
+      }
+
       // 5. Smart auto-indent: newline -> newline + full-width space ('　')
+
       if (autoIndent && (inserted === '\n' || inserted === '\r\n')) {
         return [
           {
