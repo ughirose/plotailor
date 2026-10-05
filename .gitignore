@@ -4,4 +4,4 @@ playwright-report/
 *.log
 scratch/
 public/models/*.onnx
-
+node_modules/
