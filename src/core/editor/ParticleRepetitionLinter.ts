@@ -74,6 +74,10 @@ export class ParticleRepetitionLinterEngine {
       if (/^の(?:み|で|に|は|が|を|も|だ|か|よ|ね)/.test(rest)) {
         return false;
       }
+      // Exclude formal nouns frequently used in literature: のため, の際, のとき, の場合, のよう, のはず, のわけ, の上, の中, の前, の後, の先, の下, の限り, の度
+      if (/^の(?:ため|際|さい|とき|場合|ばあい|よう|はず|わけ|上|うえ|中|なか|前|まえ|後|あと|先|さき|下|もと|限り|かぎり|度|たび)/.test(rest)) {
+        return false;
+      }
       // Exclude words ending in 'の' like 'ものの', 'この', 'その', 'あの', 'どの'
       const prevWord = sentenceText.slice(Math.max(0, index - 2), index + 1);
       if (['この', 'その', 'あの', 'どの', 'もの'].includes(prevWord)) {

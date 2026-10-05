@@ -446,11 +446,19 @@ export class LoreController {
       const cycleReport = dagEngine.detectCycles();
       const loreManager = this.deps.getLoreManager();
       const cm = this.deps.getEditorView();
-      const docText = cm ? cm.state.doc.toString() : '';
+      const currentDocText = cm ? cm.state.doc.toString() : '';
+      const currentChapterId = this.deps.getCurrentChapterId();
+      const allChapters = this.deps.getChapters();
+
+      // Concatenate text from all chapters, using the current live editor text for the active chapter
+      const fullManuscriptText = allChapters
+        .map((ch) => (ch.id === currentChapterId ? currentDocText : ch.content))
+        .join('\n');
+
       const allEntities = loreManager.getEntities();
-      const { strayLores } = this.strayEngine.scanAndReconcile(docText, allEntities, {
+      const { strayLores } = this.strayEngine.scanAndReconcile(fullManuscriptText, allEntities, {
         isCommitted: false,
-        provenanceBlockId: this.deps.getCurrentChapterId(),
+        provenanceBlockId: currentChapterId,
       });
       narrativeDock.updateContinuityState({
         dagCycleReport: cycleReport,

@@ -599,8 +599,8 @@ export class NarrativeLinterEngine {
           tier: 1,
           ruleType: 'prh-rule',
           message: match.description
-            ? `用字用語ルール違反: 「${match.matchedText}」→「${match.expected}」（${match.description}）`
-            : `用字用語ルール違反: 「${match.matchedText}」→「${match.expected}」`,
+            ? `表記ゆれ検知（用字用語ルール違反）: 「${match.matchedText}」→「${match.expected}」（${match.description}）`
+            : `表記ゆれ検知（用字用語ルール違反）: 「${match.matchedText}」→「${match.expected}」`,
           source: 'prh-rule-engine',
           previewText: match.matchedText,
           replacementText: match.expected,

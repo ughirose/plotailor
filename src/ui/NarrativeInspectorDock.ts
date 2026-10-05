@@ -293,7 +293,7 @@ export class NarrativeInspectorDock {
         if (this.prhRules.length > 0) {
           html += `
             <div style="margin-top: 10px; padding: 6px 8px; background: rgba(0, 0, 0, 0.03); border-radius: 4px;">
-              <div style="font-size: 11px; font-weight: 600; color: var(--color-text-dim); margin-bottom: 4px;">登録済み用字用語(PRH)ルール (${this.prhRules.length}件):</div>
+              <div style="font-size: 11px; font-weight: 600; color: var(--color-text-dim); margin-bottom: 4px;">登録済み表記ゆれ・呼称統一ルール (${this.prhRules.length}件):</div>
           `;
           for (const rule of this.prhRules) {
             html += `
@@ -720,7 +720,7 @@ export class NarrativeInspectorDock {
       case 'qwerty-typo':
         return 'タイポ検知';
       case 'prh-rule':
-        return '用字用語(PRH)';
+        return '表記ゆれ・呼称';
       case 'consecutive-punctuation':
         return '句読点連続';
       case 'char-repetition':

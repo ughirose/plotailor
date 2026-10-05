@@ -70,16 +70,16 @@ const DEFAULT_CHAPTERS: ChapterData[] = [
     id: 'ch1',
     title: '第一章 双月の巡る夜に',
     charCount: 0,
-    content: `　深藍の夜空を二つの月が照らし出していた。
-　第一衛星《セレネ》が蒼き冷光を投げかけ、第二衛星《フォボス》の琥珀色が地平の端を染める。
-　二重満月<<コンジャンクション>>の夜、北方の砦に集う兵たちの息は白く凍りついていた。不穏な凶兆が立ち込めている。
+    content: `　深藍の夜空を｜双月《そうげつ》が照らし出していた。
+　第一衛星《セレネ》が蒼き冷光を投げかけ、地平の端を染める。二重満月の夜、北方の砦に集う兵たちの息は白く凍りついていた。暗雲の隙間から立ち込める《《凶兆》》に、誰もが言葉を失っていた。
 
-「総督<<ヴァレリウス>>閣下、帝国軍の先遣隊が峡谷を越えたとの急報です」
+「総督、急報です。バレリウス閣下、敵の先遣隊が峡谷を越えました！」
+「落ち着いてくだしあ。こんちには、と言って迎え撃つ準備はできている」
 
-　斥候の震える声に、男は静かに外套を翻した。
-　その胸元には、皇帝から下賜された金箔の紋章が鈍く輝いている。
-　彼は剣の柄に手を掛け、夜の帳を見据えた。
-　この戦いは、ただの領土紛争ではない。千年の古より受け継がれし<<<<星辰の盟約>>>>を巡る、運命の分岐点であった。`
+　斥候の震える声に、男は静かに外套を翻した。皇帝から下賜された金箔の紋章が鈍く輝いている。
+　走り出した。遠くを見つめ、剣の柄に手を掛けた。
+　セレネは心の中で激しく怯えていた。その青き瞳の奥底で、彼女は帝国の崩壊を予感し、絶望に打ちひしがれていたのだ。
+　この戦いは、千年の古より受け継がれし<<<<星辰の盟約>>>>を巡る、運命の分岐点であった...。`
   },
   {
     id: 'ch2',
@@ -223,8 +223,8 @@ export class PlotailorApp {
       onDeletePrhRule: (ruleId) => {
         this.narrativeWorkerBridge.getPrhEngine().removeRule(ruleId);
         this.narrativeDock.updatePrhRules(this.narrativeWorkerBridge.getPrhEngine().getRules());
-        this.renderRightPane();
-        this.showToast('🗑️ PRHルールを削除しました');
+        this.triggerNarrativeReanalysis();
+        this.showToast('🗑️ 表記ゆれ・呼称統一ルールを削除しました');
       },
       onAddPrhRule: (rule) => {
         if (!rule.expected || !rule.patterns || rule.patterns.length === 0) return;
@@ -240,11 +240,21 @@ export class PlotailorApp {
         };
         this.narrativeWorkerBridge.getPrhEngine().addRule(fullRule);
         this.narrativeDock.updatePrhRules(this.narrativeWorkerBridge.getPrhEngine().getRules());
-        this.renderRightPane();
-        this.showToast(`✨ PRHルール「${fullRule.expected}」を登録しました`);
+        this.triggerNarrativeReanalysis();
       },
     });
 
+    // Register default literary normalization rules
+    this.narrativeWorkerBridge.getPrhEngine().addRule({
+      id: '00000000-0000-4000-8000-000000000001',
+      expected: 'ヴァレリウス',
+      patterns: ['バレリウス'],
+      scope: 'all',
+      action: 'suggest',
+      syntaxType: 'general',
+      description: '人名正規化（ヴァレリウス将軍）',
+    });
+    this.narrativeDock.updatePrhRules(this.narrativeWorkerBridge.getPrhEngine().getRules());
 
     this.loreManager = new LoreEntityManager(this.projectManager.getVFS());
     this.loreDock = new LoreInspectorDock({
@@ -831,6 +841,107 @@ export class PlotailorApp {
     document.getElementById('btnToolbarRedo')?.addEventListener('click', handleRedo);
     document.getElementById('btnHeaderUndo')?.addEventListener('click', handleUndo);
     document.getElementById('btnHeaderRedo')?.addEventListener('click', handleRedo);
+
+    // Format & Indent & Guideline Toolbar Handlers
+    document.getElementById('btnQuickRuby')?.addEventListener('click', () => {
+      if (this.cmEditor) {
+        wrapSelectionWithRuby(this.cmEditor);
+        this.cmEditor.focus();
+      }
+    });
+
+    document.getElementById('btnQuickBouten')?.addEventListener('click', () => {
+      if (!this.cmEditor) return;
+      const sel = this.cmEditor.state.selection.main;
+      if (sel.from === sel.to) {
+        this.showToast('ℹ️ 傍点を振るテキストを選択してください');
+        return;
+      }
+      const text = this.cmEditor.state.doc.sliceString(sel.from, sel.to);
+      const replacement = `《《${text}》》`;
+      this.cmEditor.dispatch({
+        changes: { from: sel.from, to: sel.to, insert: replacement },
+        selection: { anchor: sel.from + replacement.length },
+      });
+      this.cmEditor.focus();
+      this.showToast('︙ 傍点を付与しました');
+    });
+
+    document.getElementById('btnQuickBold')?.addEventListener('click', () => {
+      if (!this.cmEditor) return;
+      const sel = this.cmEditor.state.selection.main;
+      if (sel.from === sel.to) {
+        this.showToast('ℹ️ 太字にするテキストを選択してください');
+        return;
+      }
+      const text = this.cmEditor.state.doc.sliceString(sel.from, sel.to);
+      const replacement = `**${text}**`;
+      this.cmEditor.dispatch({
+        changes: { from: sel.from, to: sel.to, insert: replacement },
+        selection: { anchor: sel.from + replacement.length },
+      });
+      this.cmEditor.focus();
+      this.showToast('B 太字を付与しました');
+    });
+
+    // Indent: toggle automatic indent mode or insert full-width space
+    const updateIndentButtonUI = () => {
+      const btn = document.getElementById('btnQuickIndent');
+      if (btn) {
+        btn.classList.toggle('active', this.isAutoIndent);
+        btn.title = `段落字下げ: ${this.isAutoIndent ? 'ON (改行時自動一字下げ)' : 'OFF'}`;
+        const lbl = btn.querySelector('.btn-label');
+        if (lbl) lbl.textContent = `字下げ: ${this.isAutoIndent ? 'ON' : 'OFF'}`;
+      }
+    };
+    updateIndentButtonUI();
+
+    document.getElementById('btnQuickIndent')?.addEventListener('click', () => {
+      if (!this.cmEditor) return;
+      const sel = this.cmEditor.state.selection.main;
+      if (sel.from !== sel.to) {
+        // Selection exists: insert or strip full-width space at line starts
+        const line = this.cmEditor.state.doc.lineAt(sel.from);
+        if (line.text.startsWith('　')) {
+          this.cmEditor.dispatch({ changes: { from: line.from, to: line.from + 1, insert: '' } });
+          this.showToast('⇥ 字下げを解除しました');
+        } else {
+          this.cmEditor.dispatch({ changes: { from: line.from, to: line.from, insert: '　' } });
+          this.showToast('⇥ 字下げ（全角空白）を挿入しました');
+        }
+      } else {
+        // Toggle automatic indent mode
+        this.isAutoIndent = !this.isAutoIndent;
+        setAutoIndentEnabled(this.isAutoIndent);
+        try { localStorage.setItem('plotailor_auto_indent', this.isAutoIndent.toString()); } catch {}
+        updateIndentButtonUI();
+        this.showToast(`⇥ 自動字下げを ${this.isAutoIndent ? '有効' : '無効'} にしました`);
+      }
+      this.cmEditor.focus();
+    });
+
+    // 40-Col Guideline: toggle ruler/border visibility
+    const updateGuidelineButtonUI = () => {
+      const btn = document.getElementById('btnToggleGuideline');
+      if (btn && this.columnGuideline) {
+        const vis = this.columnGuideline.isVisible();
+        btn.classList.toggle('active', vis);
+        btn.title = `40字ガイドライン: ${vis ? '表示中 (クリックで非表示)' : '非表示 (クリックで表示)'}`;
+        btn.textContent = `📐 40字: ${vis ? 'ON' : 'OFF'}`;
+      }
+    };
+    updateGuidelineButtonUI();
+
+    const toggleGuidelineAction = () => {
+      if (!this.columnGuideline) return;
+      const next = !this.columnGuideline.isVisible();
+      this.columnGuideline.setVisible(next);
+      updateGuidelineButtonUI();
+      this.showToast(`📐 40字ガイドラインを ${next ? '表示' : '非表示'} にしました`);
+    };
+
+    document.getElementById('btnToggleGuideline')?.addEventListener('click', toggleGuidelineAction);
+    document.getElementById('cursorPosBadge')?.addEventListener('click', toggleGuidelineAction);
 
     // History: switch to right-pane dock tab instead of modal
     document.getElementById('historyDepthBadge')?.addEventListener('click', () => {
@@ -1683,6 +1794,18 @@ export class PlotailorApp {
 
   private renderRightPane() {
     this.loreController.renderRightPane();
+  }
+
+  public triggerNarrativeReanalysis() {
+    if (!this.cmEditor) {
+      this.renderRightPane();
+      return;
+    }
+    const docText = this.cmEditor.state.doc.toString();
+    const result = this.narrativeWorkerBridge.analyzeImmediate(docText);
+    this.latestNarrativeResult = result;
+    this.narrativeDock.updateResult(result);
+    this.renderRightPane();
   }
 
   public openLoreModal(entityId?: string) {

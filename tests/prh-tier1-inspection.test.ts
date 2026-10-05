@@ -76,8 +76,8 @@ describe('Phase 2: PRH Superset Rules & Tier 1 Inspection Integration', () => {
     dock.bindEvents(container);
 
     // Verify rendered content
-    expect(container.textContent).toContain('用字用語(PRH)');
-    expect(container.textContent).toContain('登録済み用字用語(PRH)ルール');
+    expect(container.textContent).toContain('表記ゆれ・呼称');
+    expect(container.textContent).toContain('登録済み表記ゆれ・呼称統一ルール');
     expect(container.textContent).toContain('「貴様」➜ 「お前」 [dialogue]');
 
     // Click quick-replace

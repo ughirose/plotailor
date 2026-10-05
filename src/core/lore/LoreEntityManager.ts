@@ -86,6 +86,16 @@ export const DEFAULT_LORE_ENTITIES: LoreEntity[] = [
     aliases: ['北の砦', '北方の砦', '永久氷壁'],
     relations: [],
   },
+  {
+    id: 'item-sealed-stone',
+    name: '封印の魔導石',
+    category: 'item',
+    role: '失われた秘宝',
+    status: 'shelved',
+    description: '太古の魔術師が星辰の盟約を固定するために用いたとされる紅緋色の霊石。',
+    aliases: ['魔導石', '霊石'],
+    relations: [{ targetId: 'term-pact', label: '盟約核' }],
+  },
 ];
 
 export class LoreEntityManager {
