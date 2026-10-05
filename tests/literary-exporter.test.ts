@@ -8,10 +8,11 @@ import type { LoreEntity } from '../src/core/lore/LoreEntityManager.js';
 
 describe('LiteraryExporter & Markup Converter', () => {
   it('should normalize bouten and double angle bracket rubies to Aozora Bunko format', () => {
-    const raw = '千年の古より受け継がれし<<<<星辰の盟約>>>>を巡る、衛星<<セレネ>>の光。';
+    const raw = '千年の古より受け継がれし<<<<星辰の盟約>>>>を巡る、衛星<<セレネ>>の光。一部《《強調》》文。';
     const normalized = normalizeAozoraMarkup(raw);
 
     expect(normalized).toContain('［＃傍点］星辰の盟約［＃傍点終わり］');
+    expect(normalized).toContain('［＃傍点］強調［＃傍点終わり］');
     expect(normalized).toContain('《セレネ》');
   });
 
@@ -22,13 +23,19 @@ describe('LiteraryExporter & Markup Converter', () => {
     expect(normalized).toContain('｜北方《ほっぽう》');
   });
 
-  it('should convert Aozora markup into semantic HTML with <ruby> and bouten spans', () => {
-    const aozora = '｜星辰《せいしん》の空に［＃傍点］凶兆［＃傍点終わり］が現れた。\n二行目の文章。';
+  it('should convert Aozora and Plotailor markup into semantic HTML with <ruby> and bouten spans', () => {
+    const aozora = '｜星辰《せいしん》の空に［＃傍点］凶兆［＃傍点終わり］が現れた。\n二重満月<<コンジャンクション>>と《《極光》》、<<<<暗雲>>>>。';
     const html = convertAozoraToHtml(aozora);
 
     expect(html).toContain('<ruby>星辰<rt>せいしん</rt></ruby>');
+    expect(html).toContain('<ruby>二重満月<rt>コンジャンクション</rt></ruby>');
     expect(html).toContain('<span class="bouten">凶兆</span>');
-    expect(html).toContain('<p>');
+    expect(html).toContain('<span class="bouten">極光</span>');
+    expect(html).toContain('<span class="bouten">暗雲</span>');
+    expect(html).not.toContain('［＃傍点］');
+    expect(html).not.toContain('［＃傍点終わり］');
+    expect(html).not.toContain('《《');
+    expect(html).not.toContain('&lt;&lt;&lt;&lt;');
   });
 
   it('should generate complete publication-ready Aozora full text for multiple chapters', () => {

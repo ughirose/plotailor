@@ -21,15 +21,16 @@ export interface PrintHtmlOptions {
 
 /**
  * Converts internal Plotailor ruby & bouten markup into standard Aozora Bunko notation.
+ * - `《《傍点》》` or `<<<<傍点>>>>` -> `［＃傍点］傍点［＃傍点終わり］`
  * - `<<...>>` -> `《...》`
- * - `<<<<...>>>>` -> `［＃傍点］...［＃傍点終わり］`
  * - `漢字《るび》` without `｜` -> `｜漢字《るび》` when preceding characters need boundary.
  */
 export function normalizeAozoraMarkup(text: string): string {
   if (!text) return '';
 
-  // 1. Bouten: <<<<text>>>> -> ［＃傍点］text［＃傍点終わり］
+  // 1. Bouten: <<<<text>>>> or 《《text》》 -> ［＃傍点］text［＃傍点終わり］
   let result = text.replace(/<{4}(.+?)>{4}/g, '［＃傍点］$1［＃傍点終わり］');
+  result = result.replace(/《《(.+?)》》/g, '［＃傍点］$1［＃傍点終わり］');
 
   // 2. Double angle bracket ruby: <<ruby>> -> 《ruby》
   result = result.replace(/<<([^>]+?)>>/g, '《$1》');
@@ -45,7 +46,7 @@ export function normalizeAozoraMarkup(text: string): string {
 }
 
 /**
- * Converts Aozora Bunko markup into clean HTML <ruby> tags.
+ * Converts Aozora Bunko and Plotailor markup into clean HTML <ruby> and <span class="bouten"> tags.
  */
 export function convertAozoraToHtml(text: string): string {
   if (!text) return '';
@@ -55,14 +56,22 @@ export function convertAozoraToHtml(text: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // Bouten: ［＃傍点］...［＃傍点終わり］
+  // 1. Bouten: ［＃傍点］...［＃傍点終わり］, 《《...》》, <<<<...>>>>
   html = html.replace(/［＃傍点］(.*?)［＃傍点終わり］/g, '<span class="bouten">$1</span>');
+  html = html.replace(/《《(.*?)》》/g, '<span class="bouten">$1</span>');
+  html = html.replace(/(?:&lt;){4}(.*?)(?:&gt;){4}/g, '<span class="bouten">$1</span>');
 
-  // Standard Aozora: ｜親文字《るび》
-  html = html.replace(/｜([^《]+?)《([^》]+?)》/g, '<ruby>$1<rt>$2</rt></ruby>');
+  // 2. Standard Aozora Ruby with ｜: ｜親文字《るび》
+  html = html.replace(/｜([^《\n]+?)《([^》\n]+?)》/g, '<ruby>$1<rt>$2</rt></ruby>');
 
-  // Fallback ruby without ｜
-  html = html.replace(/([\u4E00-\u9FFF]+)《([^》]+?)》/g, '<ruby>$1<rt>$2</rt></ruby>');
+  // 3. Angle bracket ruby with base text: 親文字&lt;&lt;るび&gt;&gt;
+  html = html.replace(/([\u4E00-\u9FFF々ヶ〆仝\u30A1-\u30FAーa-zA-Z0-9]+)&lt;&lt;([^&]+?)&gt;&gt;/g, '<ruby>$1<rt>$2</rt></ruby>');
+
+  // 4. Fallback ruby without ｜: 親文字《るび》
+  html = html.replace(/([\u4E00-\u9FFF々ヶ〆仝\u30A1-\u30FAー]+)《([^》\n]+?)》/g, '<ruby>$1<rt>$2</rt></ruby>');
+
+  // 5. Clean up Aozora page break commands
+  html = html.replace(/［＃改ページ］/g, '<div class="page-break"></div>');
 
   // Paragraphs
   const lines = html.split('\n');

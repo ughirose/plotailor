@@ -1850,6 +1850,12 @@ export class PlotailorApp {
   private exportPrintPreview() {
     const printHtml = LiteraryExporter.exportPrintHtml(this.workTitle, this.chapters, {
       isVertical: this.isVertical,
+      fontSize: this.fontSize,
+      fontFamily: this.fontFamily === 'mincho'
+        ? '"Shippori Mincho", "Yu Mincho", "Hiragino Mincho ProN", serif'
+        : this.fontFamily === 'gothic'
+        ? '"BIZ UDPGothic", "Yu Gothic", sans-serif'
+        : 'system-ui, sans-serif',
     });
     const previewWindow = window.open('', '_blank');
     if (previewWindow) {
