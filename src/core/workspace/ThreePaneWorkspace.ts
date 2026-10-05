@@ -4,7 +4,7 @@
  * Strict compliance with the 3-Pane Integrated IDE Constitution:
  * - Left Pane: WorldCraft Lore Tree & Character Subgraph Dock
  * - Center Pane: CodeMirror 6 Vertical Writing Mode & Aozora Parser Viewport
- * - Right Pane: Proof of Process (PoP) Merkle Inspector & Real-time Consistency Panel
+ * - Right Pane: Proof of Process (PoP) Merkle Inspector & Real-time Consistency Panel & Writing Velocity Dock
  * - Prohibition: Zero single-use modal dialogs. Everything is docked and inline.
  */
 
@@ -18,13 +18,14 @@ import { ThreePaneAuditView } from '../pop/ThreePaneAuditView.js';
 import { MobileResilientStorage } from '../storage/MobileResilientStorage.js';
 import { OPFSStorage } from '../storage/OPFSStorage.js';
 import { WorkerHotSwapManager, type WorkerInstance } from '../runtime/WorkerHotSwapManager.js';
+import { WritingVelocityWidget } from '../editor/WritingVelocityWidget.js';
 
 export interface WorkspaceState {
   currentDocumentId: string;
   rawText: string;
   isComposing: boolean;
   activeLeftTab: 'world-tree' | 'character-dock' | 'shelved';
-  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance';
+  activeRightTab: 'pop-audit' | 'consistency-inspector' | 'appearance' | 'writing-velocity';
   diagnostics: LoreDiagnostic[];
   isSaving: boolean;
   lastSavedTimestamp: number;
@@ -37,6 +38,7 @@ export class ThreePaneWorkspace {
   private viewport: VerticalViewport;
   private linter: LoreLinterEngine;
   private storage: MobileResilientStorage;
+  private velocityWidget: WritingVelocityWidget;
   private hotSwapManager: WorkerHotSwapManager | null = null;
   private state: WorkspaceState;
 
@@ -44,13 +46,20 @@ export class ThreePaneWorkspace {
     initialText?: string;
     regulations?: TermRegulation[];
     worker?: WorkerInstance;
+    velocityOptions?: { pauseThresholdMs?: number; windowSizeMs?: number };
   }) {
+    const initialText = options?.initialText ?? '';
     this.ontologyEngine = new WorldOntologyEngine();
     this.popEngine = new PoPAuditEngine('three-pane-session');
     this.auditView = new ThreePaneAuditView(this.popEngine);
     this.viewport = new VerticalViewport();
     this.linter = new LoreLinterEngine(options?.regulations ?? []);
     this.storage = new MobileResilientStorage(new OPFSStorage());
+    this.velocityWidget = new WritingVelocityWidget({
+      initialCharCount: initialText.length,
+      pauseThresholdMs: options?.velocityOptions?.pauseThresholdMs,
+      windowSizeMs: options?.velocityOptions?.windowSizeMs,
+    });
 
     if (options?.worker) {
       this.hotSwapManager = new WorkerHotSwapManager(options.worker);
@@ -58,7 +67,7 @@ export class ThreePaneWorkspace {
 
     this.state = {
       currentDocumentId: `doc-${Date.now()}`,
-      rawText: options?.initialText ?? '',
+      rawText: initialText,
       isComposing: false,
       activeLeftTab: 'world-tree',
       activeRightTab: 'consistency-inspector',
@@ -80,13 +89,20 @@ export class ThreePaneWorkspace {
     return this.hotSwapManager;
   }
 
+  public getWritingVelocityWidget(): WritingVelocityWidget {
+    return this.velocityWidget;
+  }
+
   /**
    * Handle text edits from the central CodeMirror 6 editor.
-   * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, and avoids interrupting author.
+   * Runs in O(N+M) with Aho-Corasick, updates PoP audit block, records writing velocity metrics, and avoids interrupting author.
    */
   public onTextChange(newText: string, isComposing: boolean = false): void {
     this.state.rawText = newText;
     this.state.isComposing = isComposing;
+
+    // Record keystroke and char length in writing velocity tracker
+    this.velocityWidget.recordKeystroke(newText.length, { isComposing });
 
     if (this.hotSwapManager) {
       this.hotSwapManager.reportKeystroke(isComposing);
@@ -151,7 +167,15 @@ export class ThreePaneWorkspace {
     rightPane: { activeTab: string; contentHtml: string };
   } {
     const parsedHtml = this.viewport.renderContent(this.state.rawText);
-    const auditViewModel = this.auditView.render();
+
+    let rightContentHtml = '';
+    if (this.state.activeRightTab === 'pop-audit') {
+      rightContentHtml = `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`;
+    } else if (this.state.activeRightTab === 'writing-velocity') {
+      rightContentHtml = `<div class="writing-velocity-dock">${this.velocityWidget.renderInlineWidget()}</div>`;
+    } else {
+      rightContentHtml = `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`;
+    }
 
     return {
       leftPane: {
@@ -165,10 +189,7 @@ export class ThreePaneWorkspace {
       },
       rightPane: {
         activeTab: this.state.activeRightTab,
-        contentHtml:
-          this.state.activeRightTab === 'pop-audit'
-            ? `<div class="pop-audit-dock"><span>監査イベント数: ${this.popEngine.getChain().getEvents().length}</span></div>`
-            : `<div class="consistency-dock"><span>検出表記ゆれ: ${this.state.diagnostics.length}件</span></div>`,
+        contentHtml: rightContentHtml,
       },
     };
   }
