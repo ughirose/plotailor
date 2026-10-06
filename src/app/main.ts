@@ -57,6 +57,7 @@ import { MultiSiteNovelFormatter } from '../core/exporters/multisite-novel-forma
 import { FullscreenStatusBar } from '../ui/FullscreenStatusBar.js';
 import { ColumnGuideline } from '../ui/ColumnGuideline.js';
 import { ManuscriptSheetCalculator } from '../core/editor/ManuscriptSheetCalculator.js';
+import { SAMPLE_NOVEL_CHAPTERS } from '../data/SampleNovelData.js';
 
 interface ChapterData {
   id: string;
@@ -65,36 +66,12 @@ interface ChapterData {
   content: string;
 }
 
-const DEFAULT_CHAPTERS: ChapterData[] = [
-  {
-    id: 'ch1',
-    title: '第一章 双月の巡る夜に',
-    charCount: 0,
-    content: `　深藍の夜空を｜双月《そうげつ》が照らし出していた。
-　第一衛星《セレネ》が蒼き冷光を投げかけ、地平の端を染める。二重満月の夜、北方の砦に集う兵たちの息は白く凍りついていた。暗雲の隙間から立ち込める《《凶兆》》に、誰もが言葉を失っていた。
-
-「総督、急報です。バレリウス閣下、敵の先遣隊が峡谷を越えました！」
-「落ち着いてくだしあ。こんちには、と言って迎え撃つ準備はできている」
-
-　斥候の震える声に、男は静かに外套を翻した。皇帝から下賜された金箔の紋章が鈍く輝いている。
-　走り出した。遠くを見つめ、剣の柄に手を掛けた。
-　セレネは心の中で激しく怯えていた。その青き瞳の奥底で、彼女は帝国の崩壊を予感し、絶望に打ちひしがれていたのだ。
-　この戦いは、千年の古より受け継がれし<<<<星辰の盟約>>>>を巡る、運命の分岐点であった...。`
-  },
-  {
-    id: 'ch2',
-    title: '第二章 帝都の影と密書',
-    charCount: 0,
-    content: `　帝都ルミナスの夜は、地上に降りた星屑のように喧噪を極めていた。
-　だが、元老院の奥深く、石造りの回廊に届くのは靴音の反響のみである。`
-  },
-  {
-    id: 'ch3',
-    title: '第三章 忘却の砦',
-    charCount: 0,
-    content: `　極北の風が氷壁を削る音が、夜を徹して響き渡っていた。`
-  }
-];
+const DEFAULT_CHAPTERS: ChapterData[] = SAMPLE_NOVEL_CHAPTERS.map((ch) => ({
+  id: ch.id === 'ch-1' ? 'ch1' : ch.id === 'ch-2' ? 'ch2' : 'ch3',
+  title: ch.title,
+  charCount: ch.charCount,
+  content: ch.content,
+}));
 
 export class PlotailorApp {
   private editorBody: HTMLDivElement;

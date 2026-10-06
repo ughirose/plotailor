@@ -6,6 +6,7 @@
  */
 
 import type { SourceToDisplayMap } from './AozoraParser.js';
+import { SyntacticParticleAuditor } from './SyntacticParticleAuditor.js';
 
 export interface ParticleDiagnostic {
   from: number;
@@ -39,11 +40,15 @@ export class ParticleRepetitionLinterEngine {
   private targetParticles: Set<string>;
   private maxThreshold: number;
   private particleThresholds: Record<string, number>;
+  private syntacticAuditor: SyntacticParticleAuditor;
 
   constructor(particles: string[] = DEFAULT_TARGET_PARTICLES, maxThreshold: number = 3, particleThresholds: Record<string, number> = {}) {
     this.targetParticles = new Set(particles);
     this.maxThreshold = maxThreshold;
     this.particleThresholds = { ...particleThresholds };
+    this.syntacticAuditor = new SyntacticParticleAuditor({
+      chainThreshold: particleThresholds['の'] ?? maxThreshold,
+    });
   }
 
   /**
@@ -58,6 +63,9 @@ export class ParticleRepetitionLinterEngine {
    */
   public setParticleThreshold(particle: string, threshold: number): void {
     this.particleThresholds[particle] = threshold;
+    if (particle === 'の') {
+      this.syntacticAuditor = new SyntacticParticleAuditor({ chainThreshold: threshold });
+    }
   }
 
   /**
@@ -149,6 +157,27 @@ export class ParticleRepetitionLinterEngine {
 
       for (const particle of this.targetParticles) {
         const threshold = this.particleThresholds[particle] ?? this.maxThreshold;
+
+        if (particle === 'の') {
+          const chains = this.syntacticAuditor.auditParticleChains(sentenceText, sentenceStart);
+          for (const chain of chains) {
+            let from = chain.from;
+            let to = chain.to;
+            if (options?.displayMap) {
+              from = options.displayMap.toDisplayOffset(from);
+              to = options.displayMap.toDisplayOffset(to);
+            }
+            diagnostics.push({
+              from,
+              to,
+              severity: 'warning',
+              message: `【助詞連続重複】同一助詞「の」が文中に${chain.count}回連続・重複出現しています。表現を見直してください。`,
+              particle: 'の',
+              count: chain.count,
+            });
+          }
+          continue;
+        }
 
         // Find all occurrences of the particle in this sentence
         const particleMatches: { index: number; text: string }[] = [];

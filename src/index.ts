@@ -205,6 +205,7 @@ export * from './core/editor/DemonstrativeDensityLinter.js';
 export * from './core/editor/StyleDiscomfortDetector.js';
 export * from './core/editor/PovConsistencyAnalyzer.js';
 export * from './core/editor/ParticleRepetitionLinter.js';
+export * from './core/editor/SyntacticParticleAuditor.js';
 export * from './core/editor/SceneOutliner.js';
 export * from './core/editor/RubySyntaxParser.js';
 export * from './core/editor/RubyShortcutExtension.js';
@@ -265,3 +266,15 @@ export * from './core/editor/QwertyTypoDetector.js';
 export * from './core/editor/CadenceListenerExtension.js';
 export * from './core/editor/PrhRuleEngine.js';
 export * from './core/lore/StrayLoreEngine.js';
+export {
+  KinsokuAlignmentEngine,
+  type KinsokuAlignmentConfig,
+  type KinsokuBoundaryViolation,
+  type AlignmentMapEntry,
+  type AlignedLine,
+  type AlignmentResult,
+} from './core/editor/KinsokuAlignmentEngine.js';
+export * from './core/lore/ShelvedLoreArchiveManager.js';
+export * from './core/project/ProjectDuplicateEngine.js';
+export * from './core/editor/TypographyThemeConfig.js';
+export * from './data/SampleNovelData.js';
