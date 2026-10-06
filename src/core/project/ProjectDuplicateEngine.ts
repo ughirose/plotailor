@@ -189,6 +189,30 @@ export class ProjectDuplicateEngine {
       }
     }
 
+    // Process editor settings / PRH rules if present
+    const sourcePrhPath = `${sourceDir}/editor/prh_rules.json`;
+    if (await this.vfs.exists(sourcePrhPath)) {
+      try {
+        await this.vfs.mkdir(`${targetDir}/editor`, true);
+        await this.vfs.copy(sourcePrhPath, `${targetDir}/editor/prh_rules.json`);
+      } catch (err) {
+        console.warn('Failed to copy PRH rules in VFS:', err);
+      }
+    }
+
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const sourcePrhKey = `plotailor_project_${sourceProjectId}_prh_rules`;
+        const targetPrhKey = `plotailor_project_${targetProjectId}_prh_rules`;
+        const val = localStorage.getItem(sourcePrhKey);
+        if (val) {
+          localStorage.setItem(targetPrhKey, val);
+        }
+      } catch (err) {
+        console.warn('Failed to duplicate localStorage PRH rules:', err);
+      }
+    }
+
     // 4. Construct Target Project Metadata
     const now = Date.now();
     const activeChapterId = sourceMeta.activeChapterId

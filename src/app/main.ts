@@ -58,6 +58,7 @@ import { FullscreenStatusBar } from '../ui/FullscreenStatusBar.js';
 import { ColumnGuideline } from '../ui/ColumnGuideline.js';
 import { ManuscriptSheetCalculator } from '../core/editor/ManuscriptSheetCalculator.js';
 import { SAMPLE_NOVEL_CHAPTERS } from '../data/SampleNovelData.js';
+import { PrhPersistenceManager } from '../core/editor/PrhPersistenceManager.js';
 
 interface ChapterData {
   id: string;
@@ -200,6 +201,7 @@ export class PlotailorApp {
       onDeletePrhRule: (ruleId) => {
         this.narrativeWorkerBridge.getPrhEngine().removeRule(ruleId);
         this.narrativeDock.updatePrhRules(this.narrativeWorkerBridge.getPrhEngine().getRules());
+        this.savePrhRules();
         this.triggerNarrativeReanalysis();
         this.showToast('🗑️ 表記ゆれ・呼称統一ルールを削除しました');
       },
@@ -217,21 +219,13 @@ export class PlotailorApp {
         };
         this.narrativeWorkerBridge.getPrhEngine().addRule(fullRule);
         this.narrativeDock.updatePrhRules(this.narrativeWorkerBridge.getPrhEngine().getRules());
+        this.savePrhRules();
         this.triggerNarrativeReanalysis();
       },
     });
 
-    // Register default literary normalization rules
-    this.narrativeWorkerBridge.getPrhEngine().addRule({
-      id: '00000000-0000-4000-8000-000000000001',
-      expected: 'ヴァレリウス',
-      patterns: ['バレリウス'],
-      scope: 'all',
-      action: 'suggest',
-      syntaxType: 'general',
-      description: '人名正規化（ヴァレリウス将軍）',
-    });
-    this.narrativeDock.updatePrhRules(this.narrativeWorkerBridge.getPrhEngine().getRules());
+    // Load project-persisted PRH rules (or fallback to defaults)
+    this.loadPrhRules();
 
     this.loreManager = new LoreEntityManager(this.projectManager.getVFS());
     this.loreDock = new LoreInspectorDock({
@@ -264,6 +258,7 @@ export class PlotailorApp {
       getKeystrokeCount: () => this.keystrokeCount,
       isVertical: () => this.isVertical,
       showToast: (msg) => this.showToast(msg),
+      getPrhRules: () => this.narrativeWorkerBridge.getPrhEngine().getRules(),
     });
 
     this.settingsController = new SettingsController({
@@ -422,6 +417,10 @@ export class PlotailorApp {
         this.chapterStates.clear();
         this.chapterSnapshots.clear();
       },
+    });
+
+    this.projectController.registerProjectSwitchListener(() => {
+      this.loadPrhRules();
     });
 
     this.init();
@@ -1803,6 +1802,20 @@ export class PlotailorApp {
 
   public async saveLoreData() {
     await this.loreController.saveLoreData();
+  }
+
+  public savePrhRules(): void {
+    const rules = this.narrativeWorkerBridge.getPrhEngine().getRules();
+    PrhPersistenceManager.saveToStorage(this.currentProjectId, rules);
+  }
+
+  public loadPrhRules(): void {
+    const rules = PrhPersistenceManager.loadFromStorage(this.currentProjectId);
+    this.narrativeWorkerBridge.getPrhEngine().clear();
+    for (const r of rules) {
+      this.narrativeWorkerBridge.getPrhEngine().addRule(r);
+    }
+    this.narrativeDock.updatePrhRules(rules);
   }
   public getEditorView(): EditorView {
     return this.cmEditor;

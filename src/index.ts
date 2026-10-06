@@ -278,3 +278,7 @@ export * from './core/lore/ShelvedLoreArchiveManager.js';
 export * from './core/project/ProjectDuplicateEngine.js';
 export * from './core/editor/TypographyThemeConfig.js';
 export * from './data/SampleNovelData.js';
+export * from './core/editor/PrhPersistenceManager.js';
+export * from './core/editor/VerticalInspectorGeometryBridge.js';
+export * from './core/editor/CausalTimelineSyncEngine.js';
+

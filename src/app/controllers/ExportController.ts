@@ -2,6 +2,8 @@ import { LiteraryExporter, normalizeAozoraMarkup } from '../../core/export/Liter
 import { Epub3PackageBuilder } from '../../core/export/Epub3PackageBuilder.js';
 import { MultiSiteNovelFormatter } from '../../core/exporters/multisite-novel-formatter.js';
 import type { LoreEntity } from '../../core/lore/LoreEntityManager.js';
+import { PrhPersistenceManager } from '../../core/editor/PrhPersistenceManager.js';
+import type { PlotailorPrhRule } from '@worldcraft/schema';
 
 export interface ChapterData {
   id: string;
@@ -18,6 +20,7 @@ export interface ExportControllerDependencies {
   getKeystrokeCount: () => number;
   isVertical: () => boolean;
   showToast: (msg: string) => void;
+  getPrhRules?: () => PlotailorPrhRule[];
 }
 
 export type ExportHandler = (workTitle: string, chapters: ChapterData[]) => void;
@@ -225,6 +228,30 @@ export class ExportController {
     }
   }
 
+  public exportPrhYaml(action: 'copy' | 'download'): void {
+    const rules = this.deps.getPrhRules ? this.deps.getPrhRules() : [];
+    const yaml = PrhPersistenceManager.serializeToYaml(rules);
+    const title = this.deps.getWorkTitle();
+    if (action === 'copy') {
+      this.copyTextToClipboard(yaml, `✅ PRH表記ゆれルール（${rules.length}件）YAMLをコピーしました`);
+    } else {
+      LiteraryExporter.downloadFile(`${title}_prh.yml`, yaml, 'text/yaml;charset=utf-8');
+      this.deps.showToast(`📥「${title}_prh.yml」をダウンロードしました`);
+    }
+  }
+
+  public exportPrhJson(action: 'copy' | 'download'): void {
+    const rules = this.deps.getPrhRules ? this.deps.getPrhRules() : [];
+    const json = PrhPersistenceManager.serializeToJson(rules);
+    const title = this.deps.getWorkTitle();
+    if (action === 'copy') {
+      this.copyTextToClipboard(json, `✅ PRH表記ゆれルール（${rules.length}件）JSONをコピーしました`);
+    } else {
+      LiteraryExporter.downloadFile(`${title}_prh.json`, json, 'application/json;charset=utf-8');
+      this.deps.showToast(`📥「${title}_prh.json」をダウンロードしました`);
+    }
+  }
+
   public initExportModal(): void {
     const btnExport = document.getElementById('btnExportAozora');
     btnExport?.addEventListener('click', () => this.openExportModal());
@@ -239,6 +266,10 @@ export class ExportController {
     document.getElementById('btnCopyNarou')?.addEventListener('click', () => this.exportNarou());
     document.getElementById('btnCopyDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('copy'));
     document.getElementById('btnDownloadDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('download'));
+    document.getElementById('btnCopyPrhYaml')?.addEventListener('click', () => this.exportPrhYaml('copy'));
+    document.getElementById('btnDownloadPrhYaml')?.addEventListener('click', () => this.exportPrhYaml('download'));
+    document.getElementById('btnCopyPrhJson')?.addEventListener('click', () => this.exportPrhJson('copy'));
+    document.getElementById('btnDownloadPrhJson')?.addEventListener('click', () => this.exportPrhJson('download'));
 
     const modal = document.getElementById('exportModal');
     modal?.addEventListener('click', (e) => {

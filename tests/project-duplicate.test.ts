@@ -143,4 +143,40 @@ describe('ProjectDuplicateEngine', () => {
       duplicateEngine.duplicateProject('proj_a', { targetProjectId: 'proj_b' })
     ).rejects.toThrow('already exists');
   });
+
+  it('duplicates PRH rules across VFS and localStorage when present', async () => {
+    await pm.createProject({ id: 'proj_with_prh', title: '辞書付き作品' });
+
+    // Seed VFS PRH rules
+    await vfs.mkdir('/projects/proj_with_prh/editor', true);
+    await vfs.writeText(
+      '/projects/proj_with_prh/editor/prh_rules.json',
+      JSON.stringify([{ id: 'r1', expected: 'エルフ', patterns: ['妖精'] }])
+    );
+
+    // Seed localStorage if mockable
+    const mockStorage = new Map<string, string>();
+    mockStorage.set(
+      'plotailor_project_proj_with_prh_prh_rules',
+      JSON.stringify([{ id: 'r1', expected: 'エルフ', patterns: ['妖精'] }])
+    );
+    (globalThis as any).localStorage = {
+      getItem: (k: string) => mockStorage.get(k) ?? null,
+      setItem: (k: string, v: string) => mockStorage.set(k, v),
+    };
+
+    const res = await duplicateEngine.duplicateProject('proj_with_prh', {
+      targetProjectId: 'proj_duplicated_prh',
+    });
+
+    // Check VFS duplicate
+    const targetPrhVfs = await vfs.readText('/projects/proj_duplicated_prh/editor/prh_rules.json');
+    expect(JSON.parse(targetPrhVfs)).toEqual([{ id: 'r1', expected: 'エルフ', patterns: ['妖精'] }]);
+
+    // Check localStorage duplicate
+    const targetPrhStorage = (globalThis as any).localStorage.getItem(
+      'plotailor_project_proj_duplicated_prh_prh_rules'
+    );
+    expect(JSON.parse(targetPrhStorage)).toEqual([{ id: 'r1', expected: 'エルフ', patterns: ['妖精'] }]);
+  });
 });
