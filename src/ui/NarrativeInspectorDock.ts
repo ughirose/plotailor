@@ -8,6 +8,12 @@ import type { KinsokuViolation } from '../core/editor/KinsokuEngine.js';
 import type { DagCycleReport } from '../core/causality/CausalDagEngine.js';
 import type { ForeshadowingItem } from '../core/editor/ForeshadowingEngine.js';
 import type { StrayLoreState, PlotailorPrhRule } from '@worldcraft/schema';
+import {
+  VerticalInspectorGeometryBridge,
+  type BridgeLayoutOptions,
+  type TierDecorationPlacement,
+  type InspectorDecorationItem,
+} from '../core/editor/VerticalInspectorGeometryBridge.js';
 
 export interface NarrativeInspectorDockOptions {
   onJumpToTarget?: (from: number, to: number) => void;
@@ -17,6 +23,7 @@ export interface NarrativeInspectorDockOptions {
   onPurgeStrayLore?: (entityId: string) => void;
   onAddPrhRule?: (rule: Partial<PlotailorPrhRule>) => void;
   onDeletePrhRule?: (ruleId: string) => void;
+  geometryBridge?: VerticalInspectorGeometryBridge | BridgeLayoutOptions;
 }
 
 export type InspectionTier = 'all' | 'tier1' | 'tier2' | 'tier3';
@@ -39,6 +46,9 @@ export class NarrativeInspectorDock {
   private unresolvedForeshadowings: ForeshadowingItem[] = [];
   private strayLoreItems: StrayLoreState[] = [];
 
+  private geometryBridge: VerticalInspectorGeometryBridge;
+  private cachedPlacements: Map<string, TierDecorationPlacement> = new Map();
+
   private onJumpToTarget?: (from: number, to: number) => void;
   private onInsertSubject?: (from: number, candidateText: string) => void;
   private onReplaceText?: (from: number, to: number, replacement: string) => void;
@@ -55,6 +65,184 @@ export class NarrativeInspectorDock {
     this.onPurgeStrayLore = options.onPurgeStrayLore;
     this.onAddPrhRule = options.onAddPrhRule;
     this.onDeletePrhRule = options.onDeletePrhRule;
+
+    if (options.geometryBridge instanceof VerticalInspectorGeometryBridge) {
+      this.geometryBridge = options.geometryBridge;
+    } else {
+      this.geometryBridge = new VerticalInspectorGeometryBridge(options.geometryBridge);
+    }
+  }
+
+  public getGeometryBridge(): VerticalInspectorGeometryBridge {
+    return this.geometryBridge;
+  }
+
+  public setGeometryBridge(bridge: VerticalInspectorGeometryBridge | BridgeLayoutOptions): void {
+    if (bridge instanceof VerticalInspectorGeometryBridge) {
+      this.geometryBridge = bridge;
+    } else {
+      this.geometryBridge = new VerticalInspectorGeometryBridge(bridge);
+    }
+  }
+
+  public getItemPlacement(itemId: string): TierDecorationPlacement | undefined {
+    return this.cachedPlacements.get(itemId);
+  }
+
+  public getCachedPlacements(): ReadonlyMap<string, TierDecorationPlacement> {
+    return this.cachedPlacements;
+  }
+
+  /**
+   * Calculates 3-Tier geometric placements (Tier 1: wavy line, Tier 2: badge, Tier 3: anchor)
+   * in vertical-rl writing mode for all detected linter, POV, zero-pronoun, kinsoku, and continuity items.
+   */
+  public calculateTierPlacements(
+    text: string,
+    isVertical: boolean = true
+  ): Map<string, TierDecorationPlacement> {
+    this.cachedPlacements.clear();
+    if (!text) return this.cachedPlacements;
+
+    if (!isVertical) {
+      this.geometryBridge.setOptions({ writingMode: 'horizontal-tb' });
+    } else {
+      this.geometryBridge.setOptions({ writingMode: 'vertical-rl' });
+    }
+
+    // 1. Tier 1: Syntactic linter & kinsoku items
+    for (const item of this.currentResult.syntacticItems) {
+      const p = this.geometryBridge.calculateTierDecorationPlacement(
+        {
+          id: item.id,
+          tier: 1,
+          type: 'wavy_line',
+          from: item.from,
+          to: item.to,
+          label: item.message,
+          badgeText: item.ruleType,
+        },
+        text
+      );
+      this.cachedPlacements.set(item.id, p);
+    }
+
+    for (let i = 0; i < this.kinsokuViolations.length; i++) {
+      const v = this.kinsokuViolations[i];
+      const id = `kinsoku-${i}-${v.offset}`;
+      const p = this.geometryBridge.calculateTierDecorationPlacement(
+        {
+          id,
+          tier: 1,
+          type: 'wavy_line',
+          from: v.offset,
+          to: v.offset + 1,
+          label: `禁則違反: ${v.type}`,
+          badgeText: v.char,
+        },
+        text
+      );
+      this.cachedPlacements.set(id, p);
+    }
+
+    // 2. Tier 2: Zero Pronoun & POV & Event items
+    for (let i = 0; i < this.currentResult.zeroPronounItems.length; i++) {
+      const zp = this.currentResult.zeroPronounItems[i];
+      const id = `zp-${i}-${zp.from}`;
+      const p = this.geometryBridge.calculateTierDecorationPlacement(
+        {
+          id,
+          tier: 2,
+          type: 'badge',
+          from: zp.from,
+          to: zp.to,
+          label: `主語省略: ${zp.predicateText}`,
+          badgeText: zp.candidates[0]?.text || '主語',
+        },
+        text
+      );
+      this.cachedPlacements.set(id, p);
+    }
+
+    if (this.currentResult.povItems) {
+      for (const pov of this.currentResult.povItems) {
+        const id = pov.id || `pov-${pov.from}-${pov.to}`;
+        const p = this.geometryBridge.calculateTierDecorationPlacement(
+          {
+            id,
+            tier: 2,
+            type: 'badge',
+            from: pov.from,
+            to: pov.to,
+            label: pov.message || 'POV逸脱検知',
+            badgeText: 'POV',
+          },
+          text
+        );
+        this.cachedPlacements.set(id, p);
+      }
+    }
+
+    if (this.currentResult.eventActionItems) {
+      for (let i = 0; i < this.currentResult.eventActionItems.length; i++) {
+        const ev = this.currentResult.eventActionItems[i];
+        const id = `event-${i}-${ev.from}`;
+        const p = this.geometryBridge.calculateTierDecorationPlacement(
+          {
+            id,
+            tier: 2,
+            type: 'badge',
+            from: ev.from,
+            to: ev.to,
+            label: `事象行動: ${ev.actionType}`,
+            badgeText: ev.actionType,
+          },
+          text
+        );
+        this.cachedPlacements.set(id, p);
+      }
+    }
+
+    // 3. Tier 3: Unresolved foreshadowing & stray lore continuity anchors
+    for (const f of this.unresolvedForeshadowings) {
+      const id = `fore-${f.id}`;
+      const from = f.plantedOffset ?? 0;
+      const to = Math.min(text.length, from + (f.title?.length || 4));
+      const p = this.geometryBridge.calculateTierDecorationPlacement(
+        {
+          id,
+          tier: 3,
+          type: 'foreshadowing_anchor',
+          from,
+          to,
+          label: `未回収伏線: ${f.title || f.id}`,
+          badgeText: '伏線',
+        },
+        text
+      );
+      this.cachedPlacements.set(id, p);
+    }
+
+    for (const stray of this.strayLoreItems) {
+      const id = `stray-${stray.entityId}`;
+      const from = 0;
+      const to = Math.min(text.length, stray.canonicalName?.length || 4);
+      const p = this.geometryBridge.calculateTierDecorationPlacement(
+        {
+          id,
+          tier: 3,
+          type: 'foreshadowing_anchor',
+          from,
+          to,
+          label: `迷子設定: ${stray.canonicalName}`,
+          badgeText: '迷子',
+        },
+        text
+      );
+      this.cachedPlacements.set(id, p);
+    }
+
+    return this.cachedPlacements;
   }
 
   public updatePrhRules(rules: PlotailorPrhRule[]): void {

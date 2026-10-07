@@ -1,3 +1,10 @@
+import {
+  CausalTimelineSyncEngine,
+  type ConflictDetail,
+  type JumpAnchor,
+  type SyncAnalysisResult,
+} from '../core/editor/CausalTimelineSyncEngine.js';
+
 export interface LoreTermDefinition {
   id: string;
   canonicalName: string;
@@ -47,8 +54,10 @@ export interface ShelveTermEvent {
 export interface InspectorDockOptions {
   dictionary: LoreTermDefinition[];
   cursorProximityThreshold?: number;
+  syncEngine?: CausalTimelineSyncEngine;
   onReplaceTerm?: (event: ReplaceTermEvent) => void;
   onShelveTerm?: (event: ShelveTermEvent) => void;
+  onJumpToAnchor?: (anchor: JumpAnchor) => void;
 }
 
 export class LoreInspectorDock {
@@ -57,12 +66,30 @@ export class LoreInspectorDock {
   private collapsedPanels: Set<string> = new Set();
   private onReplaceTerm?: (event: ReplaceTermEvent) => void;
   private onShelveTerm?: (event: ShelveTermEvent) => void;
+  private onJumpToAnchor?: (anchor: JumpAnchor) => void;
+  private syncEngine: CausalTimelineSyncEngine | null = null;
 
   constructor(options: InspectorDockOptions) {
     this.dictionary = [...options.dictionary];
     this.cursorProximityThreshold = options.cursorProximityThreshold ?? 50;
     this.onReplaceTerm = options.onReplaceTerm;
     this.onShelveTerm = options.onShelveTerm;
+    this.onJumpToAnchor = options.onJumpToAnchor;
+    this.syncEngine = options.syncEngine ?? null;
+  }
+
+  public setSyncEngine(engine: CausalTimelineSyncEngine | null): void {
+    this.syncEngine = engine;
+  }
+
+  public getSyncEngine(): CausalTimelineSyncEngine | null {
+    return this.syncEngine;
+  }
+
+  public handleAnchorJump(anchor: JumpAnchor): void {
+    if (this.onJumpToAnchor) {
+      this.onJumpToAnchor(anchor);
+    }
   }
 
   public updateDictionary(newDictionary: LoreTermDefinition[]): void {
@@ -212,7 +239,53 @@ export class LoreInspectorDock {
     return event;
   }
 
-  public renderInlinePanelHTML(occurrences: LoreOccurrence[]): string {
+  public renderCausalConflictPanel(conflicts: ConflictDetail[]): string {
+    if (!conflicts || conflicts.length === 0) {
+      return '';
+    }
+
+    const isCollapsed = this.isPanelCollapsed('section:causal-conflicts');
+    let html = `<div class="dock-panel causal-conflict-panel" style="border-left: 3px solid #ef4444; margin-bottom: 8px;">`;
+    html += `<div class="panel-header" data-action="toggle" data-target="section:causal-conflicts" style="background: rgba(239, 68, 68, 0.08); display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; cursor: pointer;">`;
+    html += `<span class="panel-title" style="color: #ef4444; font-weight: bold; font-size: 12px;">🚨 因果DAG矛盾・パラドックス (${conflicts.length})</span>`;
+    html += `<span class="panel-toggle-icon" style="color: #ef4444;">${isCollapsed ? '+' : '-'}</span>`;
+    html += `</div>`;
+
+    if (!isCollapsed) {
+      html += `<div class="panel-body" style="padding: 6px 8px; background: rgba(239, 68, 68, 0.03);">`;
+      for (const conf of conflicts) {
+        const anchor = conf.anchor;
+        html += `
+          <div class="causal-conflict-card" style="margin-bottom: 6px; padding: 6px; border-radius: 4px; background: #fff; border: 1px solid rgba(239, 68, 68, 0.3);" data-node-id="${conf.nodeId}">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="badge" style="font-size: 10px; background: #ef4444; color: #fff; padding: 1px 5px; border-radius: 3px; font-weight: bold;">${conf.category === 'cycle' ? '循環矛盾' : '時間逆転'}</span>
+              <span style="font-size: 11px; color: var(--color-text-dim);">${anchor ? `${anchor.chapterTitle} L${anchor.lineNumber}` : ''}</span>
+            </div>
+            <div style="font-size: 12px; margin: 4px 0; color: #1f2937; line-height: 1.4;">${conf.description}</div>
+            ${anchor ? `
+              <button
+                class="btn-jump-causal-conflict"
+                data-action="jump-conflict"
+                data-node-id="${anchor.nodeId}"
+                data-chapter-id="${anchor.chapterId}"
+                data-line="${anchor.lineNumber}"
+                data-offset="${anchor.charOffset}"
+                style="width: 100%; margin-top: 4px; padding: 3px 6px; font-size: 11px; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 3px; cursor: pointer; font-weight: bold;"
+              >
+                ➜ 該当箇所（第${anchor.chapterIndex + 1}章 ${anchor.lineNumber}行目）へジャンプ
+              </button>
+            ` : ''}
+          </div>
+        `;
+      }
+      html += `</div>`;
+    }
+
+    html += `</div>`;
+    return html;
+  }
+
+  public renderInlinePanelHTML(occurrences: LoreOccurrence[], conflicts: ConflictDetail[] = []): string {
     const groupedByCategory: Record<string, LoreOccurrence[]> = {};
     for (const occ of occurrences) {
       if (!groupedByCategory[occ.category]) {
@@ -226,8 +299,18 @@ export class LoreInspectorDock {
     let html = `<div class="lore-inspector-dock" data-testid="lore-inspector-dock">`;
     html += `<div class="dock-header"><h3>リアルタイム設定語句・伏線インスペクタ</h3></div>`;
 
+    // Render causal conflicts section if any detected
+    if (conflicts.length > 0) {
+      html += this.renderCausalConflictPanel(conflicts);
+    } else if (this.syncEngine) {
+      const res = this.syncEngine.analyzeAndSynchronize();
+      if (res.conflicts.length > 0) {
+        html += this.renderCausalConflictPanel(res.conflicts);
+      }
+    }
+
     const categories = Object.keys(groupedByCategory);
-    if (categories.length === 0 && shelvedItems.length === 0) {
+    if (categories.length === 0 && shelvedItems.length === 0 && conflicts.length === 0) {
       html += `<div class="dock-empty">可視領域内に設定語句は見つかりませんでした。</div>`;
     } else {
       for (const category of categories) {

@@ -7,6 +7,12 @@
  * - Supports bidirectional YAML import/export with plotailor-prh.yml
  */
 
+import {
+  VerticalInspectorGeometryBridge,
+  type BridgeLayoutOptions,
+  type TierDecorationPlacement,
+} from '../core/editor/VerticalInspectorGeometryBridge.js';
+
 export interface OrthographyRuleEntry {
   id: string;
   expected: string;
@@ -16,8 +22,18 @@ export interface OrthographyRuleEntry {
   enabled?: boolean;
 }
 
+export interface RuleGeometryPlacement {
+  ruleId: string;
+  rule: OrthographyRuleEntry;
+  matchText: string;
+  from: number;
+  to: number;
+  placement: TierDecorationPlacement;
+}
+
 export interface OrthographyInspectorOptions {
   rules?: OrthographyRuleEntry[];
+  geometryBridge?: VerticalInspectorGeometryBridge | BridgeLayoutOptions;
   onChange?: (rules: OrthographyRuleEntry[]) => void;
   onExportPrh?: (yamlContent: string) => void;
 }
@@ -115,11 +131,18 @@ export class OrthographyInspector {
   private onExportPrh?: (yamlContent: string) => void;
   private filterQuery = '';
   private filterCategory = 'all';
+  private geometryBridge: VerticalInspectorGeometryBridge;
 
   constructor(options: OrthographyInspectorOptions = {}) {
     this.rules = options.rules ? [...options.rules] : [];
     this.onChange = options.onChange;
     this.onExportPrh = options.onExportPrh;
+
+    if (options.geometryBridge instanceof VerticalInspectorGeometryBridge) {
+      this.geometryBridge = options.geometryBridge;
+    } else {
+      this.geometryBridge = new VerticalInspectorGeometryBridge(options.geometryBridge);
+    }
 
     if (typeof document !== 'undefined') {
       this.container = document.createElement('div');
@@ -128,6 +151,78 @@ export class OrthographyInspector {
     } else {
       this.container = {} as HTMLElement;
     }
+  }
+
+  public getGeometryBridge(): VerticalInspectorGeometryBridge {
+    return this.geometryBridge;
+  }
+
+  public setGeometryBridge(bridge: VerticalInspectorGeometryBridge | BridgeLayoutOptions): void {
+    if (bridge instanceof VerticalInspectorGeometryBridge) {
+      this.geometryBridge = bridge;
+    } else {
+      this.geometryBridge = new VerticalInspectorGeometryBridge(bridge);
+    }
+  }
+
+  /**
+   * Scans document text for active orthography rule violations and calculates
+   * vertical-rl bounding box and tooltip coordinates via VerticalInspectorGeometryBridge.
+   */
+  public calculateRulePlacements(
+    text: string,
+    isVertical: boolean = true
+  ): RuleGeometryPlacement[] {
+    if (!text) return [];
+
+    const placements: RuleGeometryPlacement[] = [];
+    const activeRules = this.rules.filter((r) => r.enabled !== false);
+
+    // If horizontal mode, update bridge options temporarily or keep default
+    if (!isVertical) {
+      this.geometryBridge.setOptions({ writingMode: 'horizontal-tb' });
+    } else {
+      this.geometryBridge.setOptions({ writingMode: 'vertical-rl' });
+    }
+
+    for (const rule of activeRules) {
+      const patterns = rule.patterns && rule.patterns.length > 0 ? rule.patterns : [];
+      for (const pattern of patterns) {
+        if (!pattern) continue;
+        let searchIndex = 0;
+        while (searchIndex < text.length) {
+          const foundIdx = text.indexOf(pattern, searchIndex);
+          if (foundIdx === -1) break;
+
+          const toIdx = foundIdx + pattern.length;
+          const placement = this.geometryBridge.calculateTierDecorationPlacement(
+            {
+              id: `rule-${rule.id}-${foundIdx}`,
+              tier: 1,
+              type: 'wavy_line',
+              from: foundIdx,
+              to: toIdx,
+              label: `表記ゆれ: ${pattern} → ${rule.expected}`,
+              badgeText: rule.expected,
+            },
+            text
+          );
+
+          placements.push({
+            ruleId: rule.id,
+            rule,
+            matchText: pattern,
+            from: foundIdx,
+            to: toIdx,
+            placement,
+          });
+
+          searchIndex = toIdx;
+        }
+      }
+    }
+
+    return placements;
   }
 
   public getElement(): HTMLElement {

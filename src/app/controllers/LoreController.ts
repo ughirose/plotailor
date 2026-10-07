@@ -16,7 +16,14 @@ import {
 import { StrayLoreEngine } from '../../core/lore/StrayLoreEngine.js';
 import { CharacterEmotionalArcTracker } from '../../core/editor/CharacterEmotionalArcTracker.js';
 import { CharacterInteractionMatrix } from '../../core/editor/CharacterInteractionMatrix.js';
-import { DECORATION_LEGEND_DICTIONARY, generateAllLegendCardsHtml } from '../../core/editor/DecorationLegendDictionary.js';
+import {
+  CausalTimelineSyncEngine,
+  type CausalNodeInput,
+  type CausalEdgeInput,
+  type ConflictDetail,
+  type JumpAnchor,
+  type SyncAnalysisResult,
+} from '../../core/editor/CausalTimelineSyncEngine.js';
 import type { ChapterData } from './ExportController.js';
 
 export interface LoreControllerDependencies {
@@ -48,6 +55,7 @@ export interface LoreControllerDependencies {
   reorderChapters: (from: number, to: number) => void;
   updateMultiLayerDecorations: () => void;
   showToast: (msg: string) => void;
+  jumpToPosition?: (chapterId: string, line: number, offset: number) => void;
 }
 
 export type LoreChangeListener = (action: 'create' | 'update' | 'delete' | 'shelve' | 'promote', entityId?: string) => void;
@@ -56,9 +64,14 @@ export class LoreController {
   private deps: LoreControllerDependencies;
   private changeListeners: LoreChangeListener[] = [];
   private strayEngine = new StrayLoreEngine();
+  private lastSyncEngine: CausalTimelineSyncEngine | null = null;
 
   constructor(deps: LoreControllerDependencies) {
     this.deps = deps;
+  }
+
+  public getCausalSyncEngine(): CausalTimelineSyncEngine | null {
+    return this.lastSyncEngine;
   }
 
   public getStrayLoreEngine(): StrayLoreEngine {
@@ -514,31 +527,87 @@ export class LoreController {
         });
       });
     } else if (activeRightTab === 'causality') {
+      const loreEntities = this.deps.getLoreManager().getEntities();
+      const chapters = this.deps.getChapters();
       const dagEngine = this.deps.getDagEngine();
-      dagEngine.populateFromLore(this.deps.getLoreManager().getEntities());
+      dagEngine.populateFromLore(loreEntities);
       const cycleReport = dagEngine.detectCycles();
       const nodes = dagEngine.getNodes();
       const edges = dagEngine.getEdges();
       const isVirtualized = nodes.length >= 8;
+
+      // Build CausalNodeInputs & CausalEdgeInputs for CausalTimelineSyncEngine
+      const causalNodes: CausalNodeInput[] = nodes.map((n, idx) => {
+        const ent = loreEntities.find((e) => e.id === n.id);
+        const chapterIdx = Math.min(Math.max(0, chapters.length - 1), idx % Math.max(1, chapters.length));
+        const ch = chapters[chapterIdx] || { id: 'ch1', title: '第1章' };
+        return {
+          id: n.id,
+          label: n.label,
+          chapterId: ch.id,
+          chapterIndex: chapterIdx,
+          chapterTitle: ch.title,
+          lineNumber: (idx * 3) + 1,
+          charOffset: idx * 25,
+          storyDay: (idx + 1) * 10,
+          discourseRatio: (idx + 1) / Math.max(1, nodes.length),
+          isForeshadowing: ent?.category === 'foreshadowing',
+        };
+      });
+
+      const causalEdges: CausalEdgeInput[] = edges.map((e) => ({
+        fromId: e.fromId,
+        toId: e.toId,
+        relationType: 'causes',
+      }));
+
+      const syncEngine = new CausalTimelineSyncEngine(causalNodes, causalEdges);
+      this.lastSyncEngine = syncEngine;
+      const syncResult = syncEngine.analyzeAndSynchronize(Math.max(0, chapters.length - 1));
+      const conflictMap = new Map<string, ConflictDetail>();
+      for (const conf of syncResult.conflicts) {
+        conflictMap.set(conf.nodeId, conf);
+      }
+
       const initialViewport = { scrollTop: 0, scrollLeft: 0, viewportWidth: 340, viewportHeight: 280, overscan: 80 };
       const svgHtml = isVirtualized
         ? dagEngine.renderVirtualizedSvgGraph(initialViewport)
         : dagEngine.renderSvgGraph(340, 280);
 
+      const hasConflict = syncResult.conflicts.length > 0;
+
       container.innerHTML = `
         <div class="dock-card">
           <div class="dock-card-header">
-            <span class="dock-card-title">🕸 因果DAG・仮想スクロール</span>
-            <span style="font-size: 11px; color: ${cycleReport.isAcyclic ? 'var(--color-success)' : 'var(--color-danger)'};">
-              ${cycleReport.isAcyclic ? '✓ 循環なし (Valid DAG)' : `⚠️ 循環検出 (${cycleReport.cycleCount})`}
+            <span class="dock-card-title">🕸 因果DAG・タイムライン同期</span>
+            <span style="font-size: 11px; color: ${hasConflict ? '#ef4444' : 'var(--color-success)'}; font-weight: bold;">
+              ${hasConflict ? `🚨 矛盾検出 (${syncResult.conflicts.length})` : '✓ 正常 (Valid DAG)'}
             </span>
           </div>
           <div class="dock-card-body" style="padding-bottom: 4px;">
             <div style="font-size: 11px; color: var(--color-text-dim); display: flex; justify-content: space-between; margin-bottom: 8px;">
               <span>登録ノード: <strong>${nodes.length}</strong></span>
               <span>有向エッジ: <strong>${edges.length}</strong></span>
-              <span style="color: var(--color-gold);"><strong>${isVirtualized ? '⚡ 仮想カリングON' : '通常レンダリング'}</strong></span>
+              <span style="color: ${hasConflict ? '#ef4444' : 'var(--color-gold)'};"><strong>${hasConflict ? '矛盾ハイライト中' : (isVirtualized ? '⚡ 仮想カリングON' : '通常描画')}</strong></span>
             </div>
+            ${hasConflict ? `
+              <div class="causal-conflicts-banner" style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; font-size: 11px;">
+                <div style="color: #ef4444; font-weight: bold; margin-bottom: 2px;">⚠️ 因果ループ・時間矛盾を検出しました:</div>
+                ${syncResult.conflicts.map((c) => {
+                  const anc = c.anchor || syncResult.jumpAnchors.get(c.nodeId);
+                  return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 3px;">
+                      <span style="color: #1f2937;">・${c.description}</span>
+                      ${anc ? `
+                        <button class="btn-jump-conflict-banner" data-node-id="${anc.nodeId}" style="padding: 1px 6px; font-size: 10px; background: #ef4444; color: #fff; border: none; border-radius: 2px; cursor: pointer;">
+                          第${anc.chapterIndex + 1}章へジャンプ
+                        </button>
+                      ` : ''}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            ` : ''}
             <div class="dag-wrapper" id="dagSvgContainer" style="max-height: 320px; overflow: auto; position: relative;">
               ${svgHtml}
             </div>
@@ -546,8 +615,9 @@ export class LoreController {
               <span style="color: #58a6ff;">■ 人物</span> &nbsp;
               <span style="color: #e3b341;">■ 用語</span> &nbsp;
               <span style="color: #bc8cff;">■ 伏線</span> &nbsp;
-              <span style="color: #56d364;">■ 拠点</span>
-              <div style="margin-top: 2px;">※ ノードをクリックすると詳細設定を開きます</div>
+              <span style="color: #56d364;">■ 拠点</span> &nbsp;
+              <span style="color: #ef4444; font-weight: bold;">■ 矛盾ノード</span>
+              <div style="margin-top: 2px;">※ ノードをクリックするとエディタ該当行・設定へジャンプします</div>
             </div>
           </div>
         </div>
@@ -555,12 +625,62 @@ export class LoreController {
 
       const attachNodeListeners = (wrapper: HTMLElement) => {
         wrapper.querySelectorAll('.dag-node').forEach((nodeEl) => {
+          const id = (nodeEl as HTMLElement).dataset.nodeId;
+          if (id && conflictMap.has(id)) {
+            const conf = conflictMap.get(id)!;
+            nodeEl.classList.add('conflict-node');
+            nodeEl.setAttribute('data-is-conflict', 'true');
+            nodeEl.setAttribute('data-conflict-type', conf.category);
+            const rect = nodeEl.querySelector('rect');
+            if (rect) {
+              rect.setAttribute('stroke', '#ef4444');
+              rect.setAttribute('stroke-width', '2.5');
+              rect.setAttribute('fill', 'rgba(239, 68, 68, 0.25)');
+            }
+          }
+
           nodeEl.addEventListener('click', (e) => {
-            const id = (e.currentTarget as HTMLElement).dataset.nodeId;
-            if (id) {
-              const ent = this.deps.getLoreManager().getEntity(id);
-              if (ent) {
-                this.deps.showToast(`📌 [${ent.name}] ${ent.role || ent.category}: ${ent.description.slice(0, 30)}...`);
+            const nodeId = (e.currentTarget as HTMLElement).dataset.nodeId;
+            if (!nodeId) return;
+
+            if (conflictMap.has(nodeId)) {
+              const conf = conflictMap.get(nodeId)!;
+              const anchor = conf.anchor || syncResult.jumpAnchors.get(nodeId);
+              if (anchor) {
+                this.deps.loadChapter(anchor.chapterId);
+                if (this.deps.jumpToPosition) {
+                  this.deps.jumpToPosition(anchor.chapterId, anchor.lineNumber, anchor.charOffset);
+                } else {
+                  const cm = this.deps.getEditorView();
+                  if (cm) cm.dispatch({ selection: { anchor: anchor.charOffset }, scrollIntoView: true });
+                }
+                this.deps.showToast(`🚨 因果矛盾検出 [${anchor.label}]: 第${anchor.chapterIndex + 1}章 ${anchor.lineNumber}行目へジャンプ`);
+                return;
+              }
+            }
+
+            const ent = this.deps.getLoreManager().getEntity(nodeId);
+            if (ent) {
+              this.deps.showToast(`📌 [${ent.name}] ${ent.role || ent.category}: ${ent.description.slice(0, 30)}...`);
+            }
+          });
+        });
+
+        // Banner jump buttons
+        container.querySelectorAll('.btn-jump-conflict-banner').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            const nodeId = (e.currentTarget as HTMLElement).dataset.nodeId;
+            if (nodeId && conflictMap.has(nodeId)) {
+              const anchor = conflictMap.get(nodeId)!.anchor || syncResult.jumpAnchors.get(nodeId);
+              if (anchor) {
+                this.deps.loadChapter(anchor.chapterId);
+                if (this.deps.jumpToPosition) {
+                  this.deps.jumpToPosition(anchor.chapterId, anchor.lineNumber, anchor.charOffset);
+                } else {
+                  const cm = this.deps.getEditorView();
+                  if (cm) cm.dispatch({ selection: { anchor: anchor.charOffset }, scrollIntoView: true });
+                }
+                this.deps.showToast(`🚨 因果矛盾検出 [${anchor.label}]: 第${anchor.chapterIndex + 1}章 ${anchor.lineNumber}行目へジャンプ`);
               }
             }
           });

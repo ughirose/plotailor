@@ -59,6 +59,7 @@ import { ColumnGuideline } from '../ui/ColumnGuideline.js';
 import { ManuscriptSheetCalculator } from '../core/editor/ManuscriptSheetCalculator.js';
 import { SAMPLE_NOVEL_CHAPTERS } from '../data/SampleNovelData.js';
 import { PrhPersistenceManager } from '../core/editor/PrhPersistenceManager.js';
+import { VerticalInspectorGeometryBridge } from '../core/editor/VerticalInspectorGeometryBridge.js';
 
 interface ChapterData {
   id: string;
@@ -129,6 +130,7 @@ export class PlotailorApp {
   private currentPovCharacterId = 'char-valerius';
   private velocityWidget = new WritingVelocityWidget();
   private fullscreenStatusBar: FullscreenStatusBar | null = null;
+  private geometryBridge: VerticalInspectorGeometryBridge;
   private kinsokuEngine = new KinsokuEngine({ columnsPerLine: 40, allowHanging: true });
   private kinsokuColumns: number = 40;
   private kinsokuHanging: boolean = true;
@@ -168,7 +170,14 @@ export class PlotailorApp {
       onStateChange: (status) => this.handleCadenceState(status),
     });
 
+    this.geometryBridge = new VerticalInspectorGeometryBridge({
+      fontSize: 16,
+      lineHeight: 2.0,
+      writingMode: 'vertical-rl',
+    });
+
     this.narrativeDock = new NarrativeInspectorDock({
+      geometryBridge: this.geometryBridge,
       onJumpToTarget: (from, to) => this.jumpToEditor(from, to),
       onInsertSubject: (from, subject) => this.insertSubjectAt(from, subject),
       onReplaceText: (from, to, replacement) => {
@@ -243,6 +252,9 @@ export class PlotailorApp {
         this.saveLoreData();
         this.renderRightPane();
         this.renderLeftPane();
+      },
+      onJumpToAnchor: (anchor) => {
+        this.jumpToPosition(anchor.chapterId, anchor.lineNumber, anchor.charOffset);
       },
     });
 
@@ -391,6 +403,7 @@ export class PlotailorApp {
       reorderChapters: (from, to) => this.reorderChapters(from, to),
       updateMultiLayerDecorations: () => this.updateMultiLayerDecorations(),
       showToast: (msg) => this.showToast(msg),
+      jumpToPosition: (chId, line, offset) => this.jumpToPosition(chId, line, offset),
     });
 
     this.projectController = new ProjectController({
@@ -1294,6 +1307,31 @@ export class PlotailorApp {
     this.cmEditor.focus();
   }
 
+  public jumpToPosition(chapterId: string, line: number, offset: number): void {
+    if (chapterId && chapterId !== this.currentChapterId) {
+      this.loadChapter(chapterId);
+    }
+
+    if (!this.cmEditor) return;
+    const doc = this.cmEditor.state.doc;
+    let targetOffset = offset;
+
+    // If offset is 0 but line is specified (> 1), calculate character offset of line
+    if (targetOffset === 0 && line > 1) {
+      if (line <= doc.lines) {
+        const lineObj = doc.line(line);
+        targetOffset = lineObj.from;
+      }
+    }
+
+    const safeOffset = Math.max(0, Math.min(targetOffset, doc.length));
+    this.cmEditor.dispatch({
+      selection: { anchor: safeOffset },
+      scrollIntoView: true,
+    });
+    this.cmEditor.focus();
+  }
+
   public insertSubjectAt(from: number, candidateText: string) {
     if (!this.cmEditor) return;
     const docLen = this.cmEditor.state.doc.length;
@@ -1824,6 +1862,10 @@ export class PlotailorApp {
 
   public getNarrativeDock(): NarrativeInspectorDock {
     return this.narrativeDock;
+  }
+
+  public getGeometryBridge(): VerticalInspectorGeometryBridge {
+    return this.geometryBridge;
   }
 
   public updateEditorWidth(): void {
