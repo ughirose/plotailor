@@ -34,9 +34,48 @@ export class PrhRuleEngine {
    * Add or update a PRH rule with schema validation.
    */
   public addRule(rawRule: unknown): PlotailorPrhRule {
-    const validated = PlotailorPrhRuleSchema.parse(rawRule);
-    this.rules.set(validated.id, validated);
-    return validated;
+    const parsed = PlotailorPrhRuleSchema.safeParse(rawRule);
+    if (parsed.success) {
+      this.rules.set(parsed.data.id, parsed.data);
+      return parsed.data;
+    }
+
+    // Defensive normalization fallback for literary extensions and non-UUID seeds
+    const r = rawRule as any;
+    const isUuid =
+      typeof r?.id === 'string' &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(r.id);
+    const id = isUuid
+      ? r.id
+      : typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : '00000000-0000-4000-8000-' + Math.random().toString(16).substring(2, 14).padEnd(12, '0');
+    const scope = ['dialogue', 'narration', 'ruby', 'all'].includes(r?.scope) ? r.scope : 'all';
+    const action = ['ignore', 'replace', 'suggest'].includes(r?.action)
+      ? r.action
+      : r?.action === 'warn'
+        ? 'suggest'
+        : 'suggest';
+    const syntaxType = ['vocative', 'referential', 'general'].includes(r?.syntaxType)
+      ? r.syntaxType
+      : 'general';
+
+    const normalized: PlotailorPrhRule = {
+      id,
+      expected: String(r?.expected ?? ''),
+      patterns:
+        Array.isArray(r?.patterns) && r.patterns.length > 0
+          ? r.patterns.map(String)
+          : [String(r?.expected ?? '')],
+      scope,
+      action,
+      syntaxType,
+      characterId: r?.characterId ? String(r.characterId) : undefined,
+      description: r?.description ? String(r.description) : undefined,
+    };
+
+    this.rules.set(normalized.id, normalized);
+    return normalized;
   }
 
   /**

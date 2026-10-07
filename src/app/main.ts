@@ -1810,12 +1810,13 @@ export class PlotailorApp {
   }
 
   public loadPrhRules(): void {
-    const rules = PrhPersistenceManager.loadFromStorage(this.currentProjectId);
+    const rawRules = PrhPersistenceManager.loadFromStorage(this.currentProjectId);
     this.narrativeWorkerBridge.getPrhEngine().clear();
-    for (const r of rules) {
+    for (const r of rawRules) {
       this.narrativeWorkerBridge.getPrhEngine().addRule(r);
     }
-    this.narrativeDock.updatePrhRules(rules);
+    const validatedRules = this.narrativeWorkerBridge.getPrhEngine().getRules();
+    this.narrativeDock.updatePrhRules(validatedRules);
   }
   public getEditorView(): EditorView {
     return this.cmEditor;

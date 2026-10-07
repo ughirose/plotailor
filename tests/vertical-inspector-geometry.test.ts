@@ -1,256 +1,269 @@
 import { describe, it, expect } from 'vitest';
 import {
   VerticalInspectorGeometryBridge,
-  type GeometryViewportOptions,
-  type InspectorTargetRange,
+  type InspectorDecorationItem,
+  type RubySpanInfo,
+  type ScrollOffset,
 } from '../src/core/editor/VerticalInspectorGeometryBridge.js';
 
 describe('VerticalInspectorGeometryBridge', () => {
-  const defaultOptions: GeometryViewportOptions = {
-    containerWidth: 800,
-    containerHeight: 600,
-    fontSize: 16,
-    lineHeight: 32, // 32px
-    paddingTop: 20,
-    paddingRight: 20,
-    paddingBottom: 20,
-    paddingLeft: 20,
-    charsPerLine: 10,
-    scrollLeft: 0,
-    scrollTop: 0,
-  };
-
-  it('computes correct vertical-rl coordinates (right to left, top to bottom)', () => {
-    const bridge = new VerticalInspectorGeometryBridge(defaultOptions);
-    const text = '吾輩は猫である';
-    const coords = bridge.computeCharCoordinates(text);
-
-    expect(coords.length).toBe(7);
-
-    // 1st column (columnIndex = 0)
-    // colX = 800 - 20 - (0 + 1) * 32 = 748
-    expect(coords[0].columnIndex).toBe(0);
-    expect(coords[0].rowIndex).toBe(0);
-    expect(coords[0].x).toBe(748);
-    expect(coords[0].y).toBe(20);
-
-    // 2nd character in same column
-    expect(coords[1].columnIndex).toBe(0);
-    expect(coords[1].rowIndex).toBe(1);
-    expect(coords[1].x).toBe(748);
-    expect(coords[1].y).toBe(36); // 20 + 1 * 16
-
-    // Last character 'る'
-    expect(coords[6].rowIndex).toBe(6);
-    expect(coords[6].y).toBe(20 + 6 * 16);
-  });
-
-  it('handles manual line breaks and advances to the left column', () => {
-    const bridge = new VerticalInspectorGeometryBridge(defaultOptions);
-    const text = '第一行\n第二行';
-    const coords = bridge.computeCharCoordinates(text);
-
-    expect(coords.length).toBe(7);
-
-    // '第' in line 1: col 0, row 0
-    expect(coords[0].columnIndex).toBe(0);
-    expect(coords[0].x).toBe(748);
-
-    // '\n'
-    expect(coords[3].char).toBe('\n');
-    expect(coords[3].columnIndex).toBe(0);
-
-    // '第' in line 2: col 1, row 0
-    // colX = 800 - 20 - (1 + 1) * 32 = 716
-    expect(coords[4].columnIndex).toBe(1);
-    expect(coords[4].rowIndex).toBe(0);
-    expect(coords[4].x).toBe(716);
-    expect(coords[4].y).toBe(20);
-  });
-
-  it('wraps to next column when charsPerLine limit is reached', () => {
+  it('calculates vertical-rl character geometries (RTL columns, top-down char progression)', () => {
     const bridge = new VerticalInspectorGeometryBridge({
-      ...defaultOptions,
-      charsPerLine: 3,
+      fontSize: 16,
+      lineHeight: 2.0, // linePitch = 32px
+      originX: 800,
+      originY: 0,
+      maxCharsPerLine: 10,
     });
-    const text = 'アイウエオ';
-    const coords = bridge.computeCharCoordinates(text);
 
-    expect(coords[0].columnIndex).toBe(0);
-    expect(coords[1].columnIndex).toBe(0);
-    expect(coords[2].columnIndex).toBe(0);
+    const text = 'あいうえお';
+    const geometries = bridge.calculateCharacterGeometries(text);
 
-    // 4th char wraps to col 1
-    expect(coords[3].columnIndex).toBe(1);
-    expect(coords[3].rowIndex).toBe(0);
-    expect(coords[3].x).toBe(716);
+    expect(geometries.length).toBe(5);
 
-    expect(coords[4].columnIndex).toBe(1);
-    expect(coords[4].rowIndex).toBe(1);
+    // Column 0 is furthest right
+    // colX = 800 - 32 + (32 - 16)/2 = 776
+    expect(geometries[0].columnIndex).toBe(0);
+    expect(geometries[0].rect.left).toBe(776);
+    expect(geometries[0].rect.top).toBe(0);
+
+    // Progression along Y axis in same column
+    expect(geometries[1].rect.top).toBe(16);
+    expect(geometries[2].rect.top).toBe(32);
+    expect(geometries[4].rect.top).toBe(64);
   });
 
-  it('calculates Tier 1 (Orthography underline/wave) placement', () => {
-    const bridge = new VerticalInspectorGeometryBridge(defaultOptions);
-    const text = '誤字のある文章です';
-    const ranges: InspectorTargetRange[] = [
-      {
-        id: 't1_error',
-        startIndex: 0,
-        endIndex: 2, // '誤字'
-        tier: 1,
-      },
-    ];
-
-    const placements = bridge.computePlacements(text, ranges);
-    expect(placements.length).toBe(1);
-
-    const p = placements[0];
-    expect(p.tier).toBe(1);
-    expect(p.decoration.type).toBe('underline');
-    expect(p.decoration.rect.x).toBe(748 - 2); // primary.x - 2
-    expect(p.decoration.rect.y).toBe(20);
-    expect(p.decoration.rect.height).toBe(32); // 2 chars * 16px
-  });
-
-  it('calculates Tier 2 (Lore entity badge) placement', () => {
-    const bridge = new VerticalInspectorGeometryBridge(defaultOptions);
-    const text = 'アリスは歩いた';
-    const ranges: InspectorTargetRange[] = [
-      {
-        id: 't2_alice',
-        startIndex: 0,
-        endIndex: 3, // 'アリス'
-        tier: 2,
-        label: '人物',
-      },
-    ];
-
-    const placements = bridge.computePlacements(text, ranges);
-    expect(placements.length).toBe(1);
-
-    const p = placements[0];
-    expect(p.tier).toBe(2);
-    expect(p.decoration.type).toBe('badge');
-    expect(p.decoration.rect.height).toBe(18);
-  });
-
-  it('calculates Tier 3 (Narrative foreshadowing anchor) placement with ruby offset', () => {
-    const bridge = new VerticalInspectorGeometryBridge(defaultOptions);
-    const text = '星辰の残響が鳴り響く';
-    const rangesWithoutRuby: InspectorTargetRange[] = [
-      {
-        id: 't3_normal',
-        startIndex: 0,
-        endIndex: 4,
-        tier: 3,
-        hasRuby: false,
-      },
-    ];
-
-    const rangesWithRuby: InspectorTargetRange[] = [
-      {
-        id: 't3_ruby',
-        startIndex: 0,
-        endIndex: 4,
-        tier: 3,
-        hasRuby: true,
-      },
-    ];
-
-    const p1 = bridge.computePlacements(text, rangesWithoutRuby)[0];
-    const p2 = bridge.computePlacements(text, rangesWithRuby)[0];
-
-    expect(p1.decoration.type).toBe('anchor');
-    expect(p2.decoration.type).toBe('anchor');
-    // Ruby anchor should be shifted right by ruby width (8px)
-    expect(p2.decoration.rect.x).toBeGreaterThan(p1.decoration.rect.x);
-  });
-
-  it('splits multi-column ranges into column segments with correct bounding union', () => {
+  it('handles explicit newlines and wraps to next column on the left', () => {
     const bridge = new VerticalInspectorGeometryBridge({
-      ...defaultOptions,
-      charsPerLine: 3,
+      fontSize: 16,
+      lineHeight: 2.0, // linePitch = 32px
+      originX: 800,
+      originY: 0,
+      maxCharsPerLine: 10,
     });
-    // 0:ア, 1:イ, 2:ウ (col 0) | 3:エ, 4:オ, 5:カ (col 1)
-    const text = 'アイウエオカ';
-    const ranges: InspectorTargetRange[] = [
-      {
-        id: 'multi_col',
-        startIndex: 1, // 'イ' (col 0, row 1)
-        endIndex: 5,   // 'オ' (col 1, row 1) inclusive
-        tier: 1,
-      },
-    ];
 
-    const placements = bridge.computePlacements(text, ranges);
-    expect(placements.length).toBe(1);
+    const text = 'ABC\nDEF';
+    const geometries = bridge.calculateCharacterGeometries(text);
 
-    const p = placements[0];
-    expect(p.columnSegments.length).toBe(2);
+    // 'A', 'B', 'C', '\n' in column 0
+    expect(geometries[0].columnIndex).toBe(0); // A
+    expect(geometries[1].columnIndex).toBe(0); // B
+    expect(geometries[2].columnIndex).toBe(0); // C
+    expect(geometries[3].columnIndex).toBe(0); // \n
 
-    // Segment 1 (col 0): 'イ', 'ウ' (rows 1-2)
-    expect(p.columnSegments[0].columnIndex).toBe(0);
-    expect(p.columnSegments[0].startRow).toBe(1);
-    expect(p.columnSegments[0].endRow).toBe(2);
-    expect(p.columnSegments[0].height).toBe(32);
+    // 'D', 'E', 'F' in column 1 (to the left of col 0)
+    expect(geometries[4].columnIndex).toBe(1); // D
+    expect(geometries[5].columnIndex).toBe(1); // E
 
-    // Segment 2 (col 1): 'エ', 'オ' (rows 0-1)
-    expect(p.columnSegments[1].columnIndex).toBe(1);
-    expect(p.columnSegments[1].startRow).toBe(0);
-    expect(p.columnSegments[1].endRow).toBe(1);
-    expect(p.columnSegments[1].height).toBe(32);
-
-    // Bounding union contains both columns
-    expect(p.boundingUnion.width).toBeGreaterThan(16);
+    // Column 1 is to the left of Column 0
+    expect(geometries[4].rect.left).toBeLessThan(geometries[0].rect.left);
   });
 
-  it('applies scroll offsets correctly', () => {
+  it('wraps characters at maxCharsPerLine limit', () => {
     const bridge = new VerticalInspectorGeometryBridge({
-      ...defaultOptions,
-      scrollLeft: 50,
+      fontSize: 16,
+      lineHeight: 2.0,
+      originX: 800,
+      originY: 0,
+      maxCharsPerLine: 3,
+    });
+
+    const text = '12345';
+    const geometries = bridge.calculateCharacterGeometries(text);
+
+    // 1, 2, 3 in col 0
+    expect(geometries[0].columnIndex).toBe(0);
+    expect(geometries[2].columnIndex).toBe(0);
+
+    // 4, 5 wrapped to col 1
+    expect(geometries[3].columnIndex).toBe(1);
+    expect(geometries[4].columnIndex).toBe(1);
+  });
+
+  it('expands bounding box for Ruby annotations on right side', () => {
+    const bridge = new VerticalInspectorGeometryBridge({
+      fontSize: 16,
+      lineHeight: 2.0,
+      rubyFontSize: 8,
+      rubyGap: 2,
+      originX: 800,
+      originY: 0,
+    });
+
+    const text = '青空';
+    const rubySpans: RubySpanInfo[] = [
+      { from: 0, to: 2, rubyText: 'あおぞら' },
+    ];
+
+    const rangeGeom = bridge.calculateRangeGeometry(0, 2, text, rubySpans);
+
+    expect(rangeGeom.hasRuby).toBe(true);
+    expect(rangeGeom.fragments.length).toBe(1);
+
+    const baseCharGeoms = bridge.calculateCharacterGeometries(text, rubySpans);
+    const baseRight = baseCharGeoms[0].rect.right;
+
+    // Bounding box right should be expanded past base text right by ruby (8px + 2px gap = 10px)
+    expect(rangeGeom.boundingBox.right).toBe(baseRight + 8 + 2);
+  });
+
+  it('splits multi-column ranges across line wrap boundaries into fragments', () => {
+    const bridge = new VerticalInspectorGeometryBridge({
+      fontSize: 16,
+      lineHeight: 2.0,
+      maxCharsPerLine: 3,
+      originX: 800,
+    });
+
+    const text = 'あいうえおかきく'; // 8 chars, 3 chars/col -> 3 columns
+    const rangeGeom = bridge.calculateRangeGeometry(0, 8, text);
+
+    expect(rangeGeom.fragments.length).toBe(3);
+    expect(rangeGeom.fragments[0].columnIndex).toBe(0);
+    expect(rangeGeom.fragments[1].columnIndex).toBe(1);
+    expect(rangeGeom.fragments[2].columnIndex).toBe(2);
+
+    // Bounding box encloses all fragments
+    expect(rangeGeom.boundingBox.left).toBe(rangeGeom.fragments[2].rect.left);
+    expect(rangeGeom.boundingBox.right).toBe(rangeGeom.fragments[0].rect.right);
+  });
+
+  it('calculates Tier 1 (wavy_line) decoration placement', () => {
+    const bridge = new VerticalInspectorGeometryBridge({
+      fontSize: 16,
+      lineHeight: 2.0,
+      originX: 800,
+    });
+
+    const item: InspectorDecorationItem = {
+      id: 'item-t1',
+      tier: 1,
+      type: 'wavy_line',
+      from: 0,
+      to: 3,
+      label: '表記揺れ警告',
+    };
+
+    const placement = bridge.calculateTierDecorationPlacement(item, 'あいう');
+
+    expect(placement.tier).toBe(1);
+    expect(placement.tier1WavyLineRects).toBeDefined();
+    expect(placement.tier1WavyLineRects!.length).toBe(1);
+
+    // Wavy line is drawn along the right edge of the fragment column
+    const wavyRect = placement.tier1WavyLineRects![0];
+    expect(wavyRect.left).toBe(placement.screenBoundingBox.right);
+  });
+
+  it('calculates Tier 2 (badge) decoration placement', () => {
+    const bridge = new VerticalInspectorGeometryBridge({
+      fontSize: 16,
+      lineHeight: 2.0,
+      originX: 800,
+    });
+
+    const item: InspectorDecorationItem = {
+      id: 'item-t2',
+      tier: 2,
+      type: 'badge',
+      from: 0,
+      to: 4,
+      label: '設定語句バッジ',
+      badgeText: 'キャラ',
+    };
+
+    const placement = bridge.calculateTierDecorationPlacement(item, 'ヴァレリウス');
+
+    expect(placement.tier).toBe(2);
+    expect(placement.tier2BadgePosition).toBeDefined();
+    expect(placement.tier2BadgePosition!.x).toBeGreaterThan(placement.screenBoundingBox.right);
+  });
+
+  it('calculates Tier 3 (foreshadowing_anchor) decoration anchor points', () => {
+    const bridge = new VerticalInspectorGeometryBridge({
+      fontSize: 16,
+      lineHeight: 2.0,
+      originX: 800,
+    });
+
+    const item: InspectorDecorationItem = {
+      id: 'item-t3',
+      tier: 3,
+      type: 'foreshadowing_anchor',
+      from: 0,
+      to: 5,
+      label: '伏線回収アンカー',
+    };
+
+    const placement = bridge.calculateTierDecorationPlacement(item, '赤き月の予言');
+
+    expect(placement.tier).toBe(3);
+    expect(placement.tier3AnchorPoints).toBeDefined();
+    expect(placement.tier3AnchorPoints!.start).toBeDefined();
+    expect(placement.tier3AnchorPoints!.end).toBeDefined();
+    expect(placement.tier3AnchorPoints!.center).toBeDefined();
+
+    // Start point Y should be top of first char, end point Y should be bottom of last char
+    expect(placement.tier3AnchorPoints!.start.y).toBeLessThan(placement.tier3AnchorPoints!.end.y);
+  });
+
+  it('applies scroll offsets and container offsets to screen coordinates', () => {
+    const bridge = new VerticalInspectorGeometryBridge({
+      fontSize: 16,
+      lineHeight: 2.0,
+      originX: 800,
+      originY: 50,
+      containerOffsetLeft: 100,
+      containerOffsetTop: 20,
+    });
+
+    const scrollOffset: ScrollOffset = {
+      scrollLeft: 200,
       scrollTop: 30,
-    });
-    const text = '吾輩';
-    const coords = bridge.computeCharCoordinates(text);
+    };
 
-    // base x: 748, base y: 20
-    expect(coords[0].x).toBe(748 - 50);
-    expect(coords[0].y).toBe(20 - 30);
+    const item: InspectorDecorationItem = {
+      id: 'item-1',
+      tier: 1,
+      type: 'wavy_line',
+      from: 0,
+      to: 2,
+      label: 'テスト',
+    };
+
+    const placement = bridge.calculateTierDecorationPlacement(item, 'テスト', scrollOffset);
+
+    // screenLeft = localLeft - scrollLeft + containerOffsetLeft
+    // screenLeft = localLeft - 200 + 100 = localLeft - 100
+    expect(placement.screenBoundingBox.left).toBe(placement.boundingBox.left - 200 + 100);
+    expect(placement.screenBoundingBox.top).toBe(placement.boundingBox.top - 30 + 20);
   });
 
-  it('performs hit testing on decoration rect and text segments', () => {
-    const bridge = new VerticalInspectorGeometryBridge(defaultOptions);
-    const text = '神殿の秘宝';
-    const ranges: InspectorTargetRange[] = [
-      {
-        id: 'target',
-        startIndex: 0,
-        endIndex: 2, // '神殿'
-        tier: 3,
-      },
-    ];
+  it('places tooltips to the left preferred side and auto-flips on boundary collision', () => {
+    const bridge = new VerticalInspectorGeometryBridge({
+      containerWidth: 800,
+      containerHeight: 600,
+    });
 
-    const placements = bridge.computePlacements(text, ranges);
-    const p = placements[0];
+    // Normal case: target rect is near center/right
+    const normalTargetRect = { left: 400, top: 100, width: 32, height: 100, right: 432, bottom: 200 };
+    const normalPlacement = bridge.calculateTooltipPlacement(normalTargetRect, {
+      tooltipWidth: 200,
+      preferredPosition: 'left',
+    });
 
-    // Hit decoration anchor
-    const anchorHit = bridge.hitTest(
-      p.decoration.rect.x + 2,
-      p.decoration.rect.y + 2,
-      placements
-    );
-    expect(anchorHit?.id).toBe('target');
+    expect(normalPlacement.position).toBe('left');
+    expect(normalPlacement.x).toBe(400 - 200 - 8); // left - tooltipWidth - gap
 
-    // Hit character segment
-    const segmentHit = bridge.hitTest(
-      p.columnSegments[0].x + 2,
-      p.columnSegments[0].y + 2,
-      placements
-    );
-    expect(segmentHit?.id).toBe('target');
+    // Edge collision case: target rect is near left boundary (e.g. left = 50)
+    const edgeTargetRect = { left: 50, top: 100, width: 32, height: 100, right: 82, bottom: 200 };
+    const flippedPlacement = bridge.calculateTooltipPlacement(edgeTargetRect, {
+      tooltipWidth: 200,
+      preferredPosition: 'left',
+    });
 
-    // Miss outside
-    const miss = bridge.hitTest(10, 10, placements);
-    expect(miss).toBeNull();
+    // Auto-flips to 'right' because 50 - 200 - 8 < 0
+    expect(flippedPlacement.position).toBe('right');
+    expect(flippedPlacement.x).toBe(82 + 8); // right + gap
   });
 });
