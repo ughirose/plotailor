@@ -293,5 +293,7 @@ export {
   type CharCoordinate,
 } from './core/editor/VerticalInspectorGeometryBridge.js';
 export * from './core/editor/CausalTimelineSyncEngine.js';
+export * from './core/offload/ColabOffloadClient.js';
+export * from './core/collab/P2PCrdtSyncEngine.js';
 
 
