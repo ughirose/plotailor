@@ -122,6 +122,7 @@ describe('Editor Writing Indicators & Column Guideline Dynamic Integration (Phas
       expect(guideline?.getIsOverflow()).toBe(true);
 
       // Test hanging tolerance (41 chars, hanging allowed)
+      app.setKinsokuHanging(true);
       const hangingLine = 'あ'.repeat(41);
       editor.dispatch({
         changes: { from: 0, to: editor.state.doc.length, insert: hangingLine },
@@ -168,6 +169,7 @@ describe('Editor Writing Indicators & Column Guideline Dynamic Integration (Phas
 
       expect(footerChar?.innerHTML).toContain('800');
       expect(footerChar?.innerHTML).toContain('2.0');
+      expect(footerChar?.innerHTML).toContain('実字換算');
     });
   });
 });

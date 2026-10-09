@@ -3,6 +3,7 @@ import type { LoreEntityManager } from '../../core/lore/LoreEntityManager.js';
 import type { LoreInspectorDock } from '../../ui/LoreInspectorDock.js';
 import type { ChapterData } from './ExportController.js';
 import { showInlinePrompt, showInlineAlert } from '../InlineDialog.js';
+import { LocalDirectorySyncEngine } from '../../core/fs/LocalDirectorySyncEngine.js';
 
 export interface ProjectControllerDependencies {
   getProjectManager: () => ProjectManager;
@@ -32,9 +33,18 @@ export type ProjectSwitchListener = (projectId: string, title: string) => void;
 export class ProjectController {
   private deps: ProjectControllerDependencies;
   private switchListeners: ProjectSwitchListener[] = [];
+  private syncEngine: LocalDirectorySyncEngine;
 
   constructor(deps: ProjectControllerDependencies) {
     this.deps = deps;
+    this.syncEngine = new LocalDirectorySyncEngine(this.deps.getProjectManager().getVFS(), {
+      onStatusChange: (status, dirName) => this.handleSyncStatusChange(status, dirName),
+      onError: (err) => this.deps.showToast(`ローカル同期エラー: ${err.message}`),
+    });
+  }
+
+  public getSyncEngine(): LocalDirectorySyncEngine {
+    return this.syncEngine;
   }
 
   public registerProjectSwitchListener(listener: ProjectSwitchListener): void {
@@ -63,10 +73,15 @@ export class ProjectController {
           currentProjectId = migrated.id;
           this.deps.setCurrentProjectId(currentProjectId);
         } else {
-          const defaultProj = await pm.createProject({
-            id: 'default_work',
-            title: this.deps.getWorkTitle() || '星辰の境界線',
-          });
+          let defaultProj: any;
+          try {
+            defaultProj = await pm.getProject('default_work').then((d) => d.meta);
+          } catch {
+            defaultProj = await pm.createProject({
+              id: 'default_work',
+              title: this.deps.getWorkTitle() || '星辰の境界線',
+            });
+          }
           currentProjectId = defaultProj.id;
           this.deps.setCurrentProjectId(currentProjectId);
           for (let i = 0; i < chapters.length; i++) {
@@ -130,9 +145,7 @@ export class ProjectController {
       const chapters = this.deps.getChapters();
       const currentChapterId = this.deps.getCurrentChapterId();
 
-      try {
-        await pm.getProject(currentProjectId);
-      } catch {
+      if (!(await pm.getVFS().exists(`/projects/${currentProjectId}`))) {
         await pm.createProject({
           id: currentProjectId,
           title: workTitle,
@@ -157,9 +170,44 @@ export class ProjectController {
     }
   }
 
+  private handleSyncStatusChange(status: string, dirName?: string): void {
+    const banner = document.getElementById('localDirStatusBanner');
+    const text = document.getElementById('localDirStatusText');
+    if (banner && text) {
+      if (status === 'connected') {
+        banner.style.display = 'flex';
+        text.textContent = `📁 ローカル同期中: ${dirName || '接続済み'}`;
+      } else {
+        banner.style.display = 'none';
+        text.textContent = '📁 ローカル同期中: -';
+      }
+    }
+  }
+
+  public async connectLocalDirectory(): Promise<void> {
+    try {
+      const connected = await this.syncEngine.requestAndConnectDirectory();
+      if (connected) {
+        this.deps.showToast(`📁 ローカルフォルダ「${this.syncEngine.getDirectoryName()}」に接続しました`);
+        await this.initProjectVFS();
+        await this.renderProjectList();
+      }
+    } catch (err: any) {
+      this.deps.showToast(`ローカル接続失敗: ${err.message}`);
+    }
+  }
+
+  public async disconnectLocalDirectory(): Promise<void> {
+    this.syncEngine.disconnect();
+    this.deps.showToast('ローカルフォルダとの接続を解除しました');
+    await this.initProjectVFS();
+    await this.renderProjectList();
+  }
+
   public async openProjectModal(): Promise<void> {
     const modal = document.getElementById('projectModal');
     if (!modal) return;
+    this.handleSyncStatusChange(this.syncEngine.getStatus(), this.syncEngine.getDirectoryName() || undefined);
     await this.renderProjectList();
     modal.style.display = 'flex';
   }
@@ -172,6 +220,16 @@ export class ProjectController {
   public async renderProjectList(): Promise<void> {
     const container = document.getElementById('projectListContainer');
     if (!container) return;
+
+    // Bind Connect / Disconnect Local Directory buttons
+    const btnConnect = document.getElementById('btnConnectLocalDir');
+    if (btnConnect) {
+      btnConnect.onclick = () => this.connectLocalDirectory();
+    }
+    const btnDisconnect = document.getElementById('btnDisconnectLocalDir');
+    if (btnDisconnect) {
+      btnDisconnect.onclick = () => this.disconnectLocalDirectory();
+    }
 
     try {
       const projects = await this.deps.getProjectManager().listProjects();

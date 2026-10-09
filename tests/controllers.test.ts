@@ -98,6 +98,40 @@ describe('Plotailor Controllers Refactoring & Extension Points', () => {
       expect(ran).toBe(true);
       expect(customHandler).toHaveBeenCalledWith('テスト作品', expect.any(Array));
     });
+
+    it('triggers EPUB3 binary, InDesign tagged text, SpecSheet, and commercial package exports', () => {
+      const showToast = vi.fn();
+      const exportCtrl = new ExportController({
+        getWorkTitle: () => 'テスト作品',
+        getChapters: () => [{ id: 'ch1', title: '第一章', charCount: 10, content: 'テスト本文。《《傍点》》｜親文字《るび》' }],
+        getLoreEntities: () => [],
+        getCurrentChapterContent: () => 'テスト本文',
+        getKeystrokeCount: () => 100,
+        isVertical: () => true,
+        showToast,
+      });
+
+      const downloadBinarySpy = vi.spyOn(exportCtrl, 'downloadBinary').mockImplementation(() => {});
+      const copySpy = vi.spyOn(exportCtrl, 'copyTextToClipboard').mockImplementation(() => {});
+
+      // 1. EPUB3 Binary
+      exportCtrl.exportDenshokyoEpubBinary();
+      expect(downloadBinarySpy).toHaveBeenCalledWith('テスト作品.epub', expect.any(Uint8Array), 'application/epub+zip');
+      expect(showToast).toHaveBeenCalledWith(expect.stringContaining('電書協EPUB3'));
+
+      // 2. InDesign Tagged Text
+      exportCtrl.exportInDesignTaggedText('copy');
+      expect(copySpy).toHaveBeenCalledWith(expect.stringContaining('<UNICODE-WIN>'), expect.any(String));
+
+      // 3. SpecSheet
+      exportCtrl.exportManuscriptSpecSheet('copy');
+      expect(copySpy).toHaveBeenCalledWith(expect.stringContaining('商業原稿仕様書・割付指示書'), expect.any(String));
+
+      // 4. Commercial Package
+      exportCtrl.exportCommercialPackage();
+      expect(downloadBinarySpy).toHaveBeenCalledWith('テスト作品_商業入稿パッケージ.zip', expect.any(Uint8Array), 'application/zip');
+      expect(showToast).toHaveBeenCalledWith(expect.stringContaining('商業入稿パッケージ.zip'));
+    });
   });
 
   describe('SettingsController', () => {

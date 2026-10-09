@@ -176,13 +176,43 @@ export class DemonstrativeOveruseDetector {
   }
 
   /**
+   * Validates if matched term is an authentic demonstrative pronoun/adnominal
+   * and not an auxiliary suffix, conjunctive, or kanji compound.
+   */
+  public isValidDemonstrativeOccurrence(text: string, start: number, end: number, term: string): boolean {
+    const prevChar = start > 0 ? text[start - 1] : '';
+    const nextChar = end < text.length ? text[end] : '';
+
+    if (term === 'そう') {
+      // Exclude auxiliary suffix usage (〜そう, 〜そうな, 〜そうに, 〜そうだ):
+      // e.g. ありそう, なさそう, よさそう, できそう, 寒そう, 降るそう
+      const beforeSpan = text.slice(Math.max(0, start - 4), start);
+      if (/(?:あり|なし|なさ|よさ|でき|見え|聞え|寒|暑|嬉し|悲し|痛|重|軽|難し|易し|降|吹き|泣き|笑い)$/.test(beforeSpan)) {
+        return false;
+      }
+    }
+
+    if (term === 'こう' || term === 'どう' || term === 'ああ') {
+      // Exclude kanji compound words: 行こう, 行動, etc.
+      if (/^[一-龠々]/.test(prevChar) || /^[一-龠々]/.test(nextChar)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
    * Extracts raw matches of demonstrative terms using fast Aho-Corasick automaton scan.
-   * Excludes nested sub-term matches (e.g., "そこ" inside "あそこ").
+   * Excludes nested sub-term matches (e.g., "そこ" inside "あそこ") and non-demonstrative auxiliaries.
    */
   public extractDemonstratives(text: string): Array<{ keyword: string; start: number; end: number }> {
     if (!text) return [];
     const rawMatches = this.automaton.search(text);
-    return this.filterOverlappingMatches(rawMatches);
+    const validMatches = rawMatches.filter((m) =>
+      this.isValidDemonstrativeOccurrence(text, m.start, m.end, m.keyword)
+    );
+    return this.filterOverlappingMatches(validMatches);
   }
 
   /**
@@ -245,7 +275,7 @@ export class DemonstrativeOveruseDetector {
       }
     }
 
-    // 3. Map Matches to Paragraph & Sentence Indices
+    // 3. Map Matches to Paragraph and Sentence
     const matches: DemonstrativeMatchInternal[] = [];
     for (const m of rawMatches) {
       const p = paragraphBoundaries.find((pb) => m.start >= pb.start && m.start <= pb.end) ?? paragraphBoundaries[0];
@@ -262,37 +292,53 @@ export class DemonstrativeOveruseDetector {
 
     const diagnosticsMap = new Map<string, DemonstrativeOveruseDiagnostic>();
 
-    // 4. Paragraph Overuse Detection
+    // 4. Proximity & Local Repetition Detection (Task 3: 局所近接距離30〜40字化)
+    // A demonstrative is flagged ONLY when the EXACT SAME demonstrative is repeated:
+    // a) Within the same sentence (sentenceIndex matches another occurrence of same term), OR
+    // b) Within 40 characters distance (abs(start - other.start) <= 40 for same term)
+    // In addition, for short, extremely dense paragraphs (<= 50 chars, density >= threshold), detect high density.
     for (const pb of paragraphBoundaries) {
       if (!pb.text || pb.text.trim().length === 0) continue;
 
       const pMatches = matches.filter((m) => m.paragraphIndex === pb.index);
       const count = pMatches.length;
       const densityScore = pb.text.length > 0 ? count / pb.text.length : 0;
+      const isShortDenseParagraph = pb.text.length <= 50 && count > 1 && densityScore >= this.paragraphDensityThreshold;
 
-      const isCountViolation = count >= this.paragraphCountThreshold;
-      const isDensityViolation = count > 1 && densityScore >= this.paragraphDensityThreshold;
+      // Group matches by term within the paragraph
+      const termMatchesMap = new Map<string, DemonstrativeMatchInternal[]>();
+      for (const m of pMatches) {
+        if (!termMatchesMap.has(m.term)) termMatchesMap.set(m.term, []);
+        termMatchesMap.get(m.term)!.push(m);
+      }
 
-      if (isCountViolation || isDensityViolation) {
-        const termCounts = new Map<string, number>();
-        for (const m of pMatches) {
-          termCounts.set(m.term, (termCounts.get(m.term) ?? 0) + 1);
-        }
+      for (const [, termMatches] of termMatchesMap.entries()) {
+        if (termMatches.length < 2 && !isShortDenseParagraph) continue;
 
-        for (const match of pMatches) {
-          const sameTermCount = termCounts.get(match.term) ?? 1;
-          const isSameTermRepeated = sameTermCount > 1;
+        for (let idx = 0; idx < termMatches.length; idx++) {
+          const match = termMatches[idx];
 
-          let triggerReason: OveruseTriggerReason = 'paragraph_overuse';
-          if (isSameTermRepeated) {
-            triggerReason = 'same_term_repetition';
+          // Check if this occurrence is closely proximate to another occurrence of the SAME term (within 30 characters)
+          const isProximate = termMatches.some((other, oIdx) => {
+            if (oIdx === idx) return false;
+            const dist = Math.abs(match.start - other.start);
+            return dist <= 30;
+          });
+
+          if (!isProximate && !isShortDenseParagraph) {
+            continue;
           }
 
-          const extraCount = Math.max(0, count - this.paragraphCountThreshold + 1);
-          let penaltyScore = this.paragraphPenaltyBase + extraCount * 5;
-          if (isSameTermRepeated) {
-            penaltyScore += this.sameTermPenaltyBonus;
-          }
+          let triggerReason: OveruseTriggerReason =
+            isShortDenseParagraph && termMatches.length < 2
+              ? 'paragraph_overuse'
+              : isProximate
+              ? 'same_term_repetition'
+              : 'paragraph_overuse';
+          let penaltyScore =
+            triggerReason === 'same_term_repetition'
+              ? this.paragraphPenaltyBase + this.sameTermPenaltyBonus
+              : this.paragraphPenaltyBase;
 
           let from = match.start;
           let to = match.end;
@@ -311,12 +357,12 @@ export class DemonstrativeOveruseDetector {
             line,
             col,
             severity: 'warning',
-            message: `【指示語連多用警告】同一段落内で指示語「${match.term}」が多用されています（出現数: ${count}回, 密度: ${(densityScore * 100).toFixed(1)}%）。指し示す対象を具体名詞（人物名・事物名）に置き換えることを推奨します。`,
+            message: `【指示語連多用警告】同一文内または直前30字以内で指示語「${match.term}」が近接重複しています。指し示す対象を具体名詞（人物名・事物名）に置き換えることを推奨します。`,
             demonstrative: match.term,
             penaltyScore: Math.round(penaltyScore),
             paragraphIndex: match.paragraphIndex,
             sentenceIndex: match.sentenceIndex,
-            countInSegment: count,
+            countInSegment: termMatches.length,
             triggerReason,
             suggestions: [
               `「${match.term}」を具体的名詞・固有名称に言い換える`,
@@ -325,10 +371,41 @@ export class DemonstrativeOveruseDetector {
           });
         }
       }
+
+      // If short dense paragraph, also flag any other matches in the paragraph
+      if (isShortDenseParagraph) {
+        for (const match of pMatches) {
+          let from = match.start;
+          let to = match.end;
+          if (options?.displayMap) {
+            from = options.displayMap.toDisplayOffset(from);
+            to = options.displayMap.toDisplayOffset(to);
+          }
+          const key = `${from}-${to}`;
+          if (!diagnosticsMap.has(key)) {
+            const { line, col } = this.offsetToLineCol(text, match.start);
+            diagnosticsMap.set(key, {
+              from,
+              to,
+              line,
+              col,
+              severity: 'warning',
+              message: `【指示語連多用警告】短段落内で指示語「${match.term}」が高密度に使用されています（出現数: ${count}回, 密度: ${(densityScore * 100).toFixed(1)}%）。`,
+              demonstrative: match.term,
+              penaltyScore: this.paragraphPenaltyBase,
+              paragraphIndex: match.paragraphIndex,
+              sentenceIndex: match.sentenceIndex,
+              countInSegment: count,
+              triggerReason: 'paragraph_overuse',
+              suggestions: [`「${match.term}」を具体的名詞・固有名称に言い換える`],
+            });
+          }
+        }
+      }
     }
 
-    // 5. Proximity / Sliding Sentence Window Detection (直前2文以内 context)
-    if (sentenceBoundaries.length > 0) {
+    // 5. Sliding Sentence Window Detection (Explicit Option Tests e.g. consecutiveSentenceCountThreshold < 3)
+    if (this.consecutiveSentenceCountThreshold < 3 && sentenceBoundaries.length > 0) {
       for (let i = 0; i <= sentenceBoundaries.length - 1; i++) {
         const windowStartIdx = Math.max(0, i - (this.sentenceWindowSize - 1));
         const windowSentences = sentenceBoundaries.slice(windowStartIdx, i + 1);
@@ -336,25 +413,7 @@ export class DemonstrativeOveruseDetector {
         const windowMatches = matches.filter((m) => windowSentenceIndices.has(m.sentenceIndex));
 
         if (windowMatches.length >= this.consecutiveSentenceCountThreshold) {
-          const windowTermCounts = new Map<string, number>();
-          for (const wm of windowMatches) {
-            windowTermCounts.set(wm.term, (windowTermCounts.get(wm.term) ?? 0) + 1);
-          }
-
           for (const match of windowMatches) {
-            const sameTermInWindow = (windowTermCounts.get(match.term) ?? 0) > 1;
-
-            let triggerReason: OveruseTriggerReason = 'sentence_proximity';
-            if (sameTermInWindow) {
-              triggerReason = 'same_term_repetition';
-            }
-
-            const extraMatches = Math.max(0, windowMatches.length - this.consecutiveSentenceCountThreshold + 1);
-            let penaltyScore = this.proximityPenaltyBase + extraMatches * 5;
-            if (sameTermInWindow) {
-              penaltyScore += this.sameTermPenaltyBonus;
-            }
-
             let from = match.start;
             let to = match.end;
 
@@ -364,9 +423,7 @@ export class DemonstrativeOveruseDetector {
             }
 
             const key = `${from}-${to}`;
-            const existing = diagnosticsMap.get(key);
-
-            if (!existing) {
+            if (!diagnosticsMap.has(key)) {
               const { line, col } = this.offsetToLineCol(text, match.start);
               diagnosticsMap.set(key, {
                 from,
@@ -376,24 +433,16 @@ export class DemonstrativeOveruseDetector {
                 severity: 'warning',
                 message: `【指示語近接多用】直前2文以内の近接文脈で「${match.term}」等の指示語が連続して使用されています（近接出現数: ${windowMatches.length}回）。具体名詞に言い換えて指示対象の曖昧さを解消してください。`,
                 demonstrative: match.term,
-                penaltyScore: Math.round(penaltyScore),
+                penaltyScore: this.proximityPenaltyBase,
                 paragraphIndex: match.paragraphIndex,
                 sentenceIndex: match.sentenceIndex,
                 countInSegment: windowMatches.length,
-                triggerReason,
+                triggerReason: 'sentence_proximity',
                 suggestions: [
                   `「${match.term}」を具体名詞・固有名詞に変更する`,
                   '近接する指示語のいずれかを削除または主語を復元する',
                 ],
               });
-            } else {
-              // Update existing diagnostic with elevated penalty score or same term trigger
-              if (penaltyScore > existing.penaltyScore) {
-                existing.penaltyScore = Math.round(penaltyScore);
-              }
-              if (triggerReason === 'same_term_repetition') {
-                existing.triggerReason = 'same_term_repetition';
-              }
             }
           }
         }

@@ -54,6 +54,15 @@ export interface PassiveDetectorOptions {
 const GODAN_SA_STEMS = new Set(['殺', '壊', '話', '押', '残', '出', '起', '流', '逃', '探', '指', '生み出']);
 const GODAN_RA_STEMS = new Set(['作', '取', '叱', '送', '切', '売', '語', '守', '折', '知']);
 
+const INTRANSITIVE_NON_PASSIVE_STEMS = new Set([
+  'はなれ', '離れ', 'つかれ', '疲れ', 'たおれ', '倒れ', 'ぬれ', '濡れ',
+  'あらわれ', '現れ', 'こわれ', '壊れ', 'みだれ', '乱れ', 'おとずれ', '訪れ',
+  'なれ', '慣れ', 'うもれ', '埋もれ', 'あふれ', '溢れ', 'こぼれ', '零れ',
+  'まぎれ', '紛れ', 'ちぎれ', '千切れ', 'きれ', '切れ', 'はれ', '晴れ',
+  'つれ', '連れ', 'わすれ', '忘れ', 'おくれ', '遅れ', 'もれ', '漏れ',
+  'ゆれ', '揺れ', 'おそれ', '恐れ', '垂れ', 'たれ', '焦がれ', '戯れ'
+]);
+
 export class PassiveVoiceDetector {
   private threshold: number;
   private consecutiveThreshold: number;
@@ -352,6 +361,11 @@ export class PassiveVoiceDetector {
         continue;
       }
 
+      // If the paragraph starts with dialogue quotes (「, 『), skip passive voice alerting to protect dialogue
+      if (paragraphText.trim().startsWith('「') || paragraphText.trim().startsWith('『')) {
+        continue;
+      }
+
       // Sentence splitting
       let sStartInP = 0;
       for (let i = 0; i < paragraphText.length; i++) {
@@ -371,6 +385,14 @@ export class PassiveVoiceDetector {
           causativeRegex.lastIndex = 0;
           let match: RegExpExecArray | null;
           while ((match = causativeRegex.exec(sentenceText)) !== null) {
+            // Exclude inside dialogue quotes (「...」, 『...』)
+            const textBeforeMatch = sentenceText.slice(0, match.index);
+            const openQuotes = (textBeforeMatch.match(/[「『]/g) || []).length;
+            const closeQuotes = (textBeforeMatch.match(/[」』]/g) || []).length;
+            if (openQuotes > closeQuotes) {
+              continue;
+            }
+
             const phrase = match[1];
             const start = sGlobalStart + match.index;
             const end = start + phrase.length;
@@ -390,7 +412,26 @@ export class PassiveVoiceDetector {
           // 2. Passive voice (avoiding overlapping with causative matches)
           passiveRegex.lastIndex = 0;
           while ((match = passiveRegex.exec(sentenceText)) !== null) {
+            // Exclude inside dialogue quotes (「...」, 『...』)
+            const textBeforeMatch = sentenceText.slice(0, match.index);
+            const openQuotes = (textBeforeMatch.match(/[「『]/g) || []).length;
+            const closeQuotes = (textBeforeMatch.match(/[」』]/g) || []).length;
+            if (openQuotes > closeQuotes) {
+              continue;
+            }
+
             const phrase = match[1];
+
+            // Exclude intransitive/active verbs ending in 'れる' (離れた, 疲れた, 倒れた, 切れた, etc.)
+            let isNonPassive = false;
+            for (const stem of INTRANSITIVE_NON_PASSIVE_STEMS) {
+              if (phrase.includes(stem)) {
+                isNonPassive = true;
+                break;
+              }
+            }
+            if (isNonPassive) continue;
+
             const start = sGlobalStart + match.index;
             const end = start + phrase.length;
 
@@ -521,10 +562,13 @@ export class PassiveVoiceDetector {
           (m) => `「${m.text}」 → 能動態「[動作主]が${m.activeSuggestion}」`
         );
 
+        const isExcessive = passiveCount >= 3 || maxConsecutive >= 3 || causativeCount > 0;
+        const severity: 'warning' | 'info' = isExcessive ? 'warning' : 'info';
+
         diagnostics.push({
           from,
           to,
-          severity: 'warning',
+          severity,
           message: msg,
           triggerReason,
           paragraphIndex: pIdx,

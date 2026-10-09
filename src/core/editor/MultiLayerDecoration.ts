@@ -154,6 +154,7 @@ export function reconcileDecorations(items: MultiLayerItem[]): MultiLayerItem[] 
 // CodeMirror 6 Decoration Marks
 export const layer0Mark = Decoration.mark({
   class: 'cm-decoration-layer0',
+  inclusive: false,
   attributes: {
     'data-layer': '0',
     title: '物理事実アンカー',
@@ -162,6 +163,7 @@ export const layer0Mark = Decoration.mark({
 
 export const layer1Mark = Decoration.mark({
   class: 'cm-decoration-layer1',
+  inclusive: false,
   attributes: {
     'data-layer': '1',
     title: '伏線ハイライト',
@@ -170,6 +172,7 @@ export const layer1Mark = Decoration.mark({
 
 export const layer2Mark = Decoration.mark({
   class: 'cm-decoration-layer2',
+  inclusive: false,
   attributes: {
     'data-layer': '2',
     title: 'POV機密漏洩エラー',

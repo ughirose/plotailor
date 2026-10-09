@@ -15,6 +15,17 @@ export interface SceneOutlinerOptions {
   knownLocations?: string[];
 }
 
+export interface SceneHeadingNode {
+  id: string;
+  level: 1 | 2 | 3;
+  title: string;
+  line: number;
+  offset: number;
+  format: 'aozora' | 'markdown';
+}
+
+export type HeadingNode = SceneHeadingNode;
+
 export interface SceneNode {
   id: string;
   index: number;
@@ -59,6 +70,77 @@ export class SceneOutliner {
    */
   public static analyzeScenes(rawText: string, options?: SceneOutlinerOptions): SceneNode[] {
     return new SceneOutliner(options).parse(rawText);
+  }
+
+  /**
+   * Static helper to extract Aozora Bunko and Markdown headings from manuscript text.
+   */
+  public static extractHeadings(rawText: string): HeadingNode[] {
+    if (!rawText) return [];
+    const headings: HeadingNode[] = [];
+    const lines = rawText.split(/\r?\n/);
+    let offset = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lineNum = i + 1;
+      const trimmed = line.trim();
+
+      // 1. Aozora Bunko headings
+      const aozoraDai = /[［\[]＃大見出し[］\]]([^\n［］\[\]]+)[［\[]＃大見出し終わり[］\]]/.exec(trimmed);
+      if (aozoraDai) {
+        headings.push({
+          id: `heading-${headings.length + 1}`,
+          level: 1,
+          title: aozoraDai[1].trim(),
+          line: lineNum,
+          offset,
+          format: 'aozora',
+        });
+      } else {
+        const aozoraChu = /[［\[]＃中見出し[］\]]([^\n［］\[\]]+)[［\[]＃中見出し終わり[］\]]/.exec(trimmed);
+        if (aozoraChu) {
+          headings.push({
+            id: `heading-${headings.length + 1}`,
+            level: 2,
+            title: aozoraChu[1].trim(),
+            line: lineNum,
+            offset,
+            format: 'aozora',
+          });
+        } else {
+          const aozoraSho = /[［\[]＃小見出し[］\]]([^\n［］\[\]]+)[［\[]＃小見出し終わり[］\]]/.exec(trimmed);
+          if (aozoraSho) {
+            headings.push({
+              id: `heading-${headings.length + 1}`,
+              level: 3,
+              title: aozoraSho[1].trim(),
+              line: lineNum,
+              offset,
+              format: 'aozora',
+            });
+          } else {
+            // 2. Markdown headings
+            const mdMatch = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+            if (mdMatch) {
+              const level = mdMatch[1].length as 1 | 2 | 3;
+              headings.push({
+                id: `heading-${headings.length + 1}`,
+                level,
+                title: mdMatch[2].trim(),
+                line: lineNum,
+                offset,
+                format: 'markdown',
+              });
+            }
+          }
+        }
+      }
+
+      offset += line.length + 1;
+    }
+
+    return headings;
   }
 
   /**

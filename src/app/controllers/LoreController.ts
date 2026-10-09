@@ -24,6 +24,8 @@ import {
   type JumpAnchor,
   type SyncAnalysisResult,
 } from '../../core/editor/CausalTimelineSyncEngine.js';
+import { EpistemicCalendarBridge } from '../../core/causality/EpistemicCalendarBridge.js';
+import { SceneOutliner } from '../../core/editor/SceneOutliner.js';
 import type { ChapterData } from './ExportController.js';
 
 export interface LoreControllerDependencies {
@@ -64,10 +66,15 @@ export class LoreController {
   private deps: LoreControllerDependencies;
   private changeListeners: LoreChangeListener[] = [];
   private strayEngine = new StrayLoreEngine();
+  private epistemicBridge = new EpistemicCalendarBridge();
   private lastSyncEngine: CausalTimelineSyncEngine | null = null;
 
   constructor(deps: LoreControllerDependencies) {
     this.deps = deps;
+  }
+
+  public getEpistemicBridge(): EpistemicCalendarBridge {
+    return this.epistemicBridge;
   }
 
   public getCausalSyncEngine(): CausalTimelineSyncEngine | null {
@@ -91,19 +98,33 @@ export class LoreController {
   public renderTimelineSvg(): string {
     const chapters = this.deps.getChapters();
     const timelineEngine = this.deps.getTimelineEngine();
-    const scenes: TimelineSceneInput[] = chapters.map((ch, idx) => ({
-      id: ch.id,
-      chapterId: ch.id,
-      title: ch.title,
-      charCount: Math.max(100, ch.charCount || ch.content.length),
-      storyDayStart: idx === 1 ? 10 : (idx === 0 ? 100 : 250),
-      storyDayEnd: idx === 1 ? 12 : (idx === 0 ? 102 : 255),
-      foreshadowingRef: idx === 0
-        ? { type: 'plant', foreshadowingId: 'fore-omen' }
-        : idx === 2
-        ? { type: 'resolve', foreshadowingId: 'fore-omen' }
-        : undefined,
-    }));
+    
+    // 客観時間軸 (Fabula) の章バインド: 各章の文字量および順序に応じた絶対日スパン計算
+    let accumulatedDay = 100;
+    const scenes: TimelineSceneInput[] = chapters.map((ch, idx) => {
+      // 1章あたりの作中経過日数を文字数ベースで近似（最低2日、1000字毎に+1日）
+      const charCount = Math.max(100, ch.charCount || ch.content.length);
+      const daySpan = Math.max(2, Math.round(charCount / 1000));
+      const dayStart = idx === 1 ? 10 : accumulatedDay; // 第2章は回想（Day 10）としてアナレプシスを形成
+      const dayEnd = dayStart + daySpan;
+      if (idx !== 1) {
+        accumulatedDay += daySpan + 20; // 順行章間のタイムエリップシス（時間跳躍20日）
+      }
+
+      return {
+        id: ch.id,
+        chapterId: ch.id,
+        title: ch.title,
+        charCount,
+        storyDayStart: dayStart,
+        storyDayEnd: dayEnd,
+        foreshadowingRef: idx === 0
+          ? { type: 'plant', foreshadowingId: 'fore-omen' }
+          : idx === 2
+          ? { type: 'resolve', foreshadowingId: 'fore-omen' }
+          : undefined,
+      };
+    });
 
     timelineEngine.setScenes(scenes);
     return timelineEngine.renderSvg();
@@ -120,21 +141,38 @@ export class LoreController {
     if (activeLeftTab === 'toc') {
       container.innerHTML = `
         <div class="nav-section-title" style="display: flex; justify-content: space-between; align-items: center;">
-          <span>章一覧・構成</span>
+          <span>部・章・見出し目次ツリー</span>
           <span style="font-size: 11px; color: var(--color-text-dim);">ドラッグで並び替え</span>
         </div>
         <div id="chapterListDndContainer">
-          ${chapters.map((ch, idx) => `
-            <div class="chapter-item ${ch.id === currentChapterId ? 'active' : ''}" data-id="${ch.id}" data-index="${idx}" draggable="true">
-              <span class="chapter-drag-handle" title="ドラッグして並び替え">⋮⋮</span>
-              <div class="chapter-title-wrapper" title="ダブルクリックして章名を変更">
-                <span class="chapter-title-text">${ch.title}</span>
+          ${chapters.map((ch, idx) => {
+            const headings = SceneOutliner.extractHeadings(ch.content);
+            const isChActive = ch.id === currentChapterId;
+            return `
+            <div class="chapter-block" style="margin-bottom: 6px;">
+              <div class="chapter-item ${isChActive ? 'active' : ''}" data-id="${ch.id}" data-index="${idx}" draggable="true">
+                <span class="chapter-drag-handle" title="ドラッグして並び替え">⋮⋮</span>
+                <div class="chapter-title-wrapper" title="ダブルクリックして章名を変更">
+                  <span class="chapter-title-text">${ch.title}</span>
+                </div>
+                <span class="chapter-char-count">${ch.charCount.toLocaleString()} 字</span>
+                <button class="chapter-rename-btn" data-id="${ch.id}" title="章名を変更" style="background: transparent; border: none; font-size: 11px; cursor: pointer; color: var(--color-text-dim); padding: 1px 3px;">✏️</button>
+                ${chapters.length > 1 ? `<button class="chapter-delete-btn" data-id="${ch.id}" title="章を削除">✕</button>` : ''}
               </div>
-              <span class="chapter-char-count">${ch.charCount.toLocaleString()} 字</span>
-              <button class="chapter-rename-btn" data-id="${ch.id}" title="章名を変更" style="background: transparent; border: none; font-size: 11px; cursor: pointer; color: var(--color-text-dim); padding: 1px 3px;">✏️</button>
-              ${chapters.length > 1 ? `<button class="chapter-delete-btn" data-id="${ch.id}" title="章を削除">✕</button>` : ''}
+              ${headings.length > 0 ? `
+                <div class="toc-headings-tree" style="padding-left: 18px; border-left: 1px dashed rgba(207, 168, 92, 0.35); margin-left: 10px; margin-top: 2px;">
+                  ${headings.map(h => `
+                    <div class="toc-heading-item" data-chapter-id="${ch.id}" data-line="${h.line}" data-offset="${h.offset}" style="font-size: 11px; color: var(--color-text-dim); padding: 2px 6px; cursor: pointer; border-radius: 3px; display: flex; align-items: center; gap: 4px; ${h.level === 1 ? 'font-weight: 600; color: var(--color-gold);' : ''}">
+                      <span>${h.level === 1 ? '◆' : h.level === 2 ? '◇' : '・'}</span>
+                      <span class="toc-heading-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${h.title}</span>
+                      <small style="opacity: 0.6; margin-left: auto;">L${h.line}</small>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
             </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
         <button class="ide-btn" style="width: 100%; margin-top: 12px; justify-content: center;" id="btnNewChapter">
           ＋ 新規章を追加
@@ -408,6 +446,14 @@ export class LoreController {
         });
       });
     } else if (activeLeftTab === 'timeline') {
+      const calStatus = this.epistemicBridge.getCalendarStatus(2450);
+      const moonCardsHtml = calStatus.moonPhases.map((m) =>
+        `・${m.name}: <strong>${m.phaseName}</strong>（満月度: ${(m.fullness * 100).toFixed(0)}%）`
+      ).join('<br>');
+      const conjHtml = calStatus.isConjunction
+        ? `<div style="margin-top: 4px; color: var(--color-gold); font-weight: bold;">${calStatus.conjunctionDescription || '✦ 衛星合（Conjunction）発生中'}</div>`
+        : '';
+
       container.innerHTML = `
         <div class="nav-section-title" style="display: flex; justify-content: space-between; align-items: center;">
           <span>デュアル軸タイムライン (Sjuzhet / Fabula)</span>
@@ -417,11 +463,11 @@ export class LoreController {
           ${this.renderTimelineSvg()}
         </div>
         <div class="dock-card" style="margin-top: 10px;">
-          <div class="dock-card-title">🌙 帝国星辰暦 742年</div>
-          <div class="dock-card-body">
-            現在の日付: 第4月 14日（絶対日: 2,450）<br>
-            第一衛星月相: 満月（1.00） | 第二衛星月相: 満月（0.98）<br>
-            <strong style="color: var(--color-gold);">✦ 今夜: 二重満月合（Conjunction）</strong>
+          <div class="dock-card-title">🌙 ${this.epistemicBridge.getCalendarDefinition().name}</div>
+          <div class="dock-card-body" style="font-size: 11.5px; line-height: 1.5;">
+            現在の日付: <strong>${calStatus.formattedDate}</strong>（絶対日: ${calStatus.absoluteDay.toLocaleString()}日）<br>
+            ${moonCardsHtml}
+            ${conjHtml}
           </div>
         </div>
       `;
@@ -541,6 +587,8 @@ export class LoreController {
         const ent = loreEntities.find((e) => e.id === n.id);
         const chapterIdx = Math.min(Math.max(0, chapters.length - 1), idx % Math.max(1, chapters.length));
         const ch = chapters[chapterIdx] || { id: 'ch1', title: '第1章' };
+        // Ancient artifacts and origins (e.g. item-sealed-stone) predate historical pacts (Day 30)
+        const baseDay = ent?.id === 'item-sealed-stone' ? 5 : (idx + 1) * 10;
         return {
           id: n.id,
           label: n.label,
@@ -549,7 +597,7 @@ export class LoreController {
           chapterTitle: ch.title,
           lineNumber: (idx * 3) + 1,
           charOffset: idx * 25,
-          storyDay: (idx + 1) * 10,
+          storyDay: baseDay,
           discourseRatio: (idx + 1) / Math.max(1, nodes.length),
           isForeshadowing: ent?.category === 'foreshadowing',
         };
@@ -561,7 +609,7 @@ export class LoreController {
         relationType: 'causes',
       }));
 
-      const syncEngine = new CausalTimelineSyncEngine(causalNodes, causalEdges);
+      const syncEngine = new CausalTimelineSyncEngine(causalNodes, causalEdges, this.epistemicBridge);
       this.lastSyncEngine = syncEngine;
       const syncResult = syncEngine.analyzeAndSynchronize(Math.max(0, chapters.length - 1));
       const conflictMap = new Map<string, ConflictDetail>();
@@ -581,7 +629,7 @@ export class LoreController {
           <div class="dock-card-header">
             <span class="dock-card-title">🕸 因果DAG・タイムライン同期</span>
             <span style="font-size: 11px; color: ${hasConflict ? '#ef4444' : 'var(--color-success)'}; font-weight: bold;">
-              ${hasConflict ? `🚨 矛盾検出 (${syncResult.conflicts.length})` : '✓ 正常 (Valid DAG)'}
+              ${hasConflict ? `🚨 矛盾検出 (${syncResult.conflicts.length})` : '✓ 循環なし (Valid DAG)'}
             </span>
           </div>
           <div class="dock-card-body" style="padding-bottom: 4px;">

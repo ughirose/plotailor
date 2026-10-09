@@ -24,6 +24,7 @@ export interface HirakuDictionaryEntry {
   ruleId: string;
   description?: string;
   enabledByDefault?: boolean;
+  severity?: 'warning' | 'info';
 }
 
 export interface HirakuFilterConfig {
@@ -53,7 +54,8 @@ export const DEFAULT_HIRAKU_ENTRIES: HirakuDictionaryEntry[] = [
     hiragana: 'こと',
     category: '形式名詞',
     ruleId: 'formal-noun',
-    description: '形式名詞の「こと」はひらがな表記が推奨されます。',
+    severity: 'info',
+    description: '形式名詞の「こと」はひらがな表記の選択肢もあります。',
   },
   {
     id: 'hiraku-toki',
@@ -61,7 +63,8 @@ export const DEFAULT_HIRAKU_ENTRIES: HirakuDictionaryEntry[] = [
     hiragana: 'とき',
     category: '形式名詞',
     ruleId: 'formal-noun',
-    description: '形式名詞・接尾辞的な「とき」はひらがな表記が推奨されます。',
+    severity: 'info',
+    description: '形式名詞・接尾辞的な「とき」はひらがな表記の選択肢もあります。',
   },
   {
     id: 'hiraku-tame',
@@ -69,7 +72,8 @@ export const DEFAULT_HIRAKU_ENTRIES: HirakuDictionaryEntry[] = [
     hiragana: 'ため',
     category: '形式名詞',
     ruleId: 'formal-noun',
-    description: '形式名詞の「ため」はひらがな表記が推奨されます。',
+    severity: 'info',
+    description: '形式名詞の「ため」はひらがな表記の選択肢もあります。',
   },
   {
     id: 'hiraku-mono',
@@ -77,7 +81,8 @@ export const DEFAULT_HIRAKU_ENTRIES: HirakuDictionaryEntry[] = [
     hiragana: 'もの',
     category: '形式名詞',
     ruleId: 'formal-noun',
-    description: '抽象的な概念を表す形式名詞の「もの」はひらがな表記が推奨されます。',
+    severity: 'info',
+    description: '抽象的な概念を表す形式名詞の「もの」はひらがな表記の選択肢もあります。',
   },
   {
     id: 'hiraku-tokoro',
@@ -85,7 +90,8 @@ export const DEFAULT_HIRAKU_ENTRIES: HirakuDictionaryEntry[] = [
     hiragana: 'ところ',
     category: '形式名詞',
     ruleId: 'formal-noun',
-    description: '場面や状況を表す形式名詞の「ところ」はひらがな表記が推奨されます。',
+    severity: 'info',
+    description: '場面や状況を表す形式名詞の「ところ」はひらがな表記の選択肢もあります。',
   },
   {
     id: 'hiraku-toori',
@@ -93,7 +99,8 @@ export const DEFAULT_HIRAKU_ENTRIES: HirakuDictionaryEntry[] = [
     hiragana: 'とおり',
     category: '形式名詞',
     ruleId: 'formal-noun',
-    description: '「〜のとおり」等の形式名詞はひらがな表記が推奨されます。',
+    severity: 'info',
+    description: '「〜のとおり」等の形式名詞はひらがな表記の選択肢もあります。',
   },
   {
     id: 'hiraku-wake',
@@ -101,7 +108,8 @@ export const DEFAULT_HIRAKU_ENTRIES: HirakuDictionaryEntry[] = [
     hiragana: 'わけ',
     category: '形式名詞',
     ruleId: 'formal-noun',
-    description: '理由や状況を表す形式名詞の「わけ」はひらがな表記が推奨されます。',
+    severity: 'info',
+    description: '理由や状況を表す形式名詞の「わけ」はひらがな表記の選択肢もあります。',
   },
 
   // 接続詞 (Conjunctions)
@@ -404,6 +412,35 @@ export class KanjiHirakuDictionaryEngine {
     const diagnostics: HirakuDiagnostic[] = [];
 
     for (const match of matches) {
+      const entry = match.payload;
+
+      // Compound Kanji Boundary Guard:
+      // For single-kanji entries (e.g. 時, 事, 為, 物, 所, 訳),
+      // if adjacent to other Kanji, it is part of a compound word (時代, 場所, 事件, etc.) - do not match!
+      if (entry.kanji.length === 1 && /^[一-龠々]$/.test(entry.kanji)) {
+        const prevChar = match.start > 0 ? text[match.start - 1] : '';
+        const nextChar = match.end < text.length ? text[match.end] : '';
+        if (/^[一-龠々]$/.test(prevChar) || /^[一-龠々]$/.test(nextChar)) {
+          continue;
+        }
+      }
+
+      // Adnominal Nominal vs Formal Noun Disambiguation:
+      // For formal noun "時" (time), if preceded by [体言/名詞] + "の" (e.g. 小供の時, 千年の時, 雨の時),
+      // it is a substantive noun meaning time/era, NOT a formal noun following a predicate adnominal form.
+      if (entry.kanji === '時' && match.start >= 2 && text[match.start - 1] === 'の') {
+        const charBeforeNo = text[match.start - 2];
+        // If preceding character before 'の' is Kanji, Katakana, alphanumeric, treat as substantive noun
+        if (/^[一-龠々\u30A0-\u30FF\da-zA-Z]$/.test(charBeforeNo)) {
+          continue;
+        }
+        // Also check Hiragana nouns preceding 'の' (e.g. むかしの, こどもの, いまの)
+        const precedingSpan = text.slice(Math.max(0, match.start - 5), match.start);
+        if (/(?:むかし|おとこ|おんな|こども|あめ|かぜ|ゆき|はな|とり|やま|かわ|うみ|つき|ほし|ひ|きのう|あす|いま)の$/.test(precedingSpan)) {
+          continue;
+        }
+      }
+
       let from = match.start;
       let to = match.end;
 
@@ -412,13 +449,18 @@ export class KanjiHirakuDictionaryEngine {
         to = options.displayMap.toDisplayOffset(to);
       }
 
-      const entry = match.payload;
+      const severity = entry.severity ?? 'warning';
+      const message =
+        severity === 'info'
+          ? `「${entry.kanji}」はひらがな「${entry.hiragana}」の表記選択肢もあります（文体確認）。`
+          : `「${entry.kanji}」はひらがな「${entry.hiragana}」でひらくことが推奨されます。`;
+
       diagnostics.push({
         id: `hiraku-diag-${from}-${to}-${entry.id}`,
         from,
         to,
-        severity: 'warning',
-        message: `「${entry.kanji}」はひらがな「${entry.hiragana}」でひらくことが推奨されます。`,
+        severity,
+        message,
         kanji: entry.kanji,
         hiragana: entry.hiragana,
         category: entry.category,

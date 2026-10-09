@@ -43,6 +43,11 @@
         <button class="ide-btn" id="btnFullscreen" title="集中執筆全画面モード (F11)">⛶ <span class="btn-label">全画面</span></button>
         <button class="ide-btn" id="btnToggleRightPane" title="検査・推敲ペインの開閉 (Ctrl+J)"><span class="pane-icon">◧</span> <span class="btn-label">検査・推敲</span></button>
         
+        <!-- P2P Collab Peer Indicator Badge -->
+        <button class="ide-btn" id="btnCollabBadge" title="共同編集: 未接続 (クリックで接続設定)" style="padding: 2px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 4px;">
+          <span>👥</span> <span class="btn-label">共同編集</span> <span id="collabPeerCount" style="font-weight: 700; background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 8px; font-size: 10px;">0</span>
+        </button>
+
         <!-- Quick Help Shortcut Button -->
         <button class="ide-btn" id="btnHeaderHelp" title="操作ガイド・ショートカット一覧 (?)" style="padding: 2px 9px; font-weight: bold; font-size: 13px;">?</button>
 
@@ -96,6 +101,21 @@
                 <small>改ざん不能なMerkle創作履歴証明書を発行</small>
               </div>
             </div>
+            <div class="dropdown-item" id="menuExportCommercial">
+              <span>🎁</span>
+              <div>
+                <strong>商業入稿パッケージ一括出力</strong>
+                <small>EPUB3・InDesign・割付指示書・PoPをZIP化</small>
+              </div>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" id="menuCollabOffload">
+              <span>⚡</span>
+              <div>
+                <strong>Colab長編遠隔推敲オフロード</strong>
+                <small>GPUバッチ解析 ＆ AFL-6 CU消費台帳</small>
+              </div>
+            </div>
             <div class="dropdown-divider"></div>
             <div class="dropdown-item" id="menuToggleRuby">
               <span>ふ</span>
@@ -117,6 +137,14 @@
               <div>
                 <strong>操作ガイド・ショートカット</strong>
                 <small>キーバインドと執筆マニュアル</small>
+              </div>
+            </div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" id="menuResetAllData" style="color: var(--color-danger, #ef4444);">
+              <span>⚠️</span>
+              <div>
+                <strong style="color: var(--color-danger, #ef4444);">全データを初期状態にリセット</strong>
+                <small>全作品・設定を消去し初期サンプルに復元</small>
               </div>
             </div>
           </div>
@@ -152,11 +180,13 @@
             <span class="toolbar-chapter-title" style="font-weight: 500;" id="activeChapterTitle">第一章 双月の巡る夜に</span>
             <span class="toolbar-sep" style="color: var(--color-text-dim);">|</span>
             <!-- Quick Format Buttons -->
+            <button class="ide-btn" id="btnQuickHeading" title="選択テキストまたは現在行を青空文庫形式の大見出しに設定/解除" style="padding: 2px 7px; font-size: 11px; height: 22px;">🔖 大見出し</button>
             <button class="ide-btn" id="btnQuickRuby" title="選択テキストをルビ化 (Ctrl+R)" style="padding: 2px 7px; font-size: 11px; height: 22px;">ふ ルビ</button>
             <button class="ide-btn" id="btnQuickBouten" title="選択テキストに傍点を付与" style="padding: 2px 7px; font-size: 11px; height: 22px;">︙ 傍点</button>
             <button class="ide-btn" id="btnQuickBold" title="選択テキストを太字化" style="padding: 2px 7px; font-size: 11px; height: 22px; font-weight: bold;">B 太字</button>
             <button class="ide-btn" id="btnQuickIndent" title="段落字下げの挿入 / 自動字下げ切替" style="padding: 2px 7px; font-size: 11px; height: 22px;"><span id="btnIndentIcon">⇥</span> <span class="btn-label">字下げ</span></button>
             <button class="ide-btn" id="btnToggleGuideline" title="40字ガイドラインの表示/非表示を切り替え" style="padding: 2px 7px; font-size: 11px; height: 22px;">📐 40字ガイド</button>
+            <button class="ide-btn" id="btnToggleHanging" title="句読点・閉じ括弧のぶら下げ表示ON/OFF切替" style="padding: 2px 7px; font-size: 11px; height: 22px;">⤵ ぶら下げ: OFF</button>
           </div>
           <div class="toolbar-right-group" style="display: flex; gap: 6px; align-items: center;">
             <button class="ide-btn" id="btnToolbarUndo" title="元に戻す (Ctrl+Z)" style="padding: 2px 8px; font-size: 11px; height: 24px; min-width: auto;">↩ <span class="btn-label">戻す</span></button>
@@ -208,8 +238,8 @@
         </div>
 
         <div class="pane-tabs">
-          <button class="pane-tab-btn active" data-dock-tab="lore">設定・伏線</button>
-          <button class="pane-tab-btn" data-dock-tab="linter">推敲・文体</button>
+          <button class="pane-tab-btn" data-dock-tab="lore">設定・伏線</button>
+          <button class="pane-tab-btn active" data-dock-tab="linter">推敲・文体</button>
           <button class="pane-tab-btn" data-dock-tab="causality">因果相関図</button>
         </div>
         <div class="dock-content" id="dockContent">
@@ -233,10 +263,11 @@
     <!-- Bottom Status Bar -->
     <footer class="ide-footer">
       <div class="ide-footer-left">
-        <span id="cursorPosBadge" class="cursor-pos-badge" title="キャレット位置 (行 / 行内文字数 / 設定文字数)">
-          <span class="cursor-badge-prefix">L</span><strong id="cursorLine">1</strong>
+        <span id="cursorPosBadge" class="cursor-pos-badge" title="キャレット位置 (行 / 行内文字数 / 設定行長)">
+          <strong id="cursorLine">1</strong><span class="cursor-badge-prefix">行</span>
           <span class="cursor-badge-sep"> </span>
-          <span class="cursor-badge-prefix">C</span><strong id="cursorCol">1</strong>/<span id="cursorMaxCol">40</span>
+          <strong id="cursorCol">1</strong><span class="cursor-badge-prefix">文字</span>
+          <span class="cursor-badge-group">（<span id="cursorMaxCol">40</span>字組）</span>
           <span id="cursorOverflowBadge" class="cursor-overflow-badge" style="display: none;"></span>
         </span>
         <span>|</span>
@@ -253,8 +284,12 @@
         <span id="cadenceFooterIndicator" style="color: var(--color-accent); font-size: 11px;" title="タイピング・ケイデンス（IKI）連動ステートマシン">ケイデンス: 待機</span>
         <span>|</span>
         <span style="color: var(--color-gold); font-size: 11px;" title="OPFS (Origin Private File System) AES-GCM-256 暗号化">🔒 暗号化ローカル保存</span>
-        <span>|</span>
-        <span>Nano-Wasm: <strong style="color: var(--color-success);" title="Wasm SIMD PAS Head (0.6μs) / SPSC RingBuffer (ゼロコピー)">⚡ SIMD Ready (0.6μs)</strong></span>
+        <span id="devMetricsGroup" style="display: none;">
+          <span>|</span>
+          <span>Nano-Wasm: <strong style="color: var(--color-success);" title="Wasm SIMD PAS Head (0.6μs) / SPSC RingBuffer (ゼロコピー)">⚡ SIMD Ready (0.6μs)</strong></span>
+          <span>|</span>
+          <span id="colabCuFooterIndicator" style="cursor: pointer; padding: 1px 4px; border-radius: 3px;" title="AFL-6 Colab 遠隔オフロード累計消費: 0.0000 CU (クリックで台帳・実行モーダル)">Colab: <strong style="color: var(--color-gold);">0.0000 CU</strong></span>
+        </span>
       </div>
     </footer>
   </div>
@@ -308,6 +343,174 @@
               この時点へロールバック
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- P2P Collab Dedicated Modal -->
+  <div class="history-modal-backdrop" id="collabModal" style="display: none;">
+    <div class="history-modal-dialog" style="max-width: 540px; width: 90vw;">
+      <div class="history-modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <h3><span>👥</span> P2P/CRDT 共同編集・ピア設定</h3>
+          <span id="collabStatusText" style="font-size: 11px; color: var(--color-text-dim);">⚪ 未接続</span>
+        </div>
+        <button class="history-modal-close" id="btnCloseCollabModal">&times;</button>
+      </div>
+      <div class="history-modal-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 12px; color: var(--color-text-dim); line-height: 1.6;">
+          サーバーを介さずブラウザ間（同一マシン複数タブまたはP2P）で設定棚（Lore）・伏線データをリアルタイムに競合なく同期します（LWW-CRDT）。
+        </div>
+
+        <div style="display: grid; grid-template-columns: 100px 1fr; gap: 8px; align-items: center; font-size: 12px;">
+          <label style="color: var(--color-gold); font-weight: 600;">ルーム識別子:</label>
+          <input type="text" id="collabRoomInput" class="ide-input" style="padding: 4px 8px; font-size: 12px; width: 100%;" placeholder="plotailor-room-default_work">
+
+          <label style="color: var(--color-gold); font-weight: 600;">執筆者ネーム:</label>
+          <input type="text" id="collabNameInput" class="ide-input" style="padding: 4px 8px; font-size: 12px; width: 100%;" placeholder="執筆者名">
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+          <button class="ide-btn ide-btn-primary" id="btnToggleCollabConnect" style="padding: 4px 14px; font-size: 12px;">接続</button>
+        </div>
+
+        <div style="border-top: 1px solid var(--color-border); padding-top: 12px;">
+          <div style="font-size: 12px; font-weight: 600; margin-bottom: 8px; color: var(--color-text-dim);">
+            参加中の執筆者ピア一覧
+          </div>
+          <div id="collabPeerList" style="display: flex; flex-direction: column; gap: 4px; max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.1); border: 1px solid var(--color-border); border-radius: 4px; padding: 6px;">
+            <div style="color: var(--color-text-dim); font-size: 11px; padding: 8px;">未接続です。ルームに接続すると参加ピアが表示されます。</div>
+          </div>
+        </div>
+
+        <!-- WebRTC Serverless Remote Peer P2P Signaling Section -->
+        <div style="border-top: 1px solid var(--color-border); padding-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--color-gold);">
+              🌐 遠隔 WebRTC P2P 接続（完全サーバーレス手動シグナリング）
+            </div>
+            <span id="webrtcStatusIndicator" style="font-size: 11px; color: var(--color-text-dim);">WebRTC: ⚪ 未接続</span>
+          </div>
+          <div style="font-size: 11px; color: var(--color-text-dim); line-height: 1.5;">
+            中央サーバー不要。STUN NAT越えを用いた手動招待コード／応答コード交換で、遠隔地の相手と直接暗号化接続します。
+          </div>
+
+          <!-- Role Selector Sub-Tabs: Host vs Guest -->
+          <div style="display: flex; gap: 4px; border-bottom: 1px solid var(--color-border); padding-bottom: 4px;">
+            <button class="ide-btn active" id="btnTabCollabHost" style="font-size: 11px; padding: 3px 10px; font-weight: 600;">👑 ホスト（部屋主・招待側）</button>
+            <button class="ide-btn" id="btnTabCollabGuest" style="font-size: 11px; padding: 3px 10px; font-weight: 500;">🤝 ゲスト（参加側）</button>
+          </div>
+
+          <!-- Panel 1: Host Mode -->
+          <div id="collabHostPanel" style="background: rgba(0,0,0,0.15); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; display: flex; flex-direction: column; gap: 12px;">
+            <div>
+              <div style="font-size: 11px; font-weight: 600; margin-bottom: 4px; color: var(--color-gold);">
+                手順 1: 招待コードを発行して相手に送信
+              </div>
+              <div style="display: flex; gap: 6px; margin-bottom: 4px;">
+                <button class="ide-btn" id="btnGenerateInviteCode" style="font-size: 11px; padding: 3px 10px; white-space: nowrap;">招待コード発行（コピー）</button>
+                <input type="text" id="collabInviteCodeArea" class="ide-input" readonly style="font-size: 10px; width: 100%; font-family: monospace; padding: 2px 6px;" placeholder="発行ボタンを押すと招待コードが生成されます">
+              </div>
+            </div>
+
+            <div style="border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 8px;">
+              <div style="font-size: 11px; font-weight: 600; margin-bottom: 4px; color: var(--color-gold);">
+                手順 2: ゲストから返信された接続応答コードを入力して接続
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <input type="text" id="collabAnswerInputArea" class="ide-input" style="font-size: 10px; width: 100%; font-family: monospace; padding: 2px 6px;" placeholder="ゲストから受け取った接続応答コードを貼り付け">
+                <button class="ide-btn ide-btn-primary" id="btnAcceptAnswerCode" style="font-size: 11px; padding: 3px 12px; white-space: nowrap;">接続確定</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel 2: Guest Mode -->
+          <div id="collabGuestPanel" style="display: none; background: rgba(0,0,0,0.15); border: 1px solid var(--color-border); border-radius: 4px; padding: 12px; flex-direction: column; gap: 12px;">
+            <div>
+              <div style="font-size: 11px; font-weight: 600; margin-bottom: 4px; color: var(--color-accent);">
+                手順: ホストの招待コードを受け取り、接続応答コードを返信
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                <input type="text" id="collabJoinOfferArea" class="ide-input" style="font-size: 10px; width: 100%; font-family: monospace; padding: 2px 6px;" placeholder="ホストから受け取った招待コードを貼り付け">
+                <div style="display: flex; gap: 6px;">
+                  <button class="ide-btn" id="btnGenerateAnswerCode" style="font-size: 11px; padding: 3px 10px; white-space: nowrap;">接続応答コード生成（コピー）</button>
+                  <input type="text" id="collabGeneratedAnswerArea" class="ide-input" readonly style="font-size: 10px; width: 100%; font-family: monospace; padding: 2px 6px;" placeholder="生成された応答コードをホストに返信してください">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Colab Offload & AFL-6 CU Ledger Dedicated Modal -->
+  <div class="history-modal-backdrop" id="offloadModal" style="display: none;">
+    <div class="history-modal-dialog" style="max-width: 680px; width: 92vw; max-height: 85vh; display: flex; flex-direction: column;">
+      <div class="history-modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <h3><span>⚡</span> Colab 長編遠隔オフロード ＆ AFL-6 CU台帳</h3>
+          <span id="cuLedgerTotalBadge" style="font-size: 11px; color: var(--color-gold); font-weight: 700; background: rgba(207,168,92,0.15); padding: 2px 6px; border-radius: 4px;">0.0000 CU</span>
+        </div>
+        <button class="history-modal-close" id="btnCloseOffloadModal">&times;</button>
+      </div>
+      <div class="history-modal-body" style="padding: 16px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;">
+        <div style="font-size: 12px; color: var(--color-text-dim); line-height: 1.6;">
+          50万字規模の長編原稿を章・場面区切りの意味的境界で防御的にチャンク分割し、Google Colab遠隔GPU（L4 / A100）へオフロード推敲します。<br>
+          <strong style="color: var(--color-gold);">【AFL-6遵守】</strong> 失敗・タイムアウトを含む全リソース消費（起動オーバーヘッド込）を100%全数計上します。
+        </div>
+
+        <div style="display: grid; grid-template-columns: 120px 1fr 100px 100px; gap: 8px; align-items: center; font-size: 12px;">
+          <label style="color: var(--color-gold); font-weight: 600;">Colabエンドポイント:</label>
+          <input type="text" id="colabEndpointInput" class="ide-input" style="padding: 4px 8px; font-size: 12px; width: 100%;" value="http://127.0.0.1:8000" placeholder="https://colab-proxy... or local">
+
+          <label style="color: var(--color-gold); font-weight: 600; text-align: right;">GPU:</label>
+          <select id="colabGpuSelect" class="ide-input" style="padding: 4px 6px; font-size: 12px;">
+            <option value="L4" selected>L4 (1.05 CU/h)</option>
+            <option value="A100">A100 (2.06 CU/h)</option>
+            <option value="T4">T4 (0.50 CU/h)</option>
+          </select>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; gap: 8px; align-items: center;">
+          <button class="ide-btn" id="btnRunChapterOffload" style="padding: 4px 12px; font-size: 12px;">現在の章のみオフロード</button>
+          <button class="ide-btn ide-btn-primary" id="btnRunColabOffload" style="padding: 4px 14px; font-size: 12px;">全編一括オフロード解析 ⚡</button>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div id="offloadProgressArea" style="display: none; background: rgba(0,0,0,0.2); border: 1px solid var(--color-border); border-radius: 4px; padding: 10px;">
+          <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px;">
+            <span id="offloadStatusText" style="color: var(--color-gold);">処理中...</span>
+          </div>
+          <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+            <div id="offloadProgressBar" style="width: 0%; height: 100%; background: var(--color-gold); transition: width 0.2s ease;"></div>
+          </div>
+        </div>
+
+        <!-- AFL-6 Ledger Table -->
+        <div style="border-top: 1px solid var(--color-border); padding-top: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-size: 12px; font-weight: 600; color: var(--color-text-dim);">AFL-6 CU 消費台帳（100%全数計上履歴）</div>
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+            <thead>
+              <tr style="border-bottom: 1px solid var(--color-border); color: var(--color-gold); text-align: left;">
+                <th style="padding: 4px 8px;">時刻</th>
+                <th style="padding: 4px 8px;">GPU</th>
+                <th style="padding: 4px 8px; text-align: right;">時間</th>
+                <th style="padding: 4px 8px; text-align: right;">文字数</th>
+                <th style="padding: 4px 8px; text-align: right;">消費CU (内OVH)</th>
+                <th style="padding: 4px 8px;">状態</th>
+              </tr>
+            </thead>
+            <tbody id="cuLedgerTableBody">
+              <tr>
+                <td colspan="6" style="text-align: center; color: var(--color-text-dim); padding: 12px;">
+                  記録されたColab実行セッションはありません (全リソース消費100%全数計上)
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -375,11 +578,18 @@
         <button class="history-modal-close" id="btnCloseProjectModal">&times;</button>
       </div>
       <div class="history-modal-body">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
           <p style="font-size: 12px; color: var(--color-text-dim); margin: 0;">
-            端末内ストレージ（OPFS）に安全に保存された作品一覧です。
+            端末内ストレージまたはローカル実ディレクトリと同期中の作品一覧です。
           </p>
-          <button class="ide-btn btn-primary" id="btnCreateNewProject" style="font-size: 12px; padding: 4px 10px;">＋ 新規作品を作成</button>
+          <div style="display: flex; gap: 6px;">
+            <button class="ide-btn" id="btnConnectLocalDir" style="font-size: 12px; padding: 4px 10px;" title="PC上の実フォルダを選択して直接読み書きします">📁 ローカルフォルダ接続</button>
+            <button class="ide-btn btn-primary" id="btnCreateNewProject" style="font-size: 12px; padding: 4px 10px;">＋ 新規作品を作成</button>
+          </div>
+        </div>
+        <div id="localDirStatusBanner" style="display: none; padding: 6px 10px; margin-bottom: 10px; background: rgba(35, 134, 54, 0.12); border: 1px solid rgba(35, 134, 54, 0.3); border-radius: 4px; font-size: 11px; color: var(--color-text); align-items: center; justify-content: space-between;">
+          <span id="localDirStatusText">📁 ローカル同期中: -</span>
+          <button class="ide-btn" id="btnDisconnectLocalDir" style="font-size: 10px; padding: 2px 6px;">切断</button>
         </div>
         <div class="history-list" id="projectListContainer">
           <!-- Generated dynamically -->
@@ -553,6 +763,52 @@
               <button class="ide-btn btn-primary" id="btnDownloadPrhJson">DL (.json)</button>
             </div>
           </div>
+
+          <!-- 9. Denshokyo EPUB3 Binary (.epub) -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📚 電書協 EPUB3 電子書籍バイナリ (.epub)</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">日本電子書籍出版社協会(EBPAJ)リフロー規格完全準拠。Kindle/Apple Books/Kinoppy等に直納可能</div>
+            </div>
+            <div>
+              <button class="ide-btn btn-primary" id="btnDownloadDenshokyoEpubBinary">DL (.epub)</button>
+            </div>
+          </div>
+
+          <!-- 10. Adobe InDesign Tagged Text (.txt) -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">🖋️ Adobe InDesign タグ付きテキスト (&lt;UNICODE-WIN&gt;)</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">DTP組版・印刷所入稿用。ルビ・圏点・縦中横・段落スタイル（タイトル・見出し・会話文）を自動定義</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="ide-btn" id="btnCopyInDesignTagged">コピー</button>
+              <button class="ide-btn btn-primary" id="btnDownloadInDesignTagged">DL (.txt)</button>
+            </div>
+          </div>
+
+          <!-- 11. Manuscript Spec Sheet (.txt) -->
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📋 商業原稿仕様書・割付指示書</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">文字数集計、400字詰原稿用紙換算、章構成、全ルビ一覧、登場人物対照表、版面設計指示</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="ide-btn" id="btnCopySpecSheet">コピー</button>
+              <button class="ide-btn btn-primary" id="btnDownloadSpecSheet">DL (.txt)</button>
+            </div>
+          </div>
+
+          <!-- 12. Commercial Manuscript Packager (.zip) -->
+          <div style="background: linear-gradient(135deg, rgba(207,168,92,0.1) 0%, rgba(184,143,64,0.05) 100%); border: 1px solid var(--color-gold); border-radius: 8px; padding: 16px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px; color: var(--color-gold); margin-bottom: 4px;">🎁 商業原稿 入稿オールインワン・パッケージ (.zip)</div>
+              <div style="font-size: 12px; color: var(--color-text-dim);">EPUB3・InDesignタグ付き・青空テキスト・Lore Bible・割付指示書・PoP創作証明を一括パッケージ化</div>
+            </div>
+            <div>
+              <button class="ide-btn btn-primary" id="btnDownloadCommercialPackage" style="font-weight: 700; background: var(--color-gold); color: #000;">一括生成 (.zip)</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -565,181 +821,217 @@
         <h3><span>⚙️</span> エディタ環境設定</h3>
         <button class="history-modal-close" id="btnCloseSettingsModal">&times;</button>
       </div>
-      <div class="history-modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
-        <!-- 1. Auto Indent Toggle -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">段落自動字下げ (Tabキー全角スペース)</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">Tabキーで全角スペース「　」を挿入し段落頭をインデント</small>
-          </div>
-          <input type="checkbox" id="settingAutoIndent" checked style="width: 18px; height: 18px; cursor: pointer;">
-        </div>
-
-        <!-- 2. Auto Ruby Complete -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">ルビリアルタイム展開・自動補完</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">《ルビ》記法を入力した際にリッチルビとして展開表示</small>
-          </div>
-          <input type="checkbox" id="settingAutoRuby" checked style="width: 18px; height: 18px; cursor: pointer;">
-        </div>
-
-        <!-- 3. Realtime Linter -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">推敲・文体装飾リント表示</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">助詞連続や視点ブレなどの波線・下線ハイライトを表示</small>
-          </div>
-          <input type="checkbox" id="settingRealtimeLinter" checked style="width: 18px; height: 18px; cursor: pointer;">
-        </div>
-
-        <!-- 3.5 Vertical Latin Upright -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">縦書き時英数字・アルファベット正立（縦向き）</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">縦書き時に半角英数字を寝かせず（90度回転させず）まっすぐ縦に配置</small>
-          </div>
-          <input type="checkbox" id="settingVerticalUpright" style="width: 18px; height: 18px; cursor: pointer;">
-        </div>
-
-        <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 4px 0;">
-
-        <!-- 4. Font Size -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">本文フォントサイズ</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">エディタ内の文字サイズを調整</small>
-          </div>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <select id="settingFontSize" class="ide-input" style="width: 110px;">
-              <option value="14px">小 (14px)</option>
-              <option value="16px" selected>標準 (16px)</option>
-              <option value="18px">中 (18px)</option>
-              <option value="20px">大 (20px)</option>
-              <option value="24px">特大 (24px)</option>
-              <option value="custom">カスタム</option>
-            </select>
-            <div id="customFontSizeWrapper" style="display: flex; align-items: center; gap: 2px;">
-              <input type="number" id="settingCustomFontSize" class="ide-input" min="10" max="64" value="16" style="width: 55px; text-align: right; padding: 2px 4px; font-size: 12px;">
-              <span style="font-size: 11px; color: var(--color-text-dim);">px</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 5. Font Family -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">本文フォント指定</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">明朝体・ゴシック体・システム標準の切り替え</small>
-          </div>
-          <select id="settingFontFamily" class="ide-input" style="width: 150px;">
-            <option value="mincho" selected>しっぽり明朝 (推奨)</option>
-            <option value="gothic">BIZ UDPゴシック</option>
-            <option value="system">システム標準</option>
-          </select>
-        </div>
-
-        <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 4px 0;">
-
-        <!-- 6. Snapshot Recording Frequency -->
-        <div style="display: flex; flex-direction: column; gap: 8px;">
+      <div class="settings-tabs">
+        <button class="settings-tab-btn active" data-settings-tab="typesetting"><span>🖋️</span> 組版・表示</button>
+        <button class="settings-tab-btn" data-settings-tab="input"><span>⌨️</span> 入力・推敲</button>
+        <button class="settings-tab-btn" data-settings-tab="maintenance"><span>🛡️</span> 保守・管理</button>
+      </div>
+      <div class="history-modal-body" style="padding: 20px;">
+        <!-- Panel 1: 組版・表示 -->
+        <div data-settings-panel="typesetting" style="display: flex; flex-direction: column; gap: 16px;">
+          <!-- 本文フォント指定 -->
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
-              <strong style="font-size: 13px;">履歴スナップショット記録頻度</strong>
-              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">文章入力時に履歴を残す間隔・文字数の粒度を調整</small>
+              <strong style="font-size: 13px;">本文フォント指定</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">明朝体・ゴシック体（等幅）・システム標準の切り替え</small>
             </div>
-            <select id="settingSnapshotFrequency" class="ide-input" style="width: 180px; cursor: pointer;">
-              <option value="minimal">極小 (大節・60秒単位)</option>
-              <option value="low">ひかえめ (段落・30秒単位)</option>
-              <option value="standard" selected>標準 (25字・15秒単位)</option>
-              <option value="high">こまめ (短文・5秒単位)</option>
-              <option value="custom">カスタム (任意指定)</option>
+            <select id="settingFontFamily" class="ide-input" style="width: 170px;">
+              <option value="mincho" selected>しっぽり明朝 (推奨)</option>
+              <option value="gothic">BIZ UDゴシック (等幅)</option>
+              <option value="system">システム標準</option>
             </select>
           </div>
 
-          <!-- Custom Frequency Controls -->
-          <div id="settingCustomSnapshotGroup" style="display: none; padding: 10px; background: rgba(0, 0, 0, 0.03); border: 1px dashed var(--color-border); border-radius: 4px;">
-            <div style="display: flex; gap: 12px; align-items: center;">
-              <div style="flex: 1;">
-                <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 2px;">記録閾値（文字数）:</label>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <input type="number" id="settingSnapshotCustomChars" class="ide-input" min="5" max="2000" value="25" style="width: 100%; font-size: 12px; padding: 3px 6px;">
-                  <span style="font-size: 11px; color: var(--color-text-dim);">字</span>
-                </div>
-              </div>
-              <div style="flex: 1;">
-                <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 2px;">記録閾値（静止秒数）:</label>
-                <div style="display: flex; align-items: center; gap: 4px;">
-                  <input type="number" id="settingSnapshotCustomSeconds" class="ide-input" min="2" max="600" value="15" style="width: 100%; font-size: 12px; padding: 3px 6px;">
-                  <span style="font-size: 11px; color: var(--color-text-dim);">秒</span>
-                </div>
+          <!-- 本文フォントサイズ -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">本文フォントサイズ</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">エディタ内の文字サイズを調整</small>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <select id="settingFontSize" class="ide-input" style="width: 110px;">
+                <option value="14px">小 (14px)</option>
+                <option value="16px" selected>標準 (16px)</option>
+                <option value="18px">中 (18px)</option>
+                <option value="20px">大 (20px)</option>
+                <option value="24px">特大 (24px)</option>
+                <option value="custom">カスタム</option>
+              </select>
+              <div id="customFontSizeWrapper" style="display: flex; align-items: center; gap: 2px;">
+                <input type="number" id="settingCustomFontSize" class="ide-input" min="10" max="64" value="16" style="width: 55px; text-align: right; padding: 2px 4px; font-size: 12px;">
+                <span style="font-size: 11px; color: var(--color-text-dim);">px</span>
               </div>
             </div>
-            <small style="font-size: 10px; color: var(--color-text-dim); margin-top: 4px; display: block;">※指定文字数以上の打鍵、または執筆を中断した静止秒数で自動スナップショットを記録します。</small>
+          </div>
+
+          <!-- 縦書き時英数字・アルファベット正立 -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">縦書き時英数字・アルファベット正立（縦向き）</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">縦書き時に半角英数字を寝かせず（90度回転させず）まっすぐ縦に配置</small>
+            </div>
+            <input type="checkbox" id="settingVerticalUpright" style="width: 18px; height: 18px; cursor: pointer;">
+          </div>
+
+          <!-- 1行文字数 (スライダー + ステッパー) -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">1行あたりの文字数 (禁則処理基準)</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">禁則処理・折り返し計算の1行文字数（30〜50文字）</small>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <button class="ide-btn" id="btnKinsokuColsDec" style="padding: 2px 7px; font-size: 12px; cursor: pointer;">-</button>
+              <input type="range" id="settingKinsokuColumns" min="30" max="50" value="40" step="1" style="width: 90px; cursor: pointer;">
+              <button class="ide-btn" id="btnKinsokuColsInc" style="padding: 2px 7px; font-size: 12px; cursor: pointer;">+</button>
+              <span id="settingKinsokuColumnsVal" style="font-size: 12px; font-weight: 500; min-width: 32px; text-align: right;">40字</span>
+            </div>
+          </div>
+
+          <!-- ぶら下げ組みの許可 -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">ぶら下げ組みの許可</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">句読点等の行末ぶら下げ（1文字はみ出し配置）を許容</small>
+            </div>
+            <input type="checkbox" id="settingKinsokuHanging" checked style="width: 18px; height: 18px; cursor: pointer;">
+          </div>
+
+          <!-- 字詰めガイドライン / ルーラー -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">字詰めガイドライン / ルーラー</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">1行あたりの設定文字数目盛・境界線をエディタ本文に表示</small>
+            </div>
+            <input type="checkbox" id="settingColumnGuideline" checked style="width: 18px; height: 18px; cursor: pointer;">
           </div>
         </div>
 
-        <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 4px 0;">
-
-        <!-- 7. Kinsoku Columns -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">1行あたりの文字数 (禁則処理基準)</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">禁則処理・折り返し計算の1行文字数（30〜50文字）</small>
+        <!-- Panel 2: 入力・推敲 -->
+        <div data-settings-panel="input" style="display: none; flex-direction: column; gap: 16px;">
+          <!-- 段落自動字下げ -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">段落自動字下げ (Tabキー全角スペース)</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">Tabキーで全角スペース「　」を挿入し段落頭をインデント</small>
+            </div>
+            <input type="checkbox" id="settingAutoIndent" checked style="width: 18px; height: 18px; cursor: pointer;">
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <input type="range" id="settingKinsokuColumns" min="30" max="50" value="40" step="1" style="width: 110px; cursor: pointer;">
-            <span id="settingKinsokuColumnsVal" style="font-size: 12px; font-weight: 500; min-width: 32px; text-align: right;">40字</span>
+
+          <!-- ルビ自動補完 -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">ルビリアルタイム展開・自動補完</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">《ルビ》記法を入力した際にリッチルビとして展開表示</small>
+            </div>
+            <input type="checkbox" id="settingAutoRuby" checked style="width: 18px; height: 18px; cursor: pointer;">
+          </div>
+
+          <!-- 推敲リント表示 -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">推敲・文体装飾リント表示</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">助詞連続や視点ブレなどの波線・下線ハイライトを表示</small>
+            </div>
+            <input type="checkbox" id="settingRealtimeLinter" checked style="width: 18px; height: 18px; cursor: pointer;">
+          </div>
+
+          <!-- 履歴スナップショット記録頻度 -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="font-size: 13px;">履歴スナップショット記録頻度</strong>
+                <small style="display: block; color: var(--color-text-dim); font-size: 11px;">文章入力時に履歴を残す間隔・文字数の粒度を調整</small>
+              </div>
+              <select id="settingSnapshotFrequency" class="ide-input" style="width: 180px; cursor: pointer;">
+                <option value="minimal">極小 (大節・60秒単位)</option>
+                <option value="low">ひかえめ (段落・30秒単位)</option>
+                <option value="standard" selected>標準 (25字・15秒単位)</option>
+                <option value="high">こまめ (短文・5秒単位)</option>
+                <option value="custom">カスタム (任意指定)</option>
+              </select>
+            </div>
+
+            <!-- Custom Frequency Controls -->
+            <div id="settingCustomSnapshotGroup" style="display: none; padding: 10px; background: rgba(0, 0, 0, 0.03); border: 1px dashed var(--color-border); border-radius: 4px;">
+              <div style="display: flex; gap: 12px; align-items: center;">
+                <div style="flex: 1;">
+                  <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 2px;">記録閾値（文字数）:</label>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <input type="number" id="settingSnapshotCustomChars" class="ide-input" min="5" max="2000" value="25" style="width: 100%; font-size: 12px; padding: 3px 6px;">
+                    <span style="font-size: 11px; color: var(--color-text-dim);">字</span>
+                  </div>
+                </div>
+                <div style="flex: 1;">
+                  <label style="font-size: 11px; color: var(--color-text-dim); display: block; margin-bottom: 2px;">記録閾値（静止秒数）:</label>
+                  <div style="display: flex; align-items: center; gap: 4px;">
+                    <input type="number" id="settingSnapshotCustomSeconds" class="ide-input" min="2" max="600" value="15" style="width: 100%; font-size: 12px; padding: 3px 6px;">
+                    <span style="font-size: 11px; color: var(--color-text-dim);">秒</span>
+                  </div>
+                </div>
+              </div>
+              <small style="font-size: 10px; color: var(--color-text-dim); margin-top: 4px; display: block;">※指定文字数以上の打鍵、または執筆を中断した静止秒数で自動スナップショットを記録します。</small>
+            </div>
+          </div>
+
+          <!-- 目標執筆文字数 -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">目標執筆文字数</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">全画面ステータスバー等に表示する目標文字数（1,000〜50,000字）</small>
+            </div>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <input type="number" id="settingTargetWordCount" class="ide-input" min="1000" max="50000" step="500" value="5000" style="width: 85px; text-align: right; padding: 2px 6px; font-size: 12px;">
+              <span style="font-size: 11px; color: var(--color-text-dim);">字</span>
+            </div>
+          </div>
+
+          <!-- アイドル判定時間 -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">アイドル（休憩）判定時間</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">タイピング休止と判定する時間閾値</small>
+            </div>
+            <select id="settingIdleThreshold" class="ide-input" style="width: 160px; cursor: pointer;">
+              <option value="30000">30秒 (短時間休憩)</option>
+              <option value="60000" selected>1分 (標準)</option>
+              <option value="180000">3分 (じっくり推敲)</option>
+            </select>
           </div>
         </div>
 
-        <!-- 8. Kinsoku Hanging -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">ぶら下げ組みの許可</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">句読点等の行末ぶら下げ（1文字はみ出し配置）を許容</small>
+        <!-- Panel 3: 保守・管理 -->
+        <div data-settings-panel="maintenance" style="display: none; flex-direction: column; gap: 16px;">
+          <!-- 開発者・内部メトリクス表示トグル -->
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 13px;">開発者・内部メトリクス表示 (Nano-Wasm / Colab CU)</strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px;">ステータスバー右端にWasm推論速度やColab遠隔消費CUを表示</small>
+            </div>
+            <input type="checkbox" id="settingShowDevMetrics" style="width: 18px; height: 18px; cursor: pointer;">
           </div>
-          <input type="checkbox" id="settingKinsokuHanging" checked style="width: 18px; height: 18px; cursor: pointer;">
-        </div>
 
-        <!-- 8.5. Column Guideline & Ruler -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">字詰めガイドライン / ルーラー</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">1行あたりの設定文字数目盛・境界線をエディタ本文に表示</small>
-          </div>
-          <input type="checkbox" id="settingColumnGuideline" checked style="width: 18px; height: 18px; cursor: pointer;">
-        </div>
+          <hr style="border: 0; border-top: 1px solid var(--color-border); margin: 2px 0;">
 
-        <!-- 9. Target Word Count -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">目標執筆文字数</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">全画面ステータスバー等に表示する目標文字数（1,000〜50,000字）</small>
+          <!-- 危険ゾーン: 全データ初期化 -->
+          <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 6px; padding: 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px;">
+            <div>
+              <strong style="font-size: 13px; color: var(--color-danger, #ef4444); display: flex; align-items: center; gap: 4px;">
+                <span>⚠️</span> 全データの初期化・リセット
+              </strong>
+              <small style="display: block; color: var(--color-text-dim); font-size: 11px; margin-top: 4px;">
+                保存された作品・章・設定資料・履歴を消去し、初期サンプル状態（星辰の残響）に戻します。<br>
+                ※誤操作防止のため、確認ダイアログで「RESET」の入力が必要です。
+              </small>
+            </div>
+            <button class="ide-btn" id="btnResetAllData" style="background: var(--color-danger, #ef4444); color: #fff; border: none; font-size: 11px; padding: 6px 14px; white-space: nowrap; cursor: pointer; font-weight: 600; border-radius: 4px;">
+              全データ初期化
+            </button>
           </div>
-          <div style="display: flex; align-items: center; gap: 4px;">
-            <input type="number" id="settingTargetWordCount" class="ide-input" min="1000" max="50000" step="500" value="5000" style="width: 85px; text-align: right; padding: 2px 6px; font-size: 12px;">
-            <span style="font-size: 11px; color: var(--color-text-dim);">字</span>
-          </div>
-        </div>
-
-        <!-- 10. Idle Threshold -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <strong style="font-size: 13px;">アイドル（休憩）判定時間</strong>
-            <small style="display: block; color: var(--color-text-dim); font-size: 11px;">タイピング休止と判定する時間閾値</small>
-          </div>
-          <select id="settingIdleThreshold" class="ide-input" style="width: 160px; cursor: pointer;">
-            <option value="30000">30秒 (短時間休憩)</option>
-            <option value="60000" selected>1分 (標準)</option>
-            <option value="180000">3分 (じっくり推敲)</option>
-          </select>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Help is now rendered inline in right pane dock tab -->
   <!-- Fullscreen Exit Floating Button -->
   <button class="fullscreen-exit-btn" id="btnExitFullscreen">
     <span>✕</span> 全画面執筆を終了 (Esc)

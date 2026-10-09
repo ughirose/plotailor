@@ -103,12 +103,12 @@ describe('Settings Regulation Integration & LocalStorage Persistence', () => {
       const app = new PlotailorApp();
 
       expect(app.getKinsokuColumns()).toBe(40);
-      expect(app.getKinsokuHanging()).toBe(true);
+      expect(app.getKinsokuHanging()).toBe(false);
       expect(app.getTargetWordCount()).toBe(5000);
       expect(app.getIdleThresholdMs()).toBe(60000);
 
       expect(app.getKinsokuEngine().getConfig().columnsPerLine).toBe(40);
-      expect(app.getKinsokuEngine().getConfig().allowHanging).toBe(true);
+      expect(app.getKinsokuEngine().getConfig().allowHanging).toBe(false);
       expect(app.getFullscreenStatusBar()?.getState().targetWordCount).toBe(5000);
       expect(app.getVelocityWidget().getIdleThreshold()).toBe(60000);
     });

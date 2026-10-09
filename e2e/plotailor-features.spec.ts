@@ -3,6 +3,8 @@ import * as path from 'path';
 
 test.describe('Plotailor Literature IDE - Core Features E2E', () => {
   test.beforeEach(async ({ page }) => {
+    page.on('console', (msg) => console.log(`[BROWSER CONSOLE] ${msg.type()}: ${msg.text()}`));
+    page.on('pageerror', (err) => console.log(`[BROWSER ERROR] ${err.message}`));
     await page.goto('/app.html');
     await page.waitForLoadState('domcontentloaded');
   });
@@ -180,11 +182,15 @@ test.describe('Plotailor Literature IDE - Core Features E2E', () => {
     const editor = page.locator('.cm-content');
     await expect(editor).toBeVisible();
 
-    // 1. Test vertical writing mode
+    const paneCenter = page.locator('#paneCenter');
     const btnVertical = page.locator('#btnToggleOrientation');
     await expect(btnVertical).toBeVisible();
-    await btnVertical.click();
-    await expect(page.locator('#paneCenter')).toHaveClass(/vertical-rl/);
+
+    // 1. In Plotailor, default writing orientation is vertical-rl
+    if (!(await paneCenter.evaluate((el) => el.classList.contains('vertical-rl')))) {
+      await btnVertical.click();
+    }
+    await expect(paneCenter).toHaveClass(/vertical-rl/);
 
     // Screenshot of multi-layer decoration & editor in vertical writing
     await page.screenshot({
@@ -192,9 +198,13 @@ test.describe('Plotailor Literature IDE - Core Features E2E', () => {
       fullPage: false,
     });
 
-    // 2. Switch back to horizontal writing
+    // 2. Toggle to horizontal writing
     await btnVertical.click();
-    await expect(page.locator('#paneCenter')).not.toHaveClass(/vertical-rl/);
+    await expect(paneCenter).not.toHaveClass(/vertical-rl/);
+
+    // 3. Toggle back to vertical writing
+    await btnVertical.click();
+    await expect(paneCenter).toHaveClass(/vertical-rl/);
   });
 
   test('Dual-Track Timeline: Sjuzhet vs Fabula, cubic Bezier splines, and foreshadowing arcs', async ({ page }) => {
@@ -259,9 +269,8 @@ test.describe('Plotailor Literature IDE - Core Features E2E', () => {
     await shelvedFilterChip.click();
     await expect(shelvedFilterChip).toHaveClass(/active/);
 
-    const shelvedCard = page.locator('.lore-card').first();
+    const shelvedCard = page.locator('.lore-card', { hasText: '忘却の古文書' });
     await expect(shelvedCard).toBeVisible();
-    await expect(shelvedCard).toContainText('忘却の古文書');
 
     // Verify promote button
     const btnPromote = shelvedCard.locator('.btn-promote-lore');

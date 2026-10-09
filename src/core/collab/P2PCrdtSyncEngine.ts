@@ -38,6 +38,68 @@ export interface P2PTransportAdapter {
 }
 
 /**
+ * 複数の P2PTransportAdapter を束ねて透過的に送受信する複合トランスポート
+ */
+export class MultiTransportAdapter implements P2PTransportAdapter {
+  private adapters: Set<P2PTransportAdapter> = new Set();
+  private messageCallback?: (message: CrdtMessage) => void;
+
+  constructor(initialAdapters: P2PTransportAdapter[] = []) {
+    for (const a of initialAdapters) {
+      this.addAdapter(a);
+    }
+  }
+
+  public addAdapter(adapter: P2PTransportAdapter): void {
+    if (this.adapters.has(adapter)) return;
+    this.adapters.add(adapter);
+    adapter.onMessage((msg) => {
+      if (this.messageCallback) {
+        this.messageCallback(msg);
+      }
+    });
+  }
+
+  public removeAdapter(adapter: P2PTransportAdapter): void {
+    this.adapters.delete(adapter);
+  }
+
+  public getAdapters(): P2PTransportAdapter[] {
+    return Array.from(this.adapters);
+  }
+
+  public send(message: CrdtMessage): void {
+    for (const a of this.adapters) {
+      try {
+        a.send(message);
+      } catch (err) {
+        console.warn('[MultiTransportAdapter] Failed to send via adapter:', err);
+      }
+    }
+  }
+
+  public onMessage(callback: (message: CrdtMessage) => void): void {
+    this.messageCallback = callback;
+    for (const a of this.adapters) {
+      a.onMessage((msg) => {
+        if (this.messageCallback) {
+          this.messageCallback(msg);
+        }
+      });
+    }
+  }
+
+  public close(): void {
+    for (const a of this.adapters) {
+      try {
+        a.close();
+      } catch {}
+    }
+    this.adapters.clear();
+  }
+}
+
+/**
  * BroadcastChannel を用いた同一マシン／ブラウザ内タブ間 P2P トランスポート
  */
 export class BroadcastTransportAdapter implements P2PTransportAdapter {

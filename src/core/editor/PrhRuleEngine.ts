@@ -78,11 +78,62 @@ export class PrhRuleEngine {
     return normalized;
   }
 
+  private archivedRules: Map<string, PlotailorPrhRule> = new Map();
+
   /**
-   * Remove rule by UUID.
+   * Remove rule by UUID. If archive=true, moves to trash (archivedRules) for Undo restoration.
    */
-  public removeRule(ruleId: string): boolean {
-    return this.rules.delete(ruleId);
+  public removeRule(ruleId: string, archive: boolean = true): boolean {
+    const existing = this.rules.get(ruleId);
+    if (!existing) return false;
+    this.rules.delete(ruleId);
+    if (archive) {
+      this.archivedRules.set(ruleId, existing);
+    }
+    return true;
+  }
+
+  /**
+   * Move rule directly to archive (trash).
+   */
+  public archiveRule(ruleId: string): PlotailorPrhRule | null {
+    const rule = this.rules.get(ruleId);
+    if (!rule) return null;
+    this.rules.delete(ruleId);
+    this.archivedRules.set(ruleId, rule);
+    return rule;
+  }
+
+  /**
+   * Restore archived rule back to active rules.
+   */
+  public restoreRule(ruleId: string): PlotailorPrhRule | null {
+    const rule = this.archivedRules.get(ruleId);
+    if (!rule) return null;
+    this.archivedRules.delete(ruleId);
+    this.rules.set(ruleId, rule);
+    return rule;
+  }
+
+  /**
+   * Get all archived (trashed) rules.
+   */
+  public getArchivedRules(): PlotailorPrhRule[] {
+    return Array.from(this.archivedRules.values());
+  }
+
+  /**
+   * Permanently delete an archived rule from trash.
+   */
+  public purgeArchivedRule(ruleId: string): boolean {
+    return this.archivedRules.delete(ruleId);
+  }
+
+  /**
+   * Empty trash.
+   */
+  public clearArchived(): void {
+    this.archivedRules.clear();
   }
 
   public getRules(): PlotailorPrhRule[] {
@@ -95,6 +146,7 @@ export class PrhRuleEngine {
 
   public clear(): void {
     this.rules.clear();
+    this.archivedRules.clear();
   }
 
   /**

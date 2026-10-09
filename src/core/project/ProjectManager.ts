@@ -251,10 +251,15 @@ export class ProjectManager {
     }
 
     const title = legacyTitle || '星辰の境界線';
-    const projMeta = await this.createProject({
-      id: 'default_work',
-      title,
-    });
+    let projMeta: ProjectMeta;
+    if (await this.vfs.exists(`${this.rootPath}/default_work`)) {
+      projMeta = (await this.getProject('default_work')).meta;
+    } else {
+      projMeta = await this.createProject({
+        id: 'default_work',
+        title,
+      });
+    }
 
     if (legacyChaptersStr) {
       try {

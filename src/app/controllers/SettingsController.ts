@@ -40,6 +40,7 @@ export interface SettingsControllerDependencies {
   setTargetWordCount?: (val: number) => void;
   getIdleThresholdMs?: () => number;
   setIdleThresholdMs?: (val: number) => void;
+  resetAllDataToDefault?: () => Promise<boolean | void>;
   onFontSizeChanged?: (fontSize: string) => void;
   onFontFamilyChanged?: (fontFamily: string) => void;
 }
@@ -91,7 +92,7 @@ export class SettingsController {
     if (this.state.fontFamily === 'mincho') {
       body.style.fontFamily = "'Shippori Mincho', 'Noto Serif JP', serif";
     } else if (this.state.fontFamily === 'gothic') {
-      body.style.fontFamily = "'BIZ UDPGothic', 'Yu Gothic', sans-serif";
+      body.style.fontFamily = "'BIZ UDGothic', 'BIZ UDPGothic', 'Yu Gothic Medium', 'Yu Gothic', monospace, sans-serif";
     } else {
       body.style.fontFamily = "system-ui, -apple-system, sans-serif";
     }
@@ -164,6 +165,11 @@ export class SettingsController {
     if (this.deps.getIdleThresholdMs) {
       const selIdleThreshold = document.getElementById('settingIdleThreshold') as HTMLSelectElement | null;
       if (selIdleThreshold) selIdleThreshold.value = this.deps.getIdleThresholdMs().toString();
+    }
+
+    const chkDevMetrics = document.getElementById('settingShowDevMetrics') as HTMLInputElement | null;
+    if (chkDevMetrics) {
+      chkDevMetrics.checked = localStorage.getItem('plotailor_show_dev_metrics') === 'true';
     }
   }
 
@@ -322,6 +328,38 @@ export class SettingsController {
     inputKinsokuCols?.addEventListener('input', onKinsokuColsChange);
     inputKinsokuCols?.addEventListener('change', onKinsokuColsChange);
 
+    document.getElementById('btnKinsokuColsDec')?.addEventListener('click', () => {
+      if (!inputKinsokuCols) return;
+      const cur = parseInt(inputKinsokuCols.value, 10) || 40;
+      const next = Math.max(30, cur - 1);
+      inputKinsokuCols.value = next.toString();
+      inputKinsokuCols.dispatchEvent(new Event('input'));
+    });
+
+    document.getElementById('btnKinsokuColsInc')?.addEventListener('click', () => {
+      if (!inputKinsokuCols) return;
+      const cur = parseInt(inputKinsokuCols.value, 10) || 40;
+      const next = Math.min(50, cur + 1);
+      inputKinsokuCols.value = next.toString();
+      inputKinsokuCols.dispatchEvent(new Event('input'));
+    });
+
+    // Settings Modal Category Tab Switching
+    const tabBtns = document.querySelectorAll('.settings-tab-btn');
+    const panels = document.querySelectorAll('[data-settings-panel]');
+    tabBtns.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const tabKey = target.dataset.settingsTab;
+        tabBtns.forEach((b) => b.classList.remove('active'));
+        target.classList.add('active');
+        panels.forEach((p) => {
+          const panel = p as HTMLElement;
+          panel.style.display = panel.dataset.settingsPanel === tabKey ? 'flex' : 'none';
+        });
+      });
+    });
+
     document.getElementById('settingKinsokuHanging')?.addEventListener('change', (e) => {
       const checked = (e.target as HTMLInputElement).checked;
       this.deps.setKinsokuHanging?.(checked);
@@ -375,6 +413,20 @@ export class SettingsController {
       } catch {}
       this.notifyListeners('isJapaneseBeautify', checked);
       this.deps.showToast(`約物自動補正・括弧自動閉じを ${checked ? 'ON' : 'OFF'} に設定しました`);
+    });
+
+    document.getElementById('settingShowDevMetrics')?.addEventListener('change', (e) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      try {
+        localStorage.setItem('plotailor_show_dev_metrics', checked.toString());
+      } catch {}
+      const devGroup = document.getElementById('devMetricsGroup');
+      if (devGroup) devGroup.style.display = checked ? 'inline' : 'none';
+      this.deps.showToast(`内部メトリクス表示を ${checked ? 'ON' : 'OFF'} に設定しました`);
+    });
+
+    document.getElementById('btnResetAllData')?.addEventListener('click', () => {
+      this.deps.resetAllDataToDefault?.();
     });
   }
 }

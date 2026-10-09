@@ -338,7 +338,7 @@ export class NarrativeLinterEngine {
       // Deduplicate particle-repetition diagnostics on the same line for IDE issue list aggregation
       if (ruleType === 'particle-repetition') {
         const alreadyExists = syntacticItems.some(
-          (item) => item.ruleType === 'particle-repetition' && item.line === line && item.message === diag.message
+          (item) => item.ruleType === ruleType && item.line === line
         );
         if (alreadyExists) {
           continue;
@@ -354,7 +354,7 @@ export class NarrativeLinterEngine {
         to: diag.to,
         line,
         col,
-        severity: diag.severity === 'error' ? 'error' : 'warning',
+        severity: diag.severity === 'error' ? 'error' : diag.severity === 'info' ? 'info' : 'warning',
         ruleType,
         message: diag.message,
         source: diag.source ?? 'narrative-nano',
@@ -386,14 +386,25 @@ export class NarrativeLinterEngine {
       });
     }
 
-    // Char repetition: target natural language characters (hiragana, katakana, han, letter)
+    // Char repetition: target natural language characters (hiragana, katakana, han, letter) 3+ times
     // while strictly excluding punctuation, typographical leaders (... / --), and markup symbols (<, >, *, etc.)
-    const charRepeatRegex = /([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}\p{Letter}])\1{3,}/gu;
+    const charRepeatRegex = /([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}\p{Letter}])\1{2,}/gu;
     let charMatch: RegExpExecArray | null;
     while ((charMatch = charRepeatRegex.exec(syntaxCleanText)) !== null) {
+      const matchText = charMatch[0];
       const from = charMatch.index;
-      const to = from + charMatch[0].length;
+      const to = from + matchText.length;
       if (window && (to < window.from || from > window.to)) continue;
+
+      // Dialogue exclamation exemption e.g. 「あああ！」「うわああ！」
+      const beforeSnippet = syntaxCleanText.slice(Math.max(0, from - 10), from);
+      const afterSnippet = syntaxCleanText.slice(to, Math.min(syntaxCleanText.length, to + 10));
+      const inDialogue = beforeSnippet.includes('「') && !beforeSnippet.includes('」');
+      const isExclamationChar = /^[あいうえおぁぃぅぇぉアイウエオァィゥェォわ]$/.test(charMatch[1]);
+      if (inDialogue && isExclamationChar && /[！!？?]/.test(afterSnippet)) {
+        continue;
+      }
+
       const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, from);
       syntacticItems.push({
         id: `syn-repeat-${from}`,
@@ -403,9 +414,9 @@ export class NarrativeLinterEngine {
         col,
         severity: 'error',
         ruleType: 'char-repetition',
-        message: `同一文字の連続「${charMatch[0].slice(0, 8)}」が検出されました。推敲または脱字・連打を確認してください。`,
+        message: `同一文字の3回以上異常連続「${matchText.slice(0, 8)}」が検出されました。タイポまたはキーボード連打を確認してください。`,
         source: 'narrative-linter',
-        previewText: charMatch[0],
+        previewText: matchText,
         snippet: NarrativeLinterEngine.extractContextSnippet(targetText, from, to),
       });
     }
@@ -438,6 +449,10 @@ export class NarrativeLinterEngine {
       for (const p of passiveDiags) {
         if (window && (p.to < window.from || p.from > window.to)) continue;
         const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, p.from);
+        const alreadyExists = syntacticItems.some(
+          (item) => (item.ruleType === 'consecutive-passive' || item.ruleType === 'passive-voice') && item.line === line
+        );
+        if (alreadyExists) continue;
         syntacticItems.push({
           id: `syn-passive-${p.from}`,
           from: p.from,
@@ -561,6 +576,10 @@ export class NarrativeLinterEngine {
           const to = from + typo.original.length;
           if (window && (to < window.from || from > window.to)) continue;
           const { line, col } = NarrativeLinterEngine.offsetToLineCol(targetText, from);
+          const alreadyExists = syntacticItems.some(
+            (item) => item.ruleType === 'qwerty-typo' && (Math.abs(item.from - from) < 5 || item.previewText?.includes(typo.original) || typo.original.includes(item.previewText || ''))
+          );
+          if (alreadyExists) continue;
           const msg = typo.isTransposition
             ? `音韻反転タイポ「${typo.original}」を検出しました。`
             : `誤打鍵タイポ「${typo.original}」を検出しました。`;
@@ -632,9 +651,11 @@ export class NarrativeLinterEngine {
     }
 
     let avgScore = countedSentences > 0 ? (totalScore / countedSentences) * 100 : 100;
-    // Deduct directly for any detected syntactic issues (particle repetitions, double negations, passive, etc.)
-    if (syntacticItems.length > 0) {
-      avgScore = Math.max(0, avgScore - syntacticItems.length * 8);
+    // Deduct directly for actual syntactic issues ('warning' or 'error').
+    // SPEC CONFORMANCE: Stylistic suggestions ('info') MUST NEVER penalize the author's score!
+    const penaltyItems = syntacticItems.filter((i) => i.severity !== 'info');
+    if (penaltyItems.length > 0) {
+      avgScore = Math.max(0, avgScore - penaltyItems.length * 8);
     }
     // Deduct for unresolved zero pronouns
     if (zeroPronounItems.length > 0) {
@@ -646,7 +667,7 @@ export class NarrativeLinterEngine {
       syntacticItems,
       zeroPronounItems,
       syntacticScore: finalScore,
-      totalWarnings: syntacticItems.length + zeroPronounItems.length,
+      totalWarnings: penaltyItems.length + zeroPronounItems.length,
       analyzedWindow: window,
       sensoryAnalysis,
     };

@@ -3,22 +3,33 @@ setlocal
 cd /d "%~dp0"
 
 echo ======================================================
-echo  Plotailor ì‰ÆŒü‚¯ƒTƒCƒg • Ž©“®Ž€ŠˆŠÄŽ‹ƒ‰ƒ“ƒ`ƒƒ[
+echo  Plotailor åŸ·ç­†ã‚µã‚¤ãƒˆ èµ·å‹•ï¼†è‡ªå‹•ç›£è¦–ãƒ©ãƒ³ãƒãƒ£ãƒ¼
 echo ======================================================
 echo.
-echo ƒoƒbƒNƒOƒ‰ƒEƒ“ƒh‚ÅŽ€ŠˆŠÄŽ‹EŽ©“®Ä‹N“®ƒT[ƒrƒX‚ð‹N“®‚µ‚Ü‚·...
 
+echo 1. ãƒãƒ¼ãƒˆ8080ã®æ—¢å­˜ã‚¾ãƒ³ãƒ“ãƒ—ãƒ­ã‚»ã‚¹ã‚’äº‹å‰ã‚¯ãƒªãƒ¼ãƒ³ã‚¢ãƒƒãƒ—ä¸­...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$procs = Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique; foreach($p in $procs){ Stop-Process -Id $p -Force -ErrorAction SilentlyContinue }"
+
+echo 2. ãƒãƒƒã‚¯ã‚°ãƒ©ã‚¦ãƒ³ãƒ‰å¸¸æ™‚ç›£è¦–ãƒ»è‡ªå‹•å¾©æ—§ã‚µãƒ¼ãƒ“ã‚¹ã‚’èµ·å‹•ä¸­...
 wscript.exe "%~dp0PlotailorSiteStartup.vbs"
 
 echo.
-echo ƒT[ƒo[‚Ì‹N“®‚ðŠm”F’†...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$retry=0; while($retry -lt 20){ $c = New-Object System.Net.Sockets.TcpClient; try { $a = $c.BeginConnect('127.0.0.1', 8080, $null, $null); if($a.AsyncWaitHandle.WaitOne(300, $false)){ $c.EndConnect($a); $c.Close(); break } } catch{} try{$c.Close()}catch{}; Start-Sleep -Milliseconds 200; $retry++ }"
+echo 3. ã‚µãƒ¼ãƒãƒ¼ã®èµ·å‹•ã¨ HTTP 200 OK å¿œç­”ã‚’ç¢ºèªä¸­...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$retry=0; $success=$false; while($retry -lt 30){ try { $req=[System.Net.WebRequest]::Create('http://127.0.0.1:8080/app.html'); $req.Timeout=1000; $res=$req.GetResponse(); if([int]$res.StatusCode -eq 200){ $res.Close(); $success=$true; break } $res.Close() } catch{} Start-Sleep -Milliseconds 400; $retry++ }; if(-not $success){ exit 1 }"
+
+if %ERRORLEVEL% NEQ 0 (
+    echo.
+    echo ã€è­¦å‘Šã€‘ã‚µãƒ¼ãƒãƒ¼ã®èµ·å‹•å¿œç­”ãŒã‚¿ã‚¤ãƒ ã‚¢ã‚¦ãƒˆã—ã¾ã—ãŸã€‚
+    echo watchdog.log ã‚’ç¢ºèªã—ã¦ãã ã•ã„ã€‚
+    pause
+    exit /b 1
+)
 
 echo.
-echo [‹N“®Š®—¹]
-echo Local:   http://localhost:8080/
+echo [èµ·å‹•æˆåŠŸ]
+echo Local:   http://localhost:8080/app.html
 echo.
-echo ƒuƒ‰ƒEƒU‚ÅŠJ‚«‚Ü‚·...
-start http://localhost:8080/
-ping 127.0.0.1 -n 3 > nul
+echo ãƒ–ãƒ©ã‚¦ã‚¶ã§é–‹ãã¾ã™...
+start http://localhost:8080/app.html
+timeout /t 2 > nul
 exit

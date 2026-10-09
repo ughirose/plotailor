@@ -126,6 +126,8 @@ export function importFromPrhYaml(yamlStr: string): OrthographyRuleEntry[] {
 
 export class OrthographyInspector {
   private rules: OrthographyRuleEntry[] = [];
+  private archivedRules: OrthographyRuleEntry[] = [];
+  private isTrashExpanded: boolean = false;
   private container: HTMLElement;
   private onChange?: (rules: OrthographyRuleEntry[]) => void;
   private onExportPrh?: (yamlContent: string) => void;
@@ -254,14 +256,27 @@ export class OrthographyInspector {
   }
 
   public removeRule(id: string): boolean {
-    const prevLen = this.rules.length;
+    const target = this.rules.find((r) => r.id === id);
+    if (!target) return false;
     this.rules = this.rules.filter((r) => r.id !== id);
-    if (this.rules.length !== prevLen) {
-      this.notifyChange();
-      this.render();
-      return true;
-    }
-    return false;
+    this.archivedRules.unshift(target);
+    this.notifyChange();
+    this.render();
+    return true;
+  }
+
+  public restoreRule(id: string): boolean {
+    const target = this.archivedRules.find((r) => r.id === id);
+    if (!target) return false;
+    this.archivedRules = this.archivedRules.filter((r) => r.id !== id);
+    this.rules.push(target);
+    this.notifyChange();
+    this.render();
+    return true;
+  }
+
+  public getArchivedRules(): OrthographyRuleEntry[] {
+    return [...this.archivedRules];
   }
 
   public toggleRule(id: string, enabled?: boolean): boolean {
@@ -407,6 +422,42 @@ export class OrthographyInspector {
       tableContainer.appendChild(table);
     }
     this.container.appendChild(tableContainer);
+
+    // Trash / Archive Section for Undo Restoration (Item 12)
+    if (this.archivedRules.length > 0) {
+      const trashContainer = document.createElement('div');
+      trashContainer.className = 'orthography-trash-container';
+      trashContainer.style.cssText = 'padding: 4px 8px; margin-bottom: 8px; border: 1px dashed rgba(207, 168, 92, 0.4); border-radius: 4px; background: rgba(207, 168, 92, 0.05); font-size: 11px;';
+      trashContainer.innerHTML = `
+        <div class="trash-toggle-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+          <span style="font-weight: 600; color: var(--color-gold, #cfa85c);">🗑️ ゴミ箱 (${this.archivedRules.length}件)</span>
+          <span style="font-size: 10px; color: var(--color-gold);">${this.isTrashExpanded ? '▲ 閉じる' : '▼ 展開'}</span>
+        </div>
+        <div class="trash-rule-list" style="display: ${this.isTrashExpanded ? 'flex' : 'none'}; flex-direction: column; gap: 3px; margin-top: 4px;"></div>
+      `;
+
+      trashContainer.querySelector('.trash-toggle-header')?.addEventListener('click', () => {
+        this.isTrashExpanded = !this.isTrashExpanded;
+        this.render();
+      });
+
+      if (this.isTrashExpanded) {
+        const listEl = trashContainer.querySelector('.trash-rule-list')!;
+        this.archivedRules.forEach((rule) => {
+          const item = document.createElement('div');
+          item.style.cssText = 'display: flex; justify-content: space-between; align-items: center; opacity: 0.85; padding: 2px 0;';
+          item.innerHTML = `
+            <span style="text-decoration: line-through;">${rule.expected} (${rule.patterns.join(', ')})</span>
+            <button class="rule-restore-btn" style="padding: 1px 6px; font-size: 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 2px; cursor: pointer;" title="元に戻す (Undo)">復元</button>
+          `;
+          item.querySelector('.rule-restore-btn')?.addEventListener('click', () => {
+            this.restoreRule(rule.id);
+          });
+          listEl.appendChild(item);
+        });
+      }
+      this.container.appendChild(trashContainer);
+    }
 
     // Inline Add Form (Non-Modal Constitution)
     const addForm = document.createElement('div');

@@ -14,6 +14,16 @@ export interface NarrativeMethodMap {
     request: { context: NarrativeContext };
     response: { score: number; suggestions: string[]; warnings: string[] };
   };
+  analyzeText: {
+    request: { text: string };
+    response: {
+      text: string;
+      tokenModality: number[];
+      dialogueRatio: number;
+      hasCitations: boolean;
+      hasMonologues: boolean;
+    };
+  };
 }
 
 export type NarrativeMethod = keyof NarrativeMethodMap;

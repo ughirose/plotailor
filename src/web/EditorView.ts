@@ -438,10 +438,12 @@ export class EditorView {
     const t = 368450; // Current scalar day
     const lunaPhase = this.celestialEngine.getMoonPhase('sat_luna', t);
     const selenePhase = this.celestialEngine.getMoonPhase('sat_selene', t);
+    const lunaFullness = Math.max(0, Math.min(1, 1.0 - Math.abs(lunaPhase - 0.5) * 2));
+    const seleneFullness = Math.max(0, Math.min(1, 1.0 - Math.abs(selenePhase - 0.5) * 2));
     const lunaEl = this.container.querySelector('#moon-phase-luna');
     const seleneEl = this.container.querySelector('#moon-phase-selene');
-    if (lunaEl) lunaEl.textContent = `${(lunaPhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
-    if (seleneEl) seleneEl.textContent = `${(selenePhase * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
+    if (lunaEl) lunaEl.textContent = `${(lunaFullness * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(lunaPhase)})`;
+    if (seleneEl) seleneEl.textContent = `${(seleneFullness * 100).toFixed(0)}% (${this.celestialEngine.getMoonPhaseName(selenePhase)})`;
   }
 
   private renderKinsokuDiagnostics(violations: KinsokuViolation[]): void {

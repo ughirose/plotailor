@@ -15,6 +15,11 @@ export interface PaneControllerDependencies {
   isLineWrapping: () => boolean;
   setActiveRightTab: (tab: string) => void;
   renderRightPane: () => void;
+  toggleTheme?: () => void;
+  toggleFullscreen?: () => void;
+  openOffloadModal?: () => void;
+  openHelpModal?: () => void;
+  resetAllDataToDefault?: () => Promise<boolean | void>;
 }
 
 export type PaneToggleListener = (pane: 'left' | 'right', open: boolean) => void;
@@ -109,20 +114,57 @@ export class PaneController {
       }
     });
 
+    const handleThemeToggle = () => {
+      dropdown.style.display = 'none';
+      btnMenu.setAttribute('aria-expanded', 'false');
+      this.deps.toggleTheme?.();
+    };
+    document.getElementById('menuToggleTheme')?.addEventListener('click', handleThemeToggle);
+    document.getElementById('menuToggleThemeMobile')?.addEventListener('click', handleThemeToggle);
+
+    const handleFullscreenToggle = () => {
+      dropdown.style.display = 'none';
+      btnMenu.setAttribute('aria-expanded', 'false');
+      this.deps.toggleFullscreen?.();
+    };
+    document.getElementById('menuToggleFullscreen')?.addEventListener('click', handleFullscreenToggle);
+    document.getElementById('menuToggleFullscreenMobile')?.addEventListener('click', handleFullscreenToggle);
+
     document.getElementById('menuOpenSettings')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
+      btnMenu.setAttribute('aria-expanded', 'false');
       this.deps.openSettingsModal();
     });
 
     document.getElementById('menuExportAozora')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
+      btnMenu.setAttribute('aria-expanded', 'false');
       this.deps.exportFullAozora('copy');
+      this.deps.openExportModal();
+    });
+
+    document.getElementById('menuExportMultiSite')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      btnMenu.setAttribute('aria-expanded', 'false');
       this.deps.openExportModal();
     });
 
     document.getElementById('menuExportPoP')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
+      btnMenu.setAttribute('aria-expanded', 'false');
       this.deps.exportPoPCertificate();
+    });
+
+    document.getElementById('menuExportCommercial')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      btnMenu.setAttribute('aria-expanded', 'false');
+      this.deps.openExportModal();
+    });
+
+    document.getElementById('menuCollabOffload')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      btnMenu.setAttribute('aria-expanded', 'false');
+      this.deps.openOffloadModal?.();
     });
 
     document.getElementById('menuToggleRuby')?.addEventListener('click', () => {
@@ -144,11 +186,22 @@ export class PaneController {
 
     document.getElementById('menuOpenHelp')?.addEventListener('click', () => {
       dropdown.style.display = 'none';
-      this.deps.setActiveRightTab('help');
-      if (!this.deps.isRightPaneOpen()) {
-        this.toggleRightPane();
+      btnMenu.setAttribute('aria-expanded', 'false');
+      if (this.deps.openHelpModal) {
+        this.deps.openHelpModal();
+      } else {
+        this.deps.setActiveRightTab('help');
+        if (!this.deps.isRightPaneOpen()) {
+          this.toggleRightPane();
+        }
+        this.deps.renderRightPane();
       }
-      this.deps.renderRightPane();
+    });
+
+    document.getElementById('menuResetAllData')?.addEventListener('click', () => {
+      dropdown.style.display = 'none';
+      btnMenu.setAttribute('aria-expanded', 'false');
+      this.deps.resetAllDataToDefault?.();
     });
   }
 

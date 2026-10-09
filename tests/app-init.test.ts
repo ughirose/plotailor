@@ -282,5 +282,32 @@ describe('PlotailorApp DOM Initialization & Data Integrity', () => {
     app.toggleHistoryDiffOnly(false);
     expect(diffContainer?.classList.contains('history-diff-only-mode')).toBe(false);
   });
+
+  it('resets all data cleanly to default sample state when resetAllDataToDefault is confirmed', async () => {
+    // Mock showInlineConfirm to auto-confirm
+    const inlineDialog = await import('../src/app/InlineDialog.js');
+    const confirmSpy = vi.spyOn(inlineDialog, 'showInlineConfirm').mockResolvedValue(true);
+
+    const { PlotailorApp } = await import('../src/app/main.js');
+    const app = new PlotailorApp();
+
+    // 1. Mutate some state and write custom localStorage entries
+    localStorage.setItem('plotailor_work_title', '汚染されたタイトル');
+    localStorage.setItem('plotailor_custom_temp_key', 'test_value');
+    localStorage.setItem('non_plotailor_key', 'should_remain');
+
+    // 2. Invoke reset
+    const result = await app.resetAllDataToDefault();
+    expect(result).toBe(true);
+
+    // 3. Verify Plotailor localStorage keys are cleaned and default state restored
+    expect(localStorage.getItem('plotailor_custom_temp_key')).toBeNull();
+    expect(localStorage.getItem('non_plotailor_key')).toBe('should_remain');
+
+    const titleEl = document.getElementById('workTitleText');
+    expect(titleEl?.textContent).toBe('星辰の残響');
+
+    confirmSpy.mockRestore();
+  });
 });
 

@@ -13,10 +13,12 @@ import { createCompositionGuardExtension } from '../core/editor/compositionGuard
 import { verticalWritingExtension, setAutoIndentEnabled } from '../core/editor/VerticalWritingExtension.js';
 
 import { wrapSelectionWithRuby } from '../core/editor/RubyShortcutExtension.js';
+import { slashCommandExtension } from '../core/editor/SlashCommandExtension.js';
 import { ScrollNormalizer } from '../core/editor/ScrollNormalizer.js';
 import { narrativeLinterExtension } from '../core/editor/CodeMirrorNarrativeExtension.js';
 import { NarrativeWorkerBridge } from '../core/editor/NarrativeWorkerBridge.js';
 import { createCadenceListenerExtension } from '../core/editor/CadenceListenerExtension.js';
+import { createCollabTextExtension } from '../core/editor/CollabTextExtension.js';
 import { NarrativeInspectorDock } from '../ui/NarrativeInspectorDock.js';
 import { LoreInspectorDock } from '../ui/LoreInspectorDock.js';
 import {
@@ -57,9 +59,11 @@ import { MultiSiteNovelFormatter } from '../core/exporters/multisite-novel-forma
 import { FullscreenStatusBar } from '../ui/FullscreenStatusBar.js';
 import { ColumnGuideline } from '../ui/ColumnGuideline.js';
 import { ManuscriptSheetCalculator } from '../core/editor/ManuscriptSheetCalculator.js';
-import { SAMPLE_NOVEL_CHAPTERS } from '../data/SampleNovelData.js';
+import { SAMPLE_NOVEL_CHAPTERS, SAMPLE_NOVEL_LORE } from '../data/SampleNovelData.js';
 import { PrhPersistenceManager } from '../core/editor/PrhPersistenceManager.js';
 import { VerticalInspectorGeometryBridge } from '../core/editor/VerticalInspectorGeometryBridge.js';
+import { CollabController } from './controllers/CollabController.js';
+import { OffloadController } from './controllers/OffloadController.js';
 
 interface ChapterData {
   id: string;
@@ -133,7 +137,7 @@ export class PlotailorApp {
   private geometryBridge: VerticalInspectorGeometryBridge;
   private kinsokuEngine = new KinsokuEngine({ columnsPerLine: 40, allowHanging: true });
   private kinsokuColumns: number = 40;
-  private kinsokuHanging: boolean = true;
+  private kinsokuHanging: boolean = false; // Default OFF per Item 15
   private columnGuideline: ColumnGuideline | null = null;
   private columnGuidelineVisible: boolean = true;
   private targetWordCount: number = 5000;
@@ -146,6 +150,8 @@ export class PlotailorApp {
   public loreController!: LoreController;
   public viewController!: ViewController;
   public projectController!: ProjectController;
+  public collabController!: CollabController;
+  public offloadController!: OffloadController;
 
   constructor() {
     this.editorBody = (document.getElementById('editorBody') || document.getElementById('editor-body')) as HTMLDivElement;
@@ -208,11 +214,24 @@ export class PlotailorApp {
         this.showToast('🗑️ 迷子設定を完全に破棄しました');
       },
       onDeletePrhRule: (ruleId) => {
-        this.narrativeWorkerBridge.getPrhEngine().removeRule(ruleId);
-        this.narrativeDock.updatePrhRules(this.narrativeWorkerBridge.getPrhEngine().getRules());
+        const prhEngine = this.narrativeWorkerBridge.getPrhEngine();
+        prhEngine.removeRule(ruleId, true);
+        this.narrativeDock.updatePrhRules(prhEngine.getRules());
+        this.narrativeDock.updateArchivedPrhRules(prhEngine.getArchivedRules());
         this.savePrhRules();
         this.triggerNarrativeReanalysis();
-        this.showToast('🗑️ 表記ゆれ・呼称統一ルールを削除しました');
+        this.renderRightPane();
+        this.showToast('🗑️ 表記ゆれルールをゴミ箱に移動しました（復元可能）');
+      },
+      onRestorePrhRule: (ruleId) => {
+        const prhEngine = this.narrativeWorkerBridge.getPrhEngine();
+        prhEngine.restoreRule(ruleId);
+        this.narrativeDock.updatePrhRules(prhEngine.getRules());
+        this.narrativeDock.updateArchivedPrhRules(prhEngine.getArchivedRules());
+        this.savePrhRules();
+        this.triggerNarrativeReanalysis();
+        this.renderRightPane();
+        this.showToast('✨ 表記ゆれルールをゴミ箱から復元しました');
       },
       onAddPrhRule: (rule) => {
         if (!rule.expected || !rule.patterns || rule.patterns.length === 0) return;
@@ -317,6 +336,7 @@ export class PlotailorApp {
       },
       onFontSizeChanged: (fontSize) => { this.fontSize = fontSize; },
       onFontFamilyChanged: (fontFamily) => { this.fontFamily = fontFamily; },
+      resetAllDataToDefault: () => this.resetAllDataToDefault(),
     });
 
     this.paneController = new PaneController({
@@ -334,6 +354,21 @@ export class PlotailorApp {
       isLineWrapping: () => this.isLineWrapping,
       setActiveRightTab: (tab) => { this.activeRightTab = tab; },
       renderRightPane: () => this.renderRightPane(),
+      resetAllDataToDefault: () => this.resetAllDataToDefault(),
+      toggleTheme: () => this.toggleTheme(),
+      toggleFullscreen: () => this.toggleFullscreen(),
+      openHelpModal: () => {
+        const modal = document.getElementById('helpModal');
+        if (modal) {
+          modal.style.display = 'flex';
+        } else {
+          this.activeRightTab = 'help';
+          if (!this.rightPaneOpen) {
+            this.toggleRightPane();
+          }
+          this.renderRightPane();
+        }
+      },
     });
 
     this.historyController = new HistoryController({
@@ -352,6 +387,7 @@ export class PlotailorApp {
       setSnapshotFrequency: (f) => this.setSnapshotFrequency(f),
       getSnapshotCustomChars: () => this.snapshotCustomChars,
       getSnapshotCustomSeconds: () => this.snapshotCustomSeconds,
+      updateMultiLayerDecorations: () => this.updateMultiLayerDecorations(),
     });
 
     this.chapterController = new ChapterController({
@@ -432,9 +468,45 @@ export class PlotailorApp {
       },
     });
 
+    this.collabController = new CollabController({
+      getLoreManager: () => this.loreManager,
+      getCurrentProjectId: () => this.currentProjectId,
+      onRemoteLoreUpdate: () => {
+        this.renderRightPane();
+        this.renderLeftPane();
+        this.updateMultiLayerDecorations();
+      },
+      showToast: (msg) => this.showToast(msg),
+    });
+
+    this.loreController.registerLoreChangeListener((action, entityId) => {
+      if (action === 'delete') {
+        if (entityId) this.collabController.broadcastLocalLoreDelete(entityId);
+      } else if (entityId) {
+        const ent = this.loreManager.getEntity(entityId);
+        if (ent) this.collabController.broadcastLocalLoreSave(ent);
+      }
+    });
+
     this.projectController.registerProjectSwitchListener(() => {
       this.loadPrhRules();
+      this.collabController.connect(`plotailor-room-${this.currentProjectId}`);
     });
+
+    this.offloadController = new OffloadController({
+      getFullManuscriptText: () => this.chapters.map((c) => c.content).join('\n\n'),
+      getCurrentChapterText: () => (this.cmEditor ? this.cmEditor.state.doc.toString() : ''),
+      showToast: (msg) => this.showToast(msg),
+    });
+
+    const menuCollabOffload = document.getElementById('menuCollabOffload');
+    if (menuCollabOffload) {
+      menuCollabOffload.addEventListener('click', () => {
+        const dropdown = document.getElementById('hamburgerDropdown');
+        if (dropdown) dropdown.style.display = 'none';
+        this.offloadController.openModal();
+      });
+    }
 
     this.init();
   }
@@ -478,6 +550,9 @@ export class PlotailorApp {
         isVertical: this.isVertical,
         fontSize: FontSizeControl.clampFontSize(this.fontSize),
         visible: this.columnGuidelineVisible,
+        onColumnsChange: (cols) => {
+          this.setKinsokuColumns(cols);
+        },
       });
     }
 
@@ -490,8 +565,38 @@ export class PlotailorApp {
         targetWordCount: this.targetWordCount,
       });
     }
-    const initialViolations = this.kinsokuEngine.detectViolations(initialContent);
+    const initialViolations = this.kinsokuEngine.detectViolations(initialContent, this.kinsokuColumns * 2);
     this.narrativeDock.updateKinsokuViolations(initialViolations);
+
+    // Asynchronously preload Narrative-Nano ONNX model into WebWorker
+    this.loadNarrativeModel();
+  }
+
+  /**
+   * Preloads Narrative-Nano INT8 ONNX model via ArrayBuffer into WebWorker
+   */
+  private async loadNarrativeModel(): Promise<void> {
+    if (typeof fetch === 'undefined') return;
+    if (typeof process !== 'undefined' && (process.env?.NODE_ENV === 'test' || process.env?.VITEST)) {
+      // In automated test runner, skip browser fetch to avoid connection refused warnings
+      return;
+    }
+    try {
+      const origin = (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null')
+        ? window.location.origin
+        : '';
+      const modelUrl = `${origin}/models/narrative_nano_ultra_v15_qat_int8.onnx`;
+      const resp = await fetch(modelUrl);
+      if (resp.ok) {
+        const buffer = await resp.arrayBuffer();
+        await this.narrativeWorkerBridge.loadModel(buffer);
+        // Trigger reanalysis with active model once loaded
+        this.triggerNarrativeReanalysis();
+      }
+    } catch (err) {
+      // Non-blocking: will continue using rule-based engine on fetch failure
+      console.warn('[PlotailorApp] Narrative model fetch/load skipped (using local heuristic engine):', err);
+    }
   }
 
   private loadStateFromStorage() {
@@ -639,6 +744,10 @@ export class PlotailorApp {
       if (savedKinsokuHanging !== null) {
         this.kinsokuHanging = savedKinsokuHanging === 'true';
       }
+      this.kinsokuEngine.updateConfig({
+        columnsPerLine: this.kinsokuColumns,
+        allowHanging: this.kinsokuHanging,
+      });
 
       const savedGuideline = localStorage.getItem('plotailor_column_guideline_visible');
       if (savedGuideline !== null) {
@@ -655,6 +764,13 @@ export class PlotailorApp {
       if (savedIdleThreshold) {
         const num = parseInt(savedIdleThreshold, 10);
         if (!isNaN(num) && num > 0) this.idleThresholdMs = num;
+      }
+
+      // 7.6. Dev Metrics Group Visibility
+      const savedDevMetrics = localStorage.getItem('plotailor_show_dev_metrics');
+      const devGroup = document.getElementById('devMetricsGroup');
+      if (devGroup) {
+        devGroup.style.display = savedDevMetrics === 'true' ? 'inline' : 'none';
       }
 
       // 8. Restore chapter snapshots
@@ -741,6 +857,18 @@ export class PlotailorApp {
         cm6ImeGuard(),
         createCompositionGuardExtension({ debounceMs: 150 }),
         multiLayerDecorationField,
+        slashCommandExtension({
+          getLoreCandidates: () =>
+            this.loreManager.getEntities().map((e) => ({
+              id: e.id,
+              name: e.name,
+              category: e.category,
+              description: e.description,
+            })),
+          onCommandApplied: (label) => {
+            this.showToast(`✨ コマンド「${label}」を適用しました`);
+          },
+        }),
 
         narrativeLinterExtension({
           workerBridge: this.narrativeWorkerBridge,
@@ -761,7 +889,14 @@ export class PlotailorApp {
             this.cadenceMachine.recordKeystroke();
             this.handleEditorChange();
             if (!update.view.composing) {
-              this.updateMultiLayerDecorationsDebounced();
+              const isHistoryAction = update.transactions.some(
+                (tr) => tr.isUserEvent('undo') || tr.isUserEvent('redo')
+              );
+              if (isHistoryAction) {
+                this.updateMultiLayerDecorations();
+              } else {
+                this.updateMultiLayerDecorationsDebounced();
+              }
             }
             this.checkShelvedCandidates();
           }
@@ -770,6 +905,15 @@ export class PlotailorApp {
             this.updateHistoryUI();
           }
         }),
+        ...(this.collabController
+          ? [
+              createCollabTextExtension({
+                textCrdtEngine: this.collabController.getTextCrdtEngine(),
+                getCurrentChapterId: () => this.currentChapterId,
+                isVertical: () => this.isVertical,
+              }),
+            ]
+          : []),
       ],
     });
   }
@@ -856,6 +1000,43 @@ export class PlotailorApp {
       this.showToast('︙ 傍点を付与しました');
     });
 
+    // Heading Toolbar Handler (Aozora & Outline, Item 9)
+    document.getElementById('btnQuickHeading')?.addEventListener('click', () => {
+      if (!this.cmEditor) return;
+      const sel = this.cmEditor.state.selection.main;
+      if (sel.from === sel.to) {
+        // Selection is collapsed: toggle heading on current line
+        const line = this.cmEditor.state.doc.lineAt(sel.from);
+        const lineText = line.text;
+        const trimmed = lineText.trim();
+        if (trimmed.startsWith('［＃大見出し］') && trimmed.endsWith('［＃大見出し終わり］')) {
+          const inner = trimmed.slice('［＃大見出し］'.length, -'［＃大見出し終わり］'.length);
+          this.cmEditor.dispatch({
+            changes: { from: line.from, to: line.to, insert: inner },
+            selection: { anchor: line.from + inner.length },
+          });
+          this.showToast('🔖 大見出しを解除しました');
+        } else {
+          const content = trimmed || '大見出し';
+          const replacement = `［＃大見出し］${content}［＃大見出し終わり］`;
+          this.cmEditor.dispatch({
+            changes: { from: line.from, to: line.to, insert: replacement },
+            selection: { anchor: line.from + replacement.length },
+          });
+          this.showToast('🔖 大見出しを設定しました');
+        }
+      } else {
+        const text = this.cmEditor.state.doc.sliceString(sel.from, sel.to);
+        const replacement = `［＃大見出し］${text}［＃大見出し終わり］`;
+        this.cmEditor.dispatch({
+          changes: { from: sel.from, to: sel.to, insert: replacement },
+          selection: { anchor: sel.from + replacement.length },
+        });
+        this.showToast('🔖 大見出しを設定しました');
+      }
+      this.cmEditor.focus();
+    });
+
     document.getElementById('btnQuickBold')?.addEventListener('click', () => {
       if (!this.cmEditor) return;
       const sel = this.cmEditor.state.selection.main;
@@ -931,6 +1112,23 @@ export class PlotailorApp {
 
     document.getElementById('btnToggleGuideline')?.addEventListener('click', toggleGuidelineAction);
     document.getElementById('cursorPosBadge')?.addEventListener('click', toggleGuidelineAction);
+
+    // Hanging Punctuation Independent Toggle (Item 15)
+    const updateHangingButtonUI = () => {
+      const btn = document.getElementById('btnToggleHanging');
+      if (btn) {
+        btn.classList.toggle('active', this.kinsokuHanging);
+        btn.title = `句読点・閉じ括弧のぶら下げ表示: ${this.kinsokuHanging ? 'ON (行末+1字許容)' : 'OFF'}`;
+        btn.textContent = `⤵ ぶら下げ: ${this.kinsokuHanging ? 'ON' : 'OFF'}`;
+      }
+    };
+    updateHangingButtonUI();
+
+    document.getElementById('btnToggleHanging')?.addEventListener('click', () => {
+      this.setKinsokuHanging(!this.kinsokuHanging);
+      updateHangingButtonUI();
+      this.showToast(`⤵ ぶら下げ表示を ${this.kinsokuHanging ? 'ON' : 'OFF'} にしました`);
+    });
 
     // History: switch to right-pane dock tab instead of modal
     document.getElementById('historyDepthBadge')?.addEventListener('click', () => {
@@ -1091,6 +1289,54 @@ export class PlotailorApp {
       });
     });
 
+    // Editor In-Line Decoration Click -> Right Pane Jump Navigation (Item 16)
+    this.editorBody?.addEventListener('click', (e) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const decEl = target.closest(
+        '.cm-decoration-layer0, .cm-decoration-layer1, .cm-decoration-layer2, [class*="cm-lint-tier"]'
+      ) as HTMLElement | null;
+      if (!decEl) return;
+
+      // Ensure right pane is expanded
+      if (!this.rightPaneOpen) {
+        this.toggleRightPane();
+      }
+
+      const isLayer0or1 = decEl.classList.contains('cm-decoration-layer0') || decEl.classList.contains('cm-decoration-layer1');
+      const isLayer2orLint = decEl.classList.contains('cm-decoration-layer2') || Array.from(decEl.classList).some((c) => c.startsWith('cm-lint-tier'));
+
+      if (isLayer0or1) {
+        this.activeRightTab = 'lore';
+      } else if (isLayer2orLint) {
+        this.activeRightTab = 'linter';
+      }
+
+      // Update right tabs UI
+      const currentRightBtns = document.querySelectorAll('.pane-right .pane-tab-btn');
+      currentRightBtns.forEach((b) => {
+        b.classList.toggle('active', (b as HTMLElement).dataset.dockTab === this.activeRightTab);
+      });
+
+      this.renderRightPane();
+
+      // Attempt to scroll to matching issue / card
+      setTimeout(() => {
+        const text = decEl.textContent?.trim();
+        if (text) {
+          const cards = document.querySelectorAll('#dockContent .dock-card, #dockContent .linter-issue-card, #dockContent .lore-card');
+          for (const card of Array.from(cards)) {
+            if (card.textContent?.includes(text)) {
+              card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              card.classList.add('highlight-flash');
+              setTimeout(() => card.classList.remove('highlight-flash'), 1500);
+              break;
+            }
+          }
+        }
+      }, 60);
+    });
+
     // Project Management Modal
     const btnOpenProj = document.getElementById('btnOpenProjectModal');
     btnOpenProj?.addEventListener('click', () => this.openProjectModal());
@@ -1142,7 +1388,7 @@ export class PlotailorApp {
 
     this.velocityWidget.recordKeystroke(rawText);
     this.fullscreenStatusBar?.updateText(rawText);
-    const kinsokuViolations = this.kinsokuEngine.detectViolations(rawText);
+    const kinsokuViolations = this.kinsokuEngine.detectViolations(rawText, this.kinsokuColumns * 2);
     this.narrativeDock.updateKinsokuViolations(kinsokuViolations);
 
     // Record snapshot debounced
@@ -1271,10 +1517,8 @@ export class PlotailorApp {
     }
 
     const decSet = buildMultiLayerDecorationSet(text.length, items);
-    const curSel = this.cmEditor.state.selection;
     this.cmEditor.dispatch({
       effects: setMultiLayerDecorations.of(decSet),
-      selection: curSel,
     });
   }
 
@@ -1308,28 +1552,35 @@ export class PlotailorApp {
   }
 
   public jumpToPosition(chapterId: string, line: number, offset: number): void {
+    const doJump = () => {
+      if (!this.cmEditor) return;
+      const doc = this.cmEditor.state.doc;
+      let targetOffset = offset;
+
+      // If offset is 0 but line is specified (> 1), calculate character offset of line
+      if (targetOffset === 0 && line > 1) {
+        if (line <= doc.lines) {
+          const lineObj = doc.line(line);
+          targetOffset = lineObj.from;
+        }
+      }
+
+      const safeOffset = Math.max(0, Math.min(targetOffset, doc.length));
+      this.cmEditor.dispatch({
+        selection: { anchor: safeOffset },
+        scrollIntoView: true,
+      });
+      this.cmEditor.focus();
+    };
+
     if (chapterId && chapterId !== this.currentChapterId) {
       this.loadChapter(chapterId);
+      requestAnimationFrame(() => {
+        setTimeout(doJump, 30);
+      });
+    } else {
+      doJump();
     }
-
-    if (!this.cmEditor) return;
-    const doc = this.cmEditor.state.doc;
-    let targetOffset = offset;
-
-    // If offset is 0 but line is specified (> 1), calculate character offset of line
-    if (targetOffset === 0 && line > 1) {
-      if (line <= doc.lines) {
-        const lineObj = doc.line(line);
-        targetOffset = lineObj.from;
-      }
-    }
-
-    const safeOffset = Math.max(0, Math.min(targetOffset, doc.length));
-    this.cmEditor.dispatch({
-      selection: { anchor: safeOffset },
-      scrollIntoView: true,
-    });
-    this.cmEditor.focus();
   }
 
   public insertSubjectAt(from: number, candidateText: string) {
@@ -1372,6 +1623,9 @@ export class PlotailorApp {
       this.currentChapterId = chapterId;
     }
 
+    // P2P/CRDT: 切り替え先章のテキスト同期をリクエスト
+    this.collabController?.getTextCrdtEngine().requestChapterSync(chapterId);
+
     const titleEl = document.getElementById('activeChapterTitle');
     if (titleEl) titleEl.textContent = ch.title;
 
@@ -1386,7 +1640,7 @@ export class PlotailorApp {
     this.saveToStorage();
     this.velocityWidget.startSession(ch.content.length);
     this.fullscreenStatusBar?.updateText(ch.content);
-    const kinsokuViolations = this.kinsokuEngine.detectViolations(ch.content);
+    const kinsokuViolations = this.kinsokuEngine.detectViolations(ch.content, this.kinsokuColumns * 2);
     this.narrativeDock.updateKinsokuViolations(kinsokuViolations);
     this.renderLeftPane();
     this.updateStats();
@@ -1465,16 +1719,17 @@ export class PlotailorApp {
       kinsokuShori: this.kinsokuHanging,
     });
     const genkoSheets = sheetResult.exactSheets.toFixed(1);
+    const rawSheets = (charCount / 400).toFixed(1);
     const bunkoPages = sheetResult.exactPublicationPages.toFixed(1);
 
     const headerChar = document.getElementById('charCountHeader');
     if (headerChar) {
-      headerChar.textContent = `${charCount.toLocaleString()} 文字（原稿用紙 ${genkoSheets} 枚 / 文庫 ${bunkoPages} P）`;
+      headerChar.textContent = `${charCount.toLocaleString()} 文字（原稿用紙 ${genkoSheets} 枚 [実字換算 ${rawSheets} 枚] / 文庫 ${bunkoPages} P）`;
     }
 
     const footerChar = document.getElementById('charCountFooter');
     if (footerChar) {
-      footerChar.innerHTML = `<strong>${charCount.toLocaleString()}</strong> 文字（原稿用紙 <strong>${genkoSheets}</strong> 枚 / 文庫 <strong>${bunkoPages}</strong> P）`;
+      footerChar.innerHTML = `<strong>${charCount.toLocaleString()}</strong> 文字（原稿用紙 <strong>${genkoSheets}</strong> 枚 [実字換算 <strong>${rawSheets}</strong> 枚] / 文庫 <strong>${bunkoPages}</strong> P）`;
     }
 
     const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
@@ -1513,10 +1768,15 @@ export class PlotailorApp {
     if (maxColEl) maxColEl.textContent = maxCols.toString();
 
     // Overflow & hanging punctuation detection
-    // A line or caret column is considered exceeding if it exceeds maxCols.
-    const currentCharPos = Math.max(col - 1, lineLength);
-    const isExceeding = currentCharPos > maxCols;
-    const isHanging = isExceeding && this.kinsokuHanging && currentCharPos === maxCols + 1;
+    // col is 1-indexed (C 1..N). charIndex before caret is col - 1.
+    const charIndex = col - 1;
+    const isCaretExceeding = charIndex > maxCols;
+    const isLineExceeding = lineLength > maxCols;
+    const isExceeding = isCaretExceeding || isLineExceeding;
+
+    const isHanging = isExceeding && this.kinsokuHanging && (
+      isCaretExceeding ? charIndex === maxCols + 1 : lineLength === maxCols + 1
+    );
     const isDefiniteOverflow = isExceeding && !isHanging;
 
     const posBadge = document.getElementById('cursorPosBadge');
@@ -1529,10 +1789,13 @@ export class PlotailorApp {
 
     if (overflowBadge) {
       if (isDefiniteOverflow) {
-        const excess = currentCharPos - maxCols;
+        // Mathematically match charIndex (charIndex - maxCols) or total line length
+        const excess = isCaretExceeding ? (charIndex - maxCols) : (lineLength - maxCols);
         overflowBadge.textContent = `+${excess}字超過`;
         overflowBadge.style.display = 'inline-flex';
-        overflowBadge.title = `設定行長(${maxCols}字)を${excess}文字超過しています`;
+        overflowBadge.title = isCaretExceeding
+          ? `キャレット位置(第${charIndex}字)が設定行長(${maxCols}字)を${excess}文字超過しています`
+          : `行全体(${lineLength}字)が設定行長(${maxCols}字)を${excess}文字超過しています`;
       } else if (isHanging) {
         overflowBadge.textContent = `ぶら下げ(+1)`;
         overflowBadge.style.display = 'inline-flex';
@@ -1600,7 +1863,7 @@ export class PlotailorApp {
     this.viewController.applyTheme();
   }
 
-  private toggleFullscreen(enable: boolean) {
+  private toggleFullscreen(enable?: boolean) {
     this.viewController.toggleFullscreen(enable);
   }
 
@@ -1625,7 +1888,7 @@ export class PlotailorApp {
     this.columnGuideline?.setColumns(val);
     this.updateEditorWidth();
     const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
-    const violations = this.kinsokuEngine.detectViolations(currentText);
+    const violations = this.kinsokuEngine.detectViolations(currentText, val * 2);
     this.narrativeDock.updateKinsokuViolations(violations);
     this.updateCursorStats();
     try {
@@ -1638,7 +1901,7 @@ export class PlotailorApp {
     this.kinsokuEngine.updateConfig({ allowHanging: checked });
     this.columnGuideline?.setAllowHanging(checked);
     const currentText = this.cmEditor ? this.cmEditor.state.doc.toString() : (this.chapters.find((c) => c.id === this.currentChapterId)?.content ?? '');
-    const violations = this.kinsokuEngine.detectViolations(currentText);
+    const violations = this.kinsokuEngine.detectViolations(currentText, this.kinsokuColumns * 2);
     this.narrativeDock.updateKinsokuViolations(violations);
     this.updateCursorStats();
     try {
@@ -1727,16 +1990,25 @@ export class PlotailorApp {
 
   private initHelpModal(): void {
     const modal = document.getElementById('helpModal');
-    if (!modal) return;
     document.getElementById('btnHeaderHelp')?.addEventListener('click', () => {
-      modal.style.display = 'flex';
+      if (modal) {
+        modal.style.display = 'flex';
+      } else {
+        this.activeRightTab = 'help';
+        if (!this.rightPaneOpen) {
+          this.toggleRightPane();
+        }
+        this.renderRightPane();
+      }
     });
-    document.getElementById('btnCloseHelpModal')?.addEventListener('click', () => {
-      modal.style.display = 'none';
-    });
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.style.display = 'none';
-    });
+    if (modal) {
+      document.getElementById('btnCloseHelpModal')?.addEventListener('click', () => {
+        modal.style.display = 'none';
+      });
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.style.display = 'none';
+      });
+    }
   }
 
   private initHistoryModal(): void {
@@ -1780,6 +2052,98 @@ export class PlotailorApp {
 
   public closeExportModal() {
     this.exportController.closeExportModal();
+  }
+
+  public async resetAllDataToDefault(): Promise<boolean> {
+    const confirmed = await showInlineConfirm({
+      message: '【全データ初期化の確認】\n保存されたすべての作品、章テキスト、世界観設定、履歴スナップショットを完全に消去し、初期サンプル状態（『星辰の残響』）にリセットします。\n\nこの操作は取り消せません。実行するには確認のため「RESET」と入力してください。',
+      destructive: true,
+      confirmText: '全データを初期化する',
+      cancelText: 'キャンセル',
+      requiredInput: 'RESET',
+    });
+    if (!confirmed) return false;
+
+    try {
+      // 1. Clear all Plotailor keys from localStorage
+      if (typeof localStorage !== 'undefined') {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('plotailor_') || key.startsWith('plotailor-'))) {
+            keysToRemove.push(key);
+          }
+        }
+        for (const k of keysToRemove) {
+          localStorage.removeItem(k);
+        }
+      }
+
+      // 2. Clear VFS workspace projects if available
+      try {
+        const vfs = this.projectManager.getVFS();
+        await vfs.rmdir('/projects', true);
+        await this.projectManager.initWorkspace();
+      } catch {}
+
+      // 3. Reset in-memory state
+      this.currentProjectId = 'default_work';
+      this.workTitle = '星辰の残響';
+      this.chapters = DEFAULT_CHAPTERS.map((ch) => ({
+        id: ch.id,
+        title: ch.title,
+        charCount: ch.content.replace(/\s+/g, '').length,
+        content: ch.content,
+      }));
+      this.currentChapterId = this.chapters[0]?.id || 'ch1';
+      this.chapterStates.clear();
+      this.chapterSnapshots.clear();
+
+      // Reset lore entities to official sample
+      this.loreManager.setEntities(JSON.parse(JSON.stringify(SAMPLE_NOVEL_LORE)));
+
+      // Save initial clean state to storage and VFS
+      this.saveToStorage();
+      await this.saveLoreData();
+      try {
+        await this.projectController.initProjectVFS();
+      } catch {}
+
+      // 4. Update UI
+      const titleEl = document.getElementById('workTitleText');
+      if (titleEl) titleEl.textContent = this.workTitle;
+
+      this.renderChapterSelect();
+      this.loadChapter(this.currentChapterId);
+      this.renderLeftPane();
+      this.renderRightPane();
+      this.updateStats();
+      this.updateMultiLayerDecorations();
+
+      const settingsModal = document.getElementById('settingsModal');
+      if (settingsModal) settingsModal.style.display = 'none';
+
+      this.showToast('✨ 全データを初期サンプル（星辰の残響）に復元しました');
+
+      // 5. Reload page if in real browser environment (avoid reload in JSDOM / test runners)
+      if (
+        typeof window !== 'undefined' &&
+        window.location &&
+        typeof window.location.reload === 'function' &&
+        !(window as any).__vitest__ &&
+        !navigator.userAgent.includes('jsdom')
+      ) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+      }
+
+      return true;
+    } catch (err: any) {
+      console.error('[PlotailorApp] Reset error:', err);
+      this.showToast(`⚠️ リセット中にエラーが発生しました: ${err?.message || err}`);
+      return false;
+    }
   }
 
   private toastTimer: any = null;

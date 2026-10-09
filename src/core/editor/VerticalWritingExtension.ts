@@ -16,6 +16,7 @@
 import { EditorView, ViewPlugin, ViewUpdate } from '@codemirror/view';
 import { Extension } from '@codemirror/state';
 import { VerticalKeyNavigationEngine } from './VerticalKeyNavigationEngine.js';
+import { verticalImeGeometryFollower } from './VerticalImeGeometryFollower.js';
 
 /**
  * Checks whether the editor is currently rendered in vertical-rl writing mode.
@@ -96,7 +97,7 @@ export function getVerticalPosAtCoords(
     }
   }
 
-  if (lineBoxes.length === 0) return 0;
+  if (lineBoxes.length === 0) return view.state.selection.main.head;
 
   // Check if click is beyond the leftmost column (past end of document in vertical-rl)
   let minLeft = Infinity;
@@ -111,8 +112,15 @@ export function getVerticalPosAtCoords(
     return view.state.doc.length;
   }
   if (coords.x > maxRight) {
-    // Clicked to the right of the first column: jump to beginning of document
-    return 0;
+    // Clicked to the right of the first column: project onto first column according to Y coordinate
+    const firstBox = lineBoxes.reduce((prev, curr) => (curr.rect.right > prev.rect.right ? curr : prev), lineBoxes[0]);
+    const firstLine = view.state.doc.lineAt(firstBox.pos);
+    if (coords.y <= firstBox.rect.top) return firstLine.from;
+    if (coords.y >= firstBox.rect.bottom) return firstLine.to;
+    const height = firstBox.rect.height || 1;
+    const progress = Math.max(0, Math.min(1, (coords.y - firstBox.rect.top) / height));
+    const charOffset = Math.round(progress * firstLine.length);
+    return Math.min(firstLine.to, firstLine.from + charOffset);
   }
 
   // Find column matching X coordinate
@@ -363,14 +371,14 @@ export function setAutoIndentEnabled(enabled: boolean) {
 
 function handleVerticalArrow(
   view: EditorView,
-  key: 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight'
+  key: 'ArrowUp' | 'ArrowDown' | 'ArrowLeft' | 'ArrowRight',
+  select: boolean = false
 ): boolean {
   if (!isVerticalMode(view)) return false;
   const doc = view.state.doc;
   const sel = view.state.selection.main;
   const currentPos = sel.head;
-  const currentLine = doc.lineAt(currentPos);
-  const offsetInLine = currentPos - currentLine.from;
+  const currentAnchor = sel.anchor;
 
   let targetPos = currentPos;
 
@@ -432,12 +440,48 @@ function handleVerticalArrow(
     }
   }
 
-  if (targetPos !== currentPos) {
+  if (targetPos !== currentPos || (select && currentAnchor !== currentPos)) {
     view.dispatch({
-      selection: { anchor: targetPos, head: targetPos },
+      selection: {
+        anchor: select ? currentAnchor : targetPos,
+        head: targetPos,
+      },
       scrollIntoView: true,
+      userEvent: 'select',
     });
   }
+  return true;
+}
+
+function handleVerticalHome(view: EditorView, select: boolean = false): boolean {
+  if (!isVerticalMode(view)) return false;
+  const sel = view.state.selection.main;
+  const line = view.state.doc.lineAt(sel.head);
+  const targetPos = line.from;
+  view.dispatch({
+    selection: {
+      anchor: select ? sel.anchor : targetPos,
+      head: targetPos,
+    },
+    scrollIntoView: true,
+    userEvent: 'select',
+  });
+  return true;
+}
+
+function handleVerticalEnd(view: EditorView, select: boolean = false): boolean {
+  if (!isVerticalMode(view)) return false;
+  const sel = view.state.selection.main;
+  const line = view.state.doc.lineAt(sel.head);
+  const targetPos = line.to;
+  view.dispatch({
+    selection: {
+      anchor: select ? sel.anchor : targetPos,
+      head: targetPos,
+    },
+    scrollIntoView: true,
+    userEvent: 'select',
+  });
   return true;
 }
 
@@ -445,19 +489,33 @@ export const verticalArrowNavigationKeymap = Prec.highest(
   keymap.of([
     {
       key: 'ArrowUp',
-      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowUp'),
+      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowUp', false),
+      shift: (view: EditorView) => handleVerticalArrow(view, 'ArrowUp', true),
     },
     {
       key: 'ArrowDown',
-      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowDown'),
+      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowDown', false),
+      shift: (view: EditorView) => handleVerticalArrow(view, 'ArrowDown', true),
     },
     {
       key: 'ArrowLeft',
-      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowLeft'),
+      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowLeft', false),
+      shift: (view: EditorView) => handleVerticalArrow(view, 'ArrowLeft', true),
     },
     {
       key: 'ArrowRight',
-      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowRight'),
+      run: (view: EditorView) => handleVerticalArrow(view, 'ArrowRight', false),
+      shift: (view: EditorView) => handleVerticalArrow(view, 'ArrowRight', true),
+    },
+    {
+      key: 'Home',
+      run: (view: EditorView) => handleVerticalHome(view, false),
+      shift: (view: EditorView) => handleVerticalHome(view, true),
+    },
+    {
+      key: 'End',
+      run: (view: EditorView) => handleVerticalEnd(view, false),
+      shift: (view: EditorView) => handleVerticalEnd(view, true),
     },
   ])
 );
@@ -473,7 +531,31 @@ export const tabIndentKeymap = keymap.of([
     key: 'Tab',
     run: (view: EditorView) => {
       if (!isAutoIndentEnabled) return false;
-      view.dispatch(view.state.replaceSelection('　'));
+      const sel = view.state.selection.main;
+      const line = view.state.doc.lineAt(sel.from);
+
+      // If line is empty or already starts with full-width space, just insert space at cursor
+      if (line.text.startsWith('　')) {
+        view.dispatch(view.state.replaceSelection('　'));
+        return true;
+      }
+
+      // Check if line is a dialogue line (starts with quotation marks 「, 『, etc.)
+      const trimmed = line.text.trimStart();
+      const firstChar = trimmed[0] || '';
+      const isQuote = ['「', '『', '（', '【', '“', '‘', '《', '〈', '〔', '［', '＜', '«', '"', "'"].includes(firstChar);
+
+      if (isQuote) {
+        // Do not force paragraph indent on dialogue lines; normal space insert
+        view.dispatch(view.state.replaceSelection('　'));
+        return true;
+      }
+
+      // Smart indent: prepend full-width space at the start of the line
+      view.dispatch({
+        changes: { from: line.from, to: line.from, insert: '　' },
+        selection: { anchor: sel.from + 1, head: sel.to + 1 },
+      });
       return true;
     },
     shift: (view: EditorView) => {
@@ -481,8 +563,11 @@ export const tabIndentKeymap = keymap.of([
       const sel = view.state.selection.main;
       const line = view.state.doc.lineAt(sel.from);
       if (line.text.startsWith('　') || line.text.startsWith(' ') || line.text.startsWith('\t')) {
+        const newAnchor = Math.max(line.from, sel.anchor - 1);
+        const newHead = Math.max(line.from, sel.head - 1);
         view.dispatch({
           changes: { from: line.from, to: line.from + 1, insert: '' },
+          selection: { anchor: newAnchor, head: newHead },
         });
         return true;
       }
@@ -517,6 +602,7 @@ export const verticalScrollTheme = EditorView.theme({
 export function verticalWritingExtension(): Extension {
   return [
     verticalWritingPlugin,
+    verticalImeGeometryFollower(),
     verticalMouseHandler,
     verticalWheelHandler,
     verticalArrowNavigationKeymap,

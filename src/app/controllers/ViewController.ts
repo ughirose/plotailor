@@ -246,13 +246,14 @@ export class ViewController {
     this.deps.saveToStorage();
   }
 
-  public toggleFullscreen(enable: boolean): void {
-    this.isFullscreen = enable;
+  public toggleFullscreen(enable?: boolean): void {
+    const nextState = enable !== undefined ? enable : !this.isFullscreen;
+    this.isFullscreen = nextState;
     const statusBar = this.deps.getFullscreenStatusBar();
     if (statusBar) {
-      statusBar.setFullscreen(enable);
+      statusBar.setFullscreen(nextState);
     }
-    if (enable) {
+    if (nextState) {
       document.body.classList.add('fullscreen-active');
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});

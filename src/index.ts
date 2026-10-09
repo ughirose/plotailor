@@ -39,6 +39,10 @@ export class PlotailorIDE {
     return this.narrativeBridge.call('evaluateNarrative', { context });
   }
 
+  async analyzeText(text: string): Promise<NarrativeRpcResponse<'analyzeText'>> {
+    return this.narrativeBridge.call('analyzeText', { text });
+  }
+
   getEngine(): WorldOntologyEngine {
     return this.engine;
   }
@@ -206,7 +210,12 @@ export * from './core/editor/StyleDiscomfortDetector.js';
 export * from './core/editor/PovConsistencyAnalyzer.js';
 export * from './core/editor/ParticleRepetitionLinter.js';
 export * from './core/editor/SyntacticParticleAuditor.js';
-export * from './core/editor/SceneOutliner.js';
+export {
+  SceneOutliner,
+  type SceneOutlinerOptions,
+  type SceneNode,
+  type SceneHeadingNode,
+} from './core/editor/SceneOutliner.js';
 export * from './core/editor/RubySyntaxParser.js';
 export * from './core/editor/RubyShortcutExtension.js';
 export * from './core/editor/ForeshadowingEngine.js';

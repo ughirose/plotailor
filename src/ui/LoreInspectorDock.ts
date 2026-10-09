@@ -255,10 +255,38 @@ export class LoreInspectorDock {
       html += `<div class="panel-body" style="padding: 6px 8px; background: rgba(239, 68, 68, 0.03);">`;
       for (const conf of conflicts) {
         const anchor = conf.anchor;
+        let badgeLabel = '矛盾';
+        let badgeBg = '#ef4444';
+        switch (conf.category) {
+          case 'cycle':
+            badgeLabel = '循環矛盾';
+            break;
+          case 'chronological_reversal':
+            badgeLabel = '時間逆転';
+            break;
+          case 'epistemic_fog_violation':
+            badgeLabel = '認知フォグ違反';
+            badgeBg = '#e11d48';
+            break;
+          case 'moon_phase_mismatch':
+            badgeLabel = '月相不整合';
+            badgeBg = '#d97706';
+            break;
+          case 'lifespan_breach':
+            badgeLabel = '生没年違反';
+            badgeBg = '#9333ea';
+            break;
+          case 'dangling_prerequisite':
+            badgeLabel = '前提断絶';
+            break;
+          default:
+            badgeLabel = conf.category;
+        }
+
         html += `
           <div class="causal-conflict-card" style="margin-bottom: 6px; padding: 6px; border-radius: 4px; background: #fff; border: 1px solid rgba(239, 68, 68, 0.3);" data-node-id="${conf.nodeId}">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span class="badge" style="font-size: 10px; background: #ef4444; color: #fff; padding: 1px 5px; border-radius: 3px; font-weight: bold;">${conf.category === 'cycle' ? '循環矛盾' : '時間逆転'}</span>
+              <span class="badge" style="font-size: 10px; background: ${badgeBg}; color: #fff; padding: 1px 5px; border-radius: 3px; font-weight: bold;">${badgeLabel}</span>
               <span style="font-size: 11px; color: var(--color-text-dim);">${anchor ? `${anchor.chapterTitle} L${anchor.lineNumber}` : ''}</span>
             </div>
             <div style="font-size: 12px; margin: 4px 0; color: #1f2937; line-height: 1.4;">${conf.description}</div>

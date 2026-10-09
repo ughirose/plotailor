@@ -352,15 +352,20 @@ html, body {
   background-color: rgba(0, 0, 0, 0.2);
   border-bottom: 1px solid var(--color-border);
   overflow-x: auto;
-  scrollbar-width: none;
+  white-space: nowrap;
+  scrollbar-width: thin;
 }
 .pane-tabs::-webkit-scrollbar {
-  display: none;
+  height: 4px;
+}
+.pane-tabs::-webkit-scrollbar-thumb {
+  background: rgba(207, 168, 92, 0.3);
+  border-radius: 2px;
 }
 
 .pane-tab-btn {
-  flex: 1;
-  padding: 8px 10px;
+  flex: 0 0 auto;
+  padding: 8px 12px;
   background: transparent;
   border: none;
   color: var(--color-text-muted);
@@ -650,6 +655,45 @@ html, body {
   right: 12px;
 }
 
+/* Washi Light Mode Styling for Column Guideline */
+body.theme-washi .column-guideline-container.mode-horizontal .column-guideline-line,
+.app-container.theme-washi .column-guideline-container.mode-horizontal .column-guideline-line {
+  border-left: 1px dashed rgba(139, 94, 60, 0.55);
+}
+
+body.theme-washi .column-guideline-container.mode-horizontal .column-guideline-line.hanging,
+.app-container.theme-washi .column-guideline-container.mode-horizontal .column-guideline-line.hanging {
+  border-left: 1px dotted rgba(139, 94, 60, 0.4);
+}
+
+body.theme-washi .column-guideline-container.mode-vertical .column-guideline-line,
+.app-container.theme-washi .column-guideline-container.mode-vertical .column-guideline-line {
+  border-top: 1px dashed rgba(139, 94, 60, 0.55);
+}
+
+body.theme-washi .column-guideline-container.mode-vertical .column-guideline-line.hanging,
+.app-container.theme-washi .column-guideline-container.mode-vertical .column-guideline-line.hanging {
+  border-top: 1px dotted rgba(139, 94, 60, 0.4);
+}
+
+body.theme-washi .column-guideline-badge,
+.app-container.theme-washi .column-guideline-badge {
+  background: rgba(253, 251, 247, 0.96) !important;
+  color: #8b5e3c !important;
+  border: 1px solid rgba(139, 94, 60, 0.4) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}
+
+body.theme-washi .column-guideline-tick-mark,
+.app-container.theme-washi .column-guideline-tick-mark {
+  background: rgba(139, 94, 60, 0.45) !important;
+}
+
+body.theme-washi .column-guideline-tick-mark .tick-label,
+.app-container.theme-washi .column-guideline-tick-mark .tick-label {
+  color: #8b5e3c !important;
+}
+
 /* Ruler Ticks */
 .column-guideline-ticks {
   position: absolute;
@@ -658,6 +702,13 @@ html, body {
   right: 0;
   bottom: 0;
   pointer-events: none;
+}
+
+.column-guideline-tick-mark .tick-label {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  display: inline-block;
+  white-space: nowrap;
 }
 
 .column-guideline-tick-mark.tick-h {
@@ -692,6 +743,41 @@ html, body {
   font-size: 8px;
   color: rgba(207, 168, 92, 0.5);
   font-family: var(--font-mono, monospace);
+}
+
+/* Guideline Drag Handle */
+.column-guideline-drag-handle {
+  position: absolute;
+  z-index: 25;
+  background: rgba(207, 168, 92, 0.4);
+  border: 1px solid rgba(207, 168, 92, 0.7);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #fff;
+  cursor: col-resize;
+  user-select: none;
+  transition: background 0.15s, transform 0.1s;
+}
+.column-guideline-drag-handle:hover {
+  background: rgba(207, 168, 92, 0.85);
+  transform: scale(1.1);
+}
+.column-guideline-container.mode-horizontal .column-guideline-drag-handle {
+  top: 4px;
+  left: -8px;
+  width: 16px;
+  height: 20px;
+  cursor: col-resize;
+}
+.column-guideline-container.mode-vertical .column-guideline-drag-handle {
+  top: -8px;
+  left: 4px;
+  width: 20px;
+  height: 16px;
+  cursor: row-resize;
 }
 
 /* Column Guideline Overflow Warning & Hanging Feedback */
@@ -845,12 +931,30 @@ html, body {
   caret-color: var(--color-gold, #cfa85c);
 }
 
+/* Vertical IME Follower Anchor & Cursor Styling */
+.cm-vertical-ime-anchor {
+  position: absolute;
+  pointer-events: none;
+  opacity: 0;
+  z-index: -1;
+  width: 2px;
+}
+
+.pane-center.vertical-rl .cm-cursor,
+.cm-vertical-rl .cm-cursor {
+  border-left: 2px solid var(--color-gold, #cfa85c) !important;
+  margin-left: -1px;
+}
+
 .pane-center.vertical-rl .cm-line,
 .cm-vertical-rl .cm-line {
   line-height: 2.2 !important;
   letter-spacing: 0.05em;
   font-feature-settings: "pkna" 1, "vpal" 1;
   text-orientation: mixed;
+  line-break: strict !important;
+  -webkit-line-break: strict !important;
+  word-break: normal !important;
 }
 
 .pane-center.vertical-rl .cm-editor {
@@ -1039,11 +1143,18 @@ rb {
   color: var(--accent-gold-light) !important;
 }
 
+.cm-bouten,
 .bouten {
   -webkit-text-emphasis: filled sesame var(--color-gold);
   text-emphasis: filled sesame var(--color-gold);
   -webkit-text-emphasis-position: over right;
   text-emphasis-position: over right;
+}
+
+.pane-center.vertical-rl .cm-bouten,
+.pane-center.vertical-rl .bouten {
+  -webkit-text-emphasis-position: over right !important;
+  text-emphasis-position: over right !important;
 }
 
 
@@ -1605,6 +1716,62 @@ body.theme-washi .fullscreen-exit-btn {
   background: rgba(207, 168, 92, 0.1);
   border: 1px solid rgba(207, 168, 92, 0.25);
   color: var(--color-gold);
+}
+
+.dock-tier-tabs {
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 3px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-subtle);
+  margin-bottom: 8px;
+}
+
+.tier-tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.tier-tab-btn:hover {
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tier-tab-btn.active {
+  background: var(--color-bg-panel);
+  color: var(--color-gold);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(207, 168, 92, 0.3);
+}
+
+body.theme-washi .dock-tier-tabs {
+  background: #ded5c2;
+  border-color: #c9bea8;
+}
+
+body.theme-washi .tier-tab-btn {
+  color: #5e5446;
+}
+
+body.theme-washi .tier-tab-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+body.theme-washi .tier-tab-btn.active {
+  background: #f7f2e7;
+  color: #9d7124;
+  border-color: rgba(157, 113, 36, 0.4);
 }
 
 .dock-filter-bar {
@@ -3182,4 +3349,76 @@ body.theme-washi .fullscreen-status-bar .progress-gauge-track {
   transition: width 0.3s ease;
 }
 
+/* Settings Modal Category Tabs */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 16px;
+  background: rgba(0, 0, 0, 0.05);
+}
 
+.settings-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.settings-tab-btn:hover {
+  color: var(--color-text-main);
+}
+
+.settings-tab-btn.active {
+  color: var(--color-gold);
+  border-bottom-color: var(--color-gold);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   P2P Collaborative Text Editing: Remote Carets & Selection Markers
+   ========================================================================== */
+.cm-collab-cursor {
+  position: relative;
+  display: inline-block;
+  pointer-events: none;
+  user-select: none;
+  z-index: 45;
+}
+
+.cm-collab-cursor-bar {
+  display: block;
+  animation: cm-collab-pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes cm-collab-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.cm-collab-cursor-label {
+  pointer-events: none;
+  font-family: var(--font-ui, system-ui, sans-serif);
+  line-height: 1.2;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  transform: translateY(-2px);
+  user-select: none;
+  transition: opacity 0.2s ease;
+}
+
+.cm-collab-selection-mark {
+  border-radius: 2px;
+  mix-blend-mode: multiply;
+}
+
+body.theme-dark .cm-collab-selection-mark {
+  mix-blend-mode: screen;
+}

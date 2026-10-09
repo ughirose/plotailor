@@ -28,6 +28,7 @@ export interface HistoryControllerDependencies {
   setSnapshotFrequency?: (freq: 'minimal' | 'low' | 'standard' | 'high' | 'custom') => void;
   getSnapshotCustomChars?: () => number;
   getSnapshotCustomSeconds?: () => number;
+  updateMultiLayerDecorations?: () => void;
 }
 
 export type SnapshotListener = (chapterId: string, snapshotCount: number) => void;
@@ -457,6 +458,7 @@ export class HistoryController {
 
     this.deps.showToast(`🕒 ${new Date(snap.time).toLocaleTimeString()} の状態へロールバックしました（未来の履歴を切り捨て）`);
     this.deps.updateStats();
+    this.deps.updateMultiLayerDecorations?.();
     this.updateHistoryUI();
     this.closeHistoryModal();
   }

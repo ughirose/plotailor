@@ -26,6 +26,7 @@ export interface ColumnGuidelineOptions {
   fontSize?: number;
   visible?: boolean;
   showTicks?: boolean;
+  onColumnsChange?: (columns: number) => void;
 }
 
 export class ColumnGuideline {
@@ -45,6 +46,7 @@ export class ColumnGuideline {
   private showTicks: boolean;
   private isOverflowState: boolean = false;
   private isHangingState: boolean = false;
+  private onColumnsChange?: (columns: number) => void;
 
   constructor(options: ColumnGuidelineOptions) {
     this.container = options.container;
@@ -54,6 +56,7 @@ export class ColumnGuideline {
     this.fontSize = options.fontSize ?? 17;
     this.visible = options.visible ?? ColumnGuideline.loadVisibility();
     this.showTicks = options.showTicks ?? true;
+    this.onColumnsChange = options.onColumnsChange;
 
     this.mount();
     this.update();
@@ -126,6 +129,53 @@ export class ColumnGuideline {
     primaryBadge.className = 'column-guideline-badge';
     primaryBadge.textContent = `${this.columns}字`;
     primaryLine.appendChild(primaryBadge);
+
+    // Drag handle for adjusting column count (Item 14)
+    const dragHandle = document.createElement('div');
+    dragHandle.className = 'column-guideline-drag-handle';
+    dragHandle.title = 'ドラッグして行長（30〜50字）を変更';
+    dragHandle.textContent = '⋮';
+    primaryLine.appendChild(dragHandle);
+
+    let isDragging = false;
+    let startCoord = 0;
+    let startCols = this.columns;
+
+    const onPointerDown = (e: PointerEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isDragging = true;
+      startCoord = this.isVertical ? e.clientY : e.clientX;
+      startCols = this.columns;
+      try { dragHandle.setPointerCapture(e.pointerId); } catch {}
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isDragging) return;
+      const currentCoord = this.isVertical ? e.clientY : e.clientX;
+      const deltaPx = currentCoord - startCoord;
+      const pitch = this.getCharacterPitch();
+      const step = this.isVertical ? pitch.height : pitch.width;
+      const deltaCols = Math.round(deltaPx / step);
+      const newCols = this.clampColumns(startCols + deltaCols);
+      if (newCols !== this.columns) {
+        this.setColumns(newCols);
+        this.onColumnsChange?.(newCols);
+      }
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (isDragging) {
+        isDragging = false;
+        try { dragHandle.releasePointerCapture(e.pointerId); } catch {}
+      }
+    };
+
+    dragHandle.addEventListener('pointerdown', onPointerDown);
+    dragHandle.addEventListener('pointermove', onPointerMove);
+    dragHandle.addEventListener('pointerup', onPointerUp);
+    dragHandle.addEventListener('pointercancel', onPointerUp);
+
     root.appendChild(primaryLine);
     this.primaryLineEl = primaryLine;
     this.primaryBadgeEl = primaryBadge;
@@ -146,9 +196,30 @@ export class ColumnGuideline {
   }
 
   /**
-   * Measures or calculates character pitch in pixels.
+   * Measures or calculates character pitch in pixels with DOM measurement fallback.
    */
   public getCharacterPitch(): { width: number; height: number } {
+    if (typeof document !== 'undefined' && this.container) {
+      try {
+        const testSpan = document.createElement('span');
+        testSpan.style.visibility = 'hidden';
+        testSpan.style.position = 'absolute';
+        testSpan.style.fontSize = `${this.fontSize}px`;
+        testSpan.style.fontFamily = 'var(--font-serif, "Noto Serif JP", serif)';
+        testSpan.textContent = '国';
+        this.container.appendChild(testSpan);
+        const rect = testSpan.getBoundingClientRect();
+        testSpan.remove();
+        if (rect.width > 0 && rect.height > 0) {
+          const letterSpacingRatio = this.isVertical ? 0.05 : 0.03;
+          return {
+            width: Number((rect.width * (1 + 0.03)).toFixed(2)),
+            height: Number((rect.height * (1 + letterSpacingRatio)).toFixed(2)),
+          };
+        }
+      } catch {}
+    }
+
     const letterSpacingRatio = this.isVertical ? 0.05 : 0.03;
     const baseWidth = Number((this.fontSize * (1 + 0.03)).toFixed(2));
     const baseHeight = Number((this.fontSize * (1 + letterSpacingRatio)).toFixed(2));

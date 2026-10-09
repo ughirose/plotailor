@@ -140,14 +140,14 @@ export class SyntacticParticleAuditor {
     // Strip Aozora ruby tags and formatting markers
     const cleanSpan = spanBetween.replace(/《[^》]*》/g, '').replace(/[｜|]/g, '');
 
-    // Whitespace or punctuation breaks noun phrases
-    if (/[\s、]/.test(cleanSpan)) {
+    // Whitespace, dashes, or punctuation breaks noun phrases
+    if (/[\s、――──――…\.\,\(\)「」『』（）\<\>《》【】:;：；]/.test(cleanSpan)) {
       return true;
     }
 
-    // Explicit case particle (が, を, は, から, より) between nominal blocks
-    // e.g. 「月明かりが部屋」 -> 「が」 breaks the noun phrase chain
-    if (/(?:[\u4E00-\u9FFF\u30A0-\u30FF\u3040-\u309F]+?)(?:が|を|は|から|より)(?=[\u4E00-\u9FFF\u30A0-\u30FF])/u.test(cleanSpan)) {
+    // Explicit case particle (が, を, は, に, で, へ, と, から, より, も) between nominal blocks
+    // e.g. 「月明かりが部屋」「神話の時代に古」 -> breaks the noun phrase chain
+    if (/(?:[\u4E00-\u9FFF\u30A0-\u30FF\u3040-\u309F]+?)(?:が|を|は|に|で|へ|と|から|より|も)(?=[\u4E00-\u9FFF\u30A0-\u30FF])/u.test(cleanSpan)) {
       return true;
     }
 
@@ -156,14 +156,14 @@ export class SyntacticParticleAuditor {
 
   /**
    * Audits text for unnatural particle "の" chains.
-   * Splits clauses by punctuation (、) and evaluates consecutive modifier chain depth.
-   * Intervening case markers (は, が, を, から...) break the modifier chain.
+   * Splits clauses by punctuation (、), dashes (――), and brackets, and evaluates consecutive modifier chain depth.
+   * Intervening case markers (は, が, を, に, で, へ, と, から...) break the modifier chain.
    */
   public auditParticleChains(sentenceText: string, sentenceOffset: number = 0): SyntacticParticleChain[] {
     const chains: SyntacticParticleChain[] = [];
 
-    // Split sentence into clauses by punctuation (、)
-    const clauseRegex = /[^、]+(?:、|$)/g;
+    // Split sentence into clauses by punctuation (、), dashes (――/──), quotes, and brackets
+    const clauseRegex = /[^、――──「」『』（）…：；\n]+(?:[、――──「」『』（）…：；\n]|$)/g;
     let clauseMatch: RegExpExecArray | null;
 
     while ((clauseMatch = clauseRegex.exec(sentenceText)) !== null) {

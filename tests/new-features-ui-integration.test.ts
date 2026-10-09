@@ -173,7 +173,7 @@ describe('New Features UI Integration (Kinsoku, Velocity, MultiSite, FullscreenS
           id: 'rule-test-1',
           expected: '魔術師',
           patterns: ['魔導士', 'まほうつかい'],
-          category: 'term',
+          category: 'lore',
           enabled: true,
         },
       ],
@@ -196,6 +196,8 @@ describe('New Features UI Integration (Kinsoku, Velocity, MultiSite, FullscreenS
           id: 'item-sync-1',
           ruleType: 'ellipsis-dash',
           tier: 1,
+          severity: 'warning',
+          source: 'test',
           from: 0,
           to: 1,
           line: 1,
@@ -207,12 +209,17 @@ describe('New Features UI Integration (Kinsoku, Velocity, MultiSite, FullscreenS
       ],
       zeroPronounItems: [
         {
+          id: 'zp-test-1',
+          omittedCase: 'ガ',
+          zeroPronounScore: 85,
+          bestCandidate: { text: 'アーサー', likelihood: 85, distance: 1 },
+          message: '主語省略検出',
           from: 5,
           to: 7,
           line: 1,
           col: 6,
           predicateText: '駆けた',
-          candidates: [{ text: 'アーサー', likelihood: 85 }],
+          candidates: [{ text: 'アーサー', likelihood: 85, distance: 1 }],
         },
       ],
       povItems: [
@@ -234,10 +241,13 @@ describe('New Features UI Integration (Kinsoku, Velocity, MultiSite, FullscreenS
       unresolvedForeshadowings: [
         {
           id: 'f-omen',
-          plantedOffset: 2,
           title: '誓いの指輪',
+          status: 'PLANTED',
+          plantedChapterId: 'ch-1',
           plantedChapterTitle: '第1章',
           plantedLine: 3,
+          plantedOffset: 2,
+          hints: [],
         },
       ],
     });
@@ -326,5 +336,71 @@ describe('New Features UI Integration (Kinsoku, Velocity, MultiSite, FullscreenS
       bannerJumpBtn.click();
       expect(jumpSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  it('binds P2P Collab badge and modal properly in PlotailorApp', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    const app = new PlotailorApp();
+
+    expect(app.collabController).toBeDefined();
+
+    const badge = document.getElementById('btnCollabBadge');
+    const peerCount = document.getElementById('collabPeerCount');
+    const modal = document.getElementById('collabModal');
+    const closeBtn = document.getElementById('btnCloseCollabModal');
+
+    expect(badge).not.toBeNull();
+    expect(peerCount?.textContent).toBe('0');
+    expect(modal?.style.display).toBe('none');
+
+    // Clicking badge opens modal
+    badge?.click();
+    expect(modal?.style.display).toBe('flex');
+
+    // Clicking close hides modal
+    closeBtn?.click();
+    expect(modal?.style.display).toBe('none');
+
+    // Connect via controller and verify badge updates
+    app.collabController.connect('test-collab-room');
+    expect(app.collabController.getIsConnected()).toBe(true);
+    expect(peerCount?.textContent).toBe('1');
+    expect(badge?.style.color).toBe('rgb(16, 185, 129)'); // #10b981 in RGB
+
+    app.collabController.disconnect();
+    expect(app.collabController.getIsConnected()).toBe(false);
+    expect(peerCount?.textContent).toBe('0');
+  });
+
+  it('binds Colab Offload footer indicator and modal in PlotailorApp', async () => {
+    const { PlotailorApp } = await import('../src/app/main.js');
+    const app = new PlotailorApp();
+
+    expect(app.offloadController).toBeDefined();
+
+    const footer = document.getElementById('colabCuFooterIndicator');
+    const modal = document.getElementById('offloadModal');
+    const closeBtn = document.getElementById('btnCloseOffloadModal');
+    const hamburgerItem = document.getElementById('menuCollabOffload');
+
+    expect(footer).not.toBeNull();
+    expect(modal).not.toBeNull();
+    expect(modal?.style.display).toBe('none');
+    expect(footer?.textContent).toContain('Colab: 0.0000 CU');
+
+    // Click footer indicator opens offload modal
+    footer?.click();
+    expect(modal?.style.display).toBe('flex');
+
+    // Close modal
+    closeBtn?.click();
+    expect(modal?.style.display).toBe('none');
+
+    // Click hamburger menu item opens offload modal
+    hamburgerItem?.click();
+    expect(modal?.style.display).toBe('flex');
+
+    closeBtn?.click();
+    expect(modal?.style.display).toBe('none');
   });
 });

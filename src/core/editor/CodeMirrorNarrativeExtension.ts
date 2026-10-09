@@ -37,26 +37,31 @@ export const setNarrativeAnalysisResult = StateEffect.define<NarrativeAnalysisRe
  */
 export const lintWarningMark = Decoration.mark({
   class: 'cm-lint-warning',
+  inclusive: false,
   attributes: { title: '推敲・構文警告' },
 });
 
 export const pronounMissingMark = Decoration.mark({
   class: 'cm-pronoun-missing',
+  inclusive: false,
   attributes: { title: '主語抜け（ゼロ代名詞）検知' },
 });
 
 export const lintMultipleMark = Decoration.mark({
   class: 'cm-lint-multiple',
+  inclusive: false,
   attributes: { title: '複数の推敲指摘が重複しています' },
 });
 
 export const povWarningMark = Decoration.mark({
   class: 'cm-pov-warning',
+  inclusive: false,
   attributes: { title: '内面描写・認識POV検知' },
 });
 
 export const entitySpanMark = Decoration.mark({
   class: 'cm-entity-span',
+  inclusive: false,
   attributes: { title: '固有表現・エンティティ' },
 });
 
@@ -133,13 +138,11 @@ class NarrativeViewPlugin {
     if (this.pendingResult && !this.view.composing) {
       const { decorationSet, result } = this.pendingResult;
       this.pendingResult = null;
-      const sel = this.view.state.selection;
       this.view.dispatch({
         effects: [
           setNarrativeDecorations.of(decorationSet),
           setNarrativeAnalysisResult.of(result),
         ],
-        selection: sel,
       });
       if (this.onAnalysisResult) {
         this.onAnalysisResult(result);
@@ -150,7 +153,10 @@ class NarrativeViewPlugin {
       // Check if user is currently composing with Japanese IME
       const isComposing = this.view.composing;
       if (!isComposing) {
-        this.runAnalysis(false);
+        const isHistoryAction = update.transactions.some(
+          (tr) => tr.isUserEvent('undo') || tr.isUserEvent('redo')
+        );
+        this.runAnalysis(isHistoryAction);
       }
     }
   }
@@ -238,13 +244,11 @@ class NarrativeViewPlugin {
         this.pendingResult = { decorationSet, result };
         return;
       }
-      const sel = this.view.state.selection;
       this.view.dispatch({
         effects: [
           setNarrativeDecorations.of(decorationSet),
           setNarrativeAnalysisResult.of(result),
         ],
-        selection: sel,
       });
 
       // Notify external listeners (e.g., Right Pane Narrative Inspector Dock)

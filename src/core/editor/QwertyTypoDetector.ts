@@ -110,6 +110,10 @@ const CANONICAL_PATTERNS: BuiltinTypoPattern[] = [
   { original: 'siyou', candidate: 'syou', distance: 1.0, isTransposition: false, confidence: 0.92 },
   // 23. ローマ字拗音ミス: tyotto -> totto
   { original: 'tyotto', candidate: 'totto', distance: 1.0, isTransposition: false, confidence: 0.90 },
+  // 24. キーボード隣接母音・子音シフトミス: わけがにいで -> わけがないで
+  { original: 'わけがにいで', candidate: 'わけがないで', distance: 1.0, isTransposition: false, confidence: 0.96 },
+  // 25. キーボード隣接母音・子音シフトミス: わけがにい -> わけがない
+  { original: 'わけがにい', candidate: 'わけがない', distance: 1.0, isTransposition: false, confidence: 0.96 },
 ];
 
 export class QwertyTypoDetector {
@@ -382,5 +386,42 @@ export class QwertyTypoDetector {
       confidence,
       layer,
     });
+  }
+
+  /**
+   * Detects 3+ consecutive identical character phonological anomalies (e.g. 「受け継がれれれし」「だだだだ」).
+   * Excludes literary ellipses, symbols, and dialogue screams.
+   */
+  public detectPhonologicalRepetitions(text: string): Array<{
+    original: string;
+    from: number;
+    to: number;
+    char: string;
+    count: number;
+  }> {
+    const results: Array<{
+      original: string;
+      from: number;
+      to: number;
+      char: string;
+      count: number;
+    }> = [];
+    if (!text) return results;
+
+    const regex = /([\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}\p{Letter}])\1{2,}/gu;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      const matchText = match[0];
+      const from = match.index;
+      const to = from + matchText.length;
+      results.push({
+        original: matchText,
+        from,
+        to,
+        char: match[1],
+        count: matchText.length,
+      });
+    }
+    return results;
   }
 }

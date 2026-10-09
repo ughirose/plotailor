@@ -95,6 +95,31 @@ export class ParticleRepetitionLinterEngine {
       if (sentenceText.slice(Math.max(0, index - 2), index + 1) === 'および') return false;
       const prevWord = sentenceText.slice(Math.max(0, index - 1), index + 1);
       if (['だが', 'すが'].includes(prevWord)) return false;
+    } else if (particle === 'に') {
+      // 1. Exclude common adverbs and adjectival nouns ending in 'に':
+      const beforeSpan = sentenceText.slice(Math.max(0, index - 5), index + particle.length);
+      if (
+        /(?:徒ら|徒|直ち|忽ち|密か|遥か|かすか|微か|現|真|大い|ついに|遂|実|特|単|主|即座|同時|互い|様々|無駄|余計|自然|俄か|不意|一斉|滅多|皮肉|何処|どこ|誰|何|いつ|ため|為|よう|様)に$/.test(
+          beforeSpan
+        )
+      ) {
+        return false;
+      }
+
+      // 2. Exclude grammaticalized modality patterns: 〜ことになった, 〜ことになり, 〜ことになると
+      const rest = sentenceText.slice(index);
+      if (/^に(?:なった|なり|なる|なら)/.test(rest) && /(?:こと|事|よう|様)に$/.test(beforeSpan)) {
+        return false;
+      }
+
+      // 3. Exclude compound particles: によると, よれば, よって, ついて, 対して, とって, おいて, つれて, 従い, 際し, かけて, 関し
+      if (/^に(?:よると|よれば|よって|関して|ついて|対して|とって|おいて|つれて|従い|従て|際し|かけて|関し)/.test(rest)) {
+        return false;
+      }
+      // 4. Exclude compound conjunctions: にもかかわらず, にすぎない
+      if (/^に(?:もかかわらず|も拘らず|すぎない|過ぎない)/.test(rest)) {
+        return false;
+      }
     } else if (particle === 'と') {
       // 1. Exclude quoted literals: 「と」, 『と』, "と", 'と'
       if (
@@ -104,13 +129,18 @@ export class ParticleRepetitionLinterEngine {
         return false;
       }
 
-      // 2. Exclude nouns starting with 'と' (formal nouns, time, place): とき, ところ, とおり, となり, とちゅう
+      // 2. Exclude adverbs starting with 'と': とうとう, とりわけ, とにかく, ともかく
       const rest = sentenceText.slice(index);
+      if (/^と(?:うとう|りわけ|にかく|もかく)/.test(rest)) {
+        return false;
+      }
+
+      // 3. Exclude nouns starting with 'と' (formal nouns, time, place): とき, ところ, とおり, となり, とちゅう
       if (/^と(?:き|ころ|おり|なり|ちゅう)/.test(rest)) {
         return false;
       }
 
-      // 3. Exclude adverbs ending in 'と':
+      // 4. Exclude adverbs ending in 'と':
       const before12 = sentenceText.slice(Math.max(0, index - 10), index + particle.length);
       if (
         /ひょっとする?と$/.test(before12) ||
@@ -119,13 +149,18 @@ export class ParticleRepetitionLinterEngine {
         return false;
       }
 
-      // 4. Exclude compound particles and auxiliaries: として, としては, とともに, という, といった, とする, とした
-      if (/^と(?:して|ともに|いう|いった|のこと|する|した|みる|みられる)/.test(rest)) {
+      // 5. Exclude compound particles and auxiliaries: として, としては, とともに, という, といった, とする, とした, と云う, と云った
+      if (/^と(?:して|ともに|いう|いった|のこと|する|した|みる|みられる|云う|云った|云われ)/.test(rest)) {
         return false;
       }
 
-      // 5. Exclude quote/thought verbs: 〜と思う, 〜と考え, 〜と言う
+      // 6. Exclude quote/thought verbs: 〜と思う, 〜と考え, 〜と言う
       if (/^と(?:は思|思|は考|考|は言|言|は聞|聞|は感|感)/.test(rest)) {
+        return false;
+      }
+
+      // 7. Exclude parallel/listing particles: とか (〜とか〜とか)
+      if (/^とか/.test(rest)) {
         return false;
       }
     }
@@ -179,7 +214,6 @@ export class ParticleRepetitionLinterEngine {
           continue;
         }
 
-        // Find all occurrences of the particle in this sentence
         const particleMatches: { index: number; text: string }[] = [];
         let pIdx = sentenceText.indexOf(particle);
         while (pIdx !== -1) {
@@ -189,26 +223,67 @@ export class ParticleRepetitionLinterEngine {
           pIdx = sentenceText.indexOf(particle, pIdx + particle.length);
         }
 
-        if (particleMatches.length >= threshold) {
-          const first = particleMatches[0];
-          const last = particleMatches[particleMatches.length - 1];
+        // Dual-Layer Literary Clause Recognition:
+        // For long complex sentences (> 35 characters), particle repetition is evaluated
+        // per clause (delimited by '、' or punctuation) to respect natural compound/complex literary sentences.
+        // For short sentences (<= 35 characters), high density across the short sentence is flagged.
+        if (sentenceText.length > 35) {
+          const clauseRegex = /[^、――──「」『』（）…：；\n]+(?:[、――──「」『』（）…：；\n]|$)/g;
+          let cMatch: RegExpExecArray | null;
+          while ((cMatch = clauseRegex.exec(sentenceText)) !== null) {
+            const clauseText = cMatch[0];
+            const clauseStart = cMatch.index;
 
-          let from = sentenceStart + first.index;
-          let to = sentenceStart + last.index + last.text.length;
+            const clauseMatches: { index: number; text: string }[] = [];
+            let pIdx = clauseText.indexOf(particle);
+            while (pIdx !== -1) {
+              if (this.isValidParticleOccurrence(clauseText, pIdx, particle)) {
+                clauseMatches.push({ index: pIdx, text: particle });
+              }
+              pIdx = clauseText.indexOf(particle, pIdx + particle.length);
+            }
 
-          if (options?.displayMap) {
-            from = options.displayMap.toDisplayOffset(from);
-            to = options.displayMap.toDisplayOffset(to);
+            if (clauseMatches.length >= threshold) {
+              const triggerMatch = clauseMatches[clauseMatches.length - 1];
+              let from = sentenceStart + clauseStart + triggerMatch.index;
+              let to = from + triggerMatch.text.length;
+
+              if (options?.displayMap) {
+                from = options.displayMap.toDisplayOffset(from);
+                to = options.displayMap.toDisplayOffset(to);
+              }
+
+              diagnostics.push({
+                from,
+                to,
+                severity: 'warning',
+                message: `【助詞連続重複】同一助詞「${particle}」が節内に${clauseMatches.length}回連続・重複出現しています。表現を見直してください。`,
+                particle,
+                count: clauseMatches.length,
+              });
+            }
           }
+        } else {
+          // Short sentence (<= 35 chars): evaluate total occurrences
+          if (particleMatches.length >= threshold) {
+            const triggerMatch = particleMatches[particleMatches.length - 1];
+            let from = sentenceStart + triggerMatch.index;
+            let to = from + triggerMatch.text.length;
 
-          diagnostics.push({
-            from,
-            to,
-            severity: 'warning',
-            message: `【助詞連続重複】同一助詞「${particle}」が文中に${particleMatches.length}回連続・重複出現しています。表現を見直してください。`,
-            particle,
-            count: particleMatches.length,
-          });
+            if (options?.displayMap) {
+              from = options.displayMap.toDisplayOffset(from);
+              to = options.displayMap.toDisplayOffset(to);
+            }
+
+            diagnostics.push({
+              from,
+              to,
+              severity: 'warning',
+              message: `【助詞連続重複】同一助詞「${particle}」が文中に${particleMatches.length}回連続・重複出現しています。表現を見直してください。`,
+              particle,
+              count: particleMatches.length,
+            });
+          }
         }
       }
     }

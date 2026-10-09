@@ -16,6 +16,8 @@ export interface InlineDialogOptions {
   cancelText?: string;
   /** Whether this is a destructive action (styles confirm button red) */
   destructive?: boolean;
+  /** Optional required text verification for 2-step destructive confirmation (e.g. 'RESET') */
+  requiredInput?: string;
 }
 
 export interface InlinePromptOptions extends InlineDialogOptions {
@@ -34,6 +36,17 @@ export function showInlineConfirm(options: InlineDialogOptions): Promise<boolean
     const overlay = createOverlay();
     const dialog = createDialogBox(options.message, options.detail);
 
+    let inputEl: HTMLInputElement | null = null;
+    if (options.requiredInput) {
+      inputEl = document.createElement('input');
+      inputEl.type = 'text';
+      inputEl.className = 'inline-dialog-input';
+      inputEl.placeholder = `実行するには「${options.requiredInput}」と入力してください`;
+      inputEl.style.marginTop = '8px';
+      inputEl.style.marginBottom = '12px';
+      dialog.append(inputEl);
+    }
+
     const btnRow = document.createElement('div');
     btnRow.className = 'inline-dialog-buttons';
 
@@ -43,14 +56,47 @@ export function showInlineConfirm(options: InlineDialogOptions): Promise<boolean
       options.destructive ? 'destructive' : 'confirm'
     );
 
+    if (options.requiredInput && inputEl) {
+      btnConfirm.disabled = true;
+      btnConfirm.style.opacity = '0.4';
+      btnConfirm.style.cursor = 'not-allowed';
+
+      inputEl.addEventListener('input', () => {
+        const matches = inputEl!.value.trim() === options.requiredInput;
+        btnConfirm.disabled = !matches;
+        btnConfirm.style.opacity = matches ? '1' : '0.4';
+        btnConfirm.style.cursor = matches ? 'pointer' : 'not-allowed';
+      });
+
+      inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !btnConfirm.disabled) {
+          overlay.remove();
+          resolve(true);
+        } else if (e.key === 'Escape') {
+          overlay.remove();
+          resolve(false);
+        }
+      });
+    }
+
     btnCancel.addEventListener('click', () => { overlay.remove(); resolve(false); });
-    btnConfirm.addEventListener('click', () => { overlay.remove(); resolve(true); });
+    btnConfirm.addEventListener('click', () => {
+      if (options.requiredInput && inputEl && inputEl.value.trim() !== options.requiredInput) {
+        return;
+      }
+      overlay.remove();
+      resolve(true);
+    });
 
     btnRow.append(btnCancel, btnConfirm);
     dialog.append(btnRow);
     overlay.append(dialog);
     document.querySelector('.app-container')?.append(overlay) ?? document.body.append(overlay);
-    btnConfirm.focus();
+    if (inputEl) {
+      inputEl.focus();
+    } else {
+      btnConfirm.focus();
+    }
   });
 }
 

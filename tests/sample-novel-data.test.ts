@@ -50,7 +50,7 @@ describe('SampleNovelData - 『星辰の残響』確定データセット＆検�
 
     // 2. 傍点記法 《《》》 または <<<<>>>>
     expect(fullText).toMatch(/《《[^》]+》》/);
-    expect(fullText).toContain('二重満月《《コンジャンクション》》');
+    expect(fullText).toContain('秘宝《《アルカディア》》');
     expect(fullText).toContain('<<<<星辰の盟約>>>>');
 
     // 3. 大見出し記法［＃大見出し］...［＃大見出し終わり］

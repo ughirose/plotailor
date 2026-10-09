@@ -7,19 +7,46 @@
  * 逆引きジャンプアンカー生成、伏線放置スパン・回収率の数理スコアリングを提供する。
  */
 
+import {
+  EpistemicCalendarBridge,
+} from '../causality/EpistemicCalendarBridge.js';
+
 export type CausalRelationType = 'causes' | 'enables' | 'resolves' | 'prerequisite';
 
 export type NodeSyncStatus =
   | 'NORMAL'
   | 'CYCLE_CONFLICT'
   | 'TIME_PARADOX'
+  | 'EPISTEMIC_CONFLICT'
+  | 'CELESTIAL_CONFLICT'
+  | 'LIFESPAN_CONFLICT'
   | 'UNRESOLVED'
   | 'RESOLVED';
 
 export type ConflictCategory =
   | 'cycle'
   | 'chronological_reversal'
-  | 'dangling_prerequisite';
+  | 'dangling_prerequisite'
+  | 'epistemic_fog_violation'
+  | 'moon_phase_mismatch'
+  | 'lifespan_breach';
+
+export interface EpistemicContextInput {
+  speakerId: string;
+  speakerLocationId?: string;
+  mentionedEventId: string;
+  eventOccurrenceDay?: number;
+  mentionDay?: number;
+}
+
+export interface CelestialContextInput {
+  satelliteId?: string;
+  expectedPhase?: string;
+  year?: number;
+  month?: number;
+  day?: number;
+  absoluteDay?: number;
+}
 
 export interface CausalNodeInput {
   id: string;
@@ -33,6 +60,10 @@ export interface CausalNodeInput {
   discourseRatio?: number; // 読者体験軸進行度 (Sjuzhet: 0.0〜1.0)
   isForeshadowing?: boolean;
   resolvedNodeId?: string;
+  characterId?: string;
+  storyYear?: number;
+  epistemicContext?: EpistemicContextInput;
+  celestialContext?: CelestialContextInput;
 }
 
 export interface CausalEdgeInput {
@@ -78,6 +109,9 @@ export interface NarrativeIntegrityMetrics {
   totalEdges: number;
   cycleConflictCount: number;
   timeParadoxCount: number;
+  epistemicConflictCount: number;
+  celestialConflictCount: number;
+  lifespanConflictCount: number;
   unresolvedForeshadowCount: number;
   resolvedForeshadowCount: number;
   resolutionRate: number; // 0.0 - 1.0
@@ -117,12 +151,26 @@ export interface SyncAnalysisResult {
 export class CausalTimelineSyncEngine {
   private nodes: Map<string, CausalNodeInput> = new Map();
   private edges: CausalEdgeInput[] = [];
+  private epistemicBridge: EpistemicCalendarBridge | null = null;
 
-  constructor(nodes: CausalNodeInput[] = [], edges: CausalEdgeInput[] = []) {
+  constructor(
+    nodes: CausalNodeInput[] = [],
+    edges: CausalEdgeInput[] = [],
+    epistemicBridge?: EpistemicCalendarBridge
+  ) {
     for (const node of nodes) {
       this.nodes.set(node.id, { ...node });
     }
     this.edges = [...edges];
+    this.epistemicBridge = epistemicBridge ?? null;
+  }
+
+  public setEpistemicBridge(bridge: EpistemicCalendarBridge | null): void {
+    this.epistemicBridge = bridge;
+  }
+
+  public getEpistemicBridge(): EpistemicCalendarBridge | null {
+    return this.epistemicBridge;
   }
 
   public setNodes(nodes: CausalNodeInput[]): void {
@@ -264,7 +312,85 @@ export class CausalTimelineSyncEngine {
       }
     }
 
-    // 3. 各ノードの同期状態・ジャンプアンカー・放置スパン計算
+    // 3. EpistemicCalendarBridge による認知フォグ・天体暦・生没年検証
+    const epistemicNodeMap = new Map<string, { category: ConflictCategory; description: string; status: NodeSyncStatus }>();
+    if (this.epistemicBridge) {
+      for (const node of this.nodes.values()) {
+        // 3.1 認知フォグ検証
+        if (node.epistemicContext) {
+          const ep = node.epistemicContext;
+          const mentionDay = ep.mentionDay ?? node.storyDay ?? 0;
+          const res = this.epistemicBridge.verifyEpistemicMention(ep.speakerId, ep.mentionedEventId, mentionDay);
+          if (res.status === 'VIOLATION') {
+            const desc = res.reason || `認知フォグ違反: 情報到達前の日付（Day ${mentionDay}）に事件言及が発生しています`;
+            conflicts.push({
+              nodeId: node.id,
+              category: 'epistemic_fog_violation',
+              description: desc,
+              severity: 'error',
+            });
+            epistemicNodeMap.set(node.id, {
+              category: 'epistemic_fog_violation',
+              description: desc,
+              status: 'EPISTEMIC_CONFLICT',
+            });
+          }
+        }
+
+        // 3.2 天体月相検証
+        if (node.celestialContext && node.celestialContext.satelliteId && node.celestialContext.expectedPhase) {
+          const cc = node.celestialContext;
+          const satId = cc.satelliteId!;
+          const expPhase = cc.expectedPhase!;
+          const dateOrAbs = cc.absoluteDay !== undefined
+            ? cc.absoluteDay
+            : (cc.year !== undefined && cc.month !== undefined && cc.day !== undefined)
+              ? { year: cc.year, month: cc.month, day: cc.day }
+              : node.storyDay ?? 0;
+
+          const res = this.epistemicBridge.verifyMoonPhaseMention(satId, dateOrAbs, expPhase);
+          if (!res.isValid) {
+            const desc = res.reason || `天体月相不整合: ${satId} の月相が描写（${expPhase}）と一致しません`;
+            conflicts.push({
+              nodeId: node.id,
+              category: 'moon_phase_mismatch',
+              description: desc,
+              severity: 'warning',
+            });
+            if (!epistemicNodeMap.has(node.id)) {
+              epistemicNodeMap.set(node.id, {
+                category: 'moon_phase_mismatch',
+                description: desc,
+                status: 'CELESTIAL_CONFLICT',
+              });
+            }
+          }
+        }
+
+        // 3.3 生没年検証
+        if (node.characterId && node.storyYear !== undefined) {
+          const res = this.epistemicBridge.verifyCharacterLifespan(node.characterId, node.storyYear);
+          if (!res.isValid) {
+            const desc = res.reason || `生没年境界違反: 登場人物の生存期間外のアクションです`;
+            conflicts.push({
+              nodeId: node.id,
+              category: 'lifespan_breach',
+              description: desc,
+              severity: 'error',
+            });
+            if (!epistemicNodeMap.has(node.id)) {
+              epistemicNodeMap.set(node.id, {
+                category: 'lifespan_breach',
+                description: desc,
+                status: 'LIFESPAN_CONFLICT',
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 4. 各ノードの同期状態・ジャンプアンカー・放置スパン計算
     const synchronizedNodes: SynchronizedNode[] = [];
     let totalPlanted = 0;
     let totalResolved = 0;
@@ -298,7 +424,16 @@ export class CausalTimelineSyncEngine {
         conflictDescription = '時間順序の逆転（客観時間の前後矛盾）が発生しています';
         highlightColor = '#ef4444'; // 赤色
       }
-      // 優先度 3: 伏線ステータス
+      // 優先度 3: 認知フォグ・天体暦・生没年矛盾
+      else if (epistemicNodeMap.has(node.id)) {
+        const epInfo = epistemicNodeMap.get(node.id)!;
+        status = epInfo.status;
+        isConflict = true;
+        conflictType = epInfo.category;
+        conflictDescription = epInfo.description;
+        highlightColor = epInfo.category === 'moon_phase_mismatch' ? '#f59e0b' : '#ef4444';
+      }
+      // 優先度 4: 伏線ステータス
       else if (node.isForeshadowing) {
         totalPlanted += 1;
         if (node.resolvedNodeId && this.nodes.has(node.resolvedNodeId)) {
@@ -358,11 +493,14 @@ export class CausalTimelineSyncEngine {
       conf.anchor = jumpAnchors.get(conf.nodeId);
     }
 
-    // 4. メトリクス算出
+    // 5. メトリクス算出
     const totalNodes = this.nodes.size;
     const totalEdges = this.edges.length;
     const cycleConflictCount = cycleNodeIds.size;
     const timeParadoxCount = paradoxNodeIds.size;
+    const epistemicConflictCount = conflicts.filter((c) => c.category === 'epistemic_fog_violation').length;
+    const celestialConflictCount = conflicts.filter((c) => c.category === 'moon_phase_mismatch').length;
+    const lifespanConflictCount = conflicts.filter((c) => c.category === 'lifespan_breach').length;
     const unresolvedForeshadowCount = totalPlanted - totalResolved;
     const resolutionRate = totalPlanted > 0 ? totalResolved / totalPlanted : 1.0;
     const averageDanglingSpanChapters =
@@ -372,15 +510,21 @@ export class CausalTimelineSyncEngine {
     let penalty =
       cycleConflictCount * 25 +
       timeParadoxCount * 20 +
+      epistemicConflictCount * 20 +
+      lifespanConflictCount * 15 +
+      celestialConflictCount * 10 +
       unresolvedForeshadowCount * 5;
     const integrityScore = Math.max(0, Math.min(100, 100 - penalty));
-    const isCleanDag = cycleConflictCount === 0 && timeParadoxCount === 0;
+    const isCleanDag = cycleConflictCount === 0 && timeParadoxCount === 0 && epistemicConflictCount === 0 && lifespanConflictCount === 0;
 
     const metrics: NarrativeIntegrityMetrics = {
       totalNodes,
       totalEdges,
       cycleConflictCount,
       timeParadoxCount,
+      epistemicConflictCount,
+      celestialConflictCount,
+      lifespanConflictCount,
       unresolvedForeshadowCount,
       resolvedForeshadowCount: totalResolved,
       resolutionRate,
@@ -389,7 +533,7 @@ export class CausalTimelineSyncEngine {
       isCleanDag,
     };
 
-    // 5. タイムラインプロットデータ作成 (Sjuzhet X: 0-1000, Fabula Y)
+    // 6. タイムラインプロットデータ作成 (Sjuzhet X: 0-1000, Fabula Y)
     const timelineNodes: TimelinePlotNode[] = synchronizedNodes.map((n) => {
       const x = Math.round((n.discourseRatio ?? n.chapterIndex / Math.max(1, maxChapterIndex)) * 1000);
       const storyY = n.storyDay ?? n.chapterIndex * 10;
@@ -405,8 +549,8 @@ export class CausalTimelineSyncEngine {
     });
 
     const timelineEdges = this.edges.map((e) => {
-      const fromConf = cycleNodeIds.has(e.fromId) || paradoxNodeIds.has(e.fromId);
-      const toConf = cycleNodeIds.has(e.toId) || paradoxNodeIds.has(e.toId);
+      const fromConf = cycleNodeIds.has(e.fromId) || paradoxNodeIds.has(e.fromId) || epistemicNodeMap.has(e.fromId);
+      const toConf = cycleNodeIds.has(e.toId) || paradoxNodeIds.has(e.toId) || epistemicNodeMap.has(e.toId);
       const isConf = fromConf && toConf;
 
       return {
@@ -429,3 +573,4 @@ export class CausalTimelineSyncEngine {
     };
   }
 }
+

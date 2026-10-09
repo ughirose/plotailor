@@ -1,5 +1,9 @@
 import { LiteraryExporter, normalizeAozoraMarkup } from '../../core/export/LiteraryExporter.js';
 import { Epub3PackageBuilder } from '../../core/export/Epub3PackageBuilder.js';
+import { Epub3BinaryPackager } from '../../core/export/Epub3BinaryPackager.js';
+import { InDesignTaggedTextExporter } from '../../core/export/InDesignTaggedTextExporter.js';
+import { ManuscriptSpecSheetGenerator } from '../../core/export/ManuscriptSpecSheetGenerator.js';
+import { CommercialManuscriptPackager } from '../../core/export/CommercialManuscriptPackager.js';
 import { MultiSiteNovelFormatter } from '../../core/exporters/multisite-novel-formatter.js';
 import type { LoreEntity } from '../../core/lore/LoreEntityManager.js';
 import { PrhPersistenceManager } from '../../core/editor/PrhPersistenceManager.js';
@@ -252,6 +256,116 @@ export class ExportController {
     }
   }
 
+  public downloadBinary(filename: string, bytes: Uint8Array, mimeType: string): void {
+    if (typeof document !== 'undefined') {
+      const blob = new Blob([bytes as unknown as BlobPart], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1000);
+    }
+  }
+
+  public exportDenshokyoEpubBinary(): void {
+    const title = this.deps.getWorkTitle();
+    const chapters = this.deps.getChapters();
+    const epubBytes = Epub3BinaryPackager.createPackage(
+      chapters.map((ch, idx) => ({
+        id: ch.id || `ch-${idx + 1}`,
+        title: ch.title,
+        content: ch.content,
+      })),
+      {
+        title,
+        direction: this.deps.isVertical() ? 'rtl' : 'ltr',
+        enableTcy: true,
+      }
+    );
+
+    this.downloadBinary(`${title}.epub`, epubBytes, 'application/epub+zip');
+    this.deps.showToast(`📥「${title}.epub」（電書協EPUB3）をダウンロードしました`);
+  }
+
+  public exportInDesignTaggedText(action: 'copy' | 'download'): void {
+    const title = this.deps.getWorkTitle();
+    const chapters = this.deps.getChapters();
+    const taggedText = InDesignTaggedTextExporter.exportFullText(
+      title,
+      chapters.map((ch) => ({ title: ch.title, content: ch.content })),
+      { enableTcy: true }
+    );
+
+    if (action === 'copy') {
+      this.copyTextToClipboard(taggedText, '✅ InDesign タグ付きテキストをコピーしました');
+    } else {
+      LiteraryExporter.downloadFile(`${title}_indesign.txt`, taggedText, 'text/plain;charset=utf-16le');
+      this.deps.showToast(`📥「${title}_indesign.txt」をダウンロードしました`);
+    }
+  }
+
+  public exportManuscriptSpecSheet(action: 'copy' | 'download'): void {
+    const title = this.deps.getWorkTitle();
+    const chapters = this.deps.getChapters();
+    const lore = this.deps.getLoreEntities();
+    const specSheet = ManuscriptSpecSheetGenerator.generateSpecSheet({
+      title,
+      chapters,
+      loreEntities: lore,
+    });
+
+    if (action === 'copy') {
+      this.copyTextToClipboard(specSheet, '✅ 原稿割付指示書をコピーしました');
+    } else {
+      LiteraryExporter.downloadFile(`${title}_原稿割付指示書.txt`, specSheet, 'text/plain;charset=utf-8');
+      this.deps.showToast(`📥「${title}_原稿割付指示書.txt」をダウンロードしました`);
+    }
+  }
+
+  public exportCommercialPackage(skipConfirm: boolean = true): void {
+    const title = this.deps.getWorkTitle();
+    const chapters = this.deps.getChapters();
+    const lore = this.deps.getLoreEntities();
+    const totalChars = chapters.reduce((acc, c) => acc + (c.content?.length || 0), 0);
+    const genkoPages = (totalChars / 400).toFixed(1);
+
+    if (!skipConfirm && typeof window !== 'undefined' && typeof window.confirm === 'function') {
+      const summaryMsg = `【商業入稿パッケージ一括出力プレビュー】\n\n` +
+        `■ 作品名: ${title}\n` +
+        `■ 収録章数: 全 ${chapters.length} 章\n` +
+        `■ 総文字数: ${totalChars.toLocaleString()} 字 (原稿用紙 約 ${genkoPages} 枚換算)\n` +
+        `■ 世界観設定・登場人物: ${lore.length} 件\n\n` +
+        `【アーカイブ収録ファイル構成】\n` +
+        ` 1. 電書協仕様 EPUB 3.2 バイナリ (${title}.epub)\n` +
+        ` 2. InDesign タグ付きテキスト UTF-16LE (${title}_indesign.txt)\n` +
+        ` 3. 商業印刷・組版割付指示書 (${title}_原稿割付指示書.txt)\n` +
+        ` 4. Merkle-PoP 創作証明台帳＆改ざん防止署名\n` +
+        ` 5. PRH 表記ゆれ定義ファイル\n\n` +
+        `上記構成で一括ZIPアーカイブを生成・ダウンロードしますか？`;
+
+      if (!window.confirm(summaryMsg)) {
+        return;
+      }
+    }
+
+    const zipBytes = CommercialManuscriptPackager.createPackage({
+      title,
+      chapters,
+      loreEntities: lore,
+      popAuditCount: this.deps.getKeystrokeCount() || 350,
+      direction: this.deps.isVertical() ? 'rtl' : 'ltr',
+      enableTcy: true,
+    });
+
+    this.downloadBinary(`${title}_商業入稿パッケージ.zip`, zipBytes, 'application/zip');
+    this.deps.showToast(`🎁「${title}_商業入稿パッケージ.zip」を一括生成しました！`);
+  }
+
   public initExportModal(): void {
     const btnExport = document.getElementById('btnExportAozora');
     btnExport?.addEventListener('click', () => this.openExportModal());
@@ -266,10 +380,21 @@ export class ExportController {
     document.getElementById('btnCopyNarou')?.addEventListener('click', () => this.exportNarou());
     document.getElementById('btnCopyDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('copy'));
     document.getElementById('btnDownloadDenshokyoEpub')?.addEventListener('click', () => this.exportDenshokyoEpub('download'));
+    document.getElementById('btnDownloadDenshokyoEpubBinary')?.addEventListener('click', () => this.exportDenshokyoEpubBinary());
+    document.getElementById('btnCopyInDesignTagged')?.addEventListener('click', () => this.exportInDesignTaggedText('copy'));
+    document.getElementById('btnDownloadInDesignTagged')?.addEventListener('click', () => this.exportInDesignTaggedText('download'));
+    document.getElementById('btnCopySpecSheet')?.addEventListener('click', () => this.exportManuscriptSpecSheet('copy'));
+    document.getElementById('btnDownloadSpecSheet')?.addEventListener('click', () => this.exportManuscriptSpecSheet('download'));
+    document.getElementById('btnDownloadCommercialPackage')?.addEventListener('click', () => this.exportCommercialPackage(false));
     document.getElementById('btnCopyPrhYaml')?.addEventListener('click', () => this.exportPrhYaml('copy'));
     document.getElementById('btnDownloadPrhYaml')?.addEventListener('click', () => this.exportPrhYaml('download'));
     document.getElementById('btnCopyPrhJson')?.addEventListener('click', () => this.exportPrhJson('copy'));
     document.getElementById('btnDownloadPrhJson')?.addEventListener('click', () => this.exportPrhJson('download'));
+
+    const menuExportCommercial = document.getElementById('menuExportCommercial');
+    menuExportCommercial?.addEventListener('click', () => {
+      this.openExportModal();
+    });
 
     const modal = document.getElementById('exportModal');
     modal?.addEventListener('click', (e) => {

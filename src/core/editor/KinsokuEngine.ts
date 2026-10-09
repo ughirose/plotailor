@@ -108,9 +108,10 @@ export class KinsokuEngine {
   /**
    * Detects prohibited characters at line boundaries of a fixed column grid.
    */
-  public detectViolations(text: string, columnsPerLine?: number): KinsokuViolation[] {
+  public detectViolations(text: string, columnsPerLine?: number, allowHanging?: boolean): KinsokuViolation[] {
     const cols = columnsPerLine ?? this.config.columnsPerLine;
-    const simulation = this.simulateTypesetting(text, cols, false);
+    const canHang = allowHanging ?? this.config.allowHanging;
+    const simulation = this.simulateTypesetting(text, cols, canHang);
     return simulation.lines.flatMap((l) => l.violations);
   }
 
