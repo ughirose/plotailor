@@ -76,8 +76,8 @@ export class NarrativeWorkerBridge {
       // If no worker instance was provided in constructor, create default one if in browser
       if (typeof Worker !== 'undefined') {
         try {
-          const workerUrl = new URL('../../worker/inferenceWorkerBundle.js', import.meta.url).href;
-          this.workerClient = new InferenceWorkerClient({ workerScriptUrl: workerUrl });
+          const worker = new Worker(new URL('../../worker/narrativeWorker.ts', import.meta.url), { type: 'module' });
+          this.workerClient = new InferenceWorkerClient({ workerInstance: worker });
         } catch {
           // Fallback or test environment
         }
