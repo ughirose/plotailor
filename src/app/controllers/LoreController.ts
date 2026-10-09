@@ -146,7 +146,12 @@ export class LoreController {
         </div>
         <div id="chapterListDndContainer">
           ${chapters.map((ch, idx) => {
-            const headings = SceneOutliner.extractHeadings(ch.content);
+            const rawHeadings = SceneOutliner.extractHeadings(ch.content);
+            const cleanTitle = ch.title.replace(/\s+/g, '');
+            const headings = rawHeadings.filter((h) => {
+              const hTitle = h.title.replace(/\s+/g, '');
+              return !(h.line <= 2 && hTitle === cleanTitle);
+            });
             const isChActive = ch.id === currentChapterId;
             return `
             <div class="chapter-block" style="margin-bottom: 6px;">
@@ -298,6 +303,20 @@ export class LoreController {
         });
       });
 
+      const headingItems = container.querySelectorAll('.toc-heading-item');
+      headingItems.forEach((hEl) => {
+        hEl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const targetEl = e.currentTarget as HTMLElement;
+          const chId = targetEl.dataset.chapterId;
+          const line = parseInt(targetEl.dataset.line || '1', 10);
+          const offset = parseInt(targetEl.dataset.offset || '0', 10);
+          if (chId && this.deps.jumpToPosition) {
+            this.deps.jumpToPosition(chId, line, offset);
+          }
+        });
+      });
+
       const btnNew = container.querySelector('#btnNewChapter');
       btnNew?.addEventListener('click', () => this.deps.addNewChapter());
     } else if (activeLeftTab === 'lore') {
@@ -359,7 +378,7 @@ export class LoreController {
               <div class="lore-card-header">
                 <span class="lore-card-title">${ent.name}</span>
                 <span style="display: flex; gap: 4px; align-items: center;">
-                  <span class="score-badge ${isShelved ? 'shelved' : ''}">S: ${score}</span>
+                  <span class="score-badge ${isShelved ? 'shelved' : ''}" title="設定の作り込み深度スコア（記述量・関連付け・独自項目）">重要度: ${score.toFixed(1)}</span>
                   <span class="lore-badge cat-${ent.category}">${getCategoryLabel(ent.category)}</span>
                 </span>
               </div>

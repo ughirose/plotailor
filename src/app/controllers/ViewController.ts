@@ -126,14 +126,22 @@ export class ViewController {
   public updateEditorWidth(): void {
     const editorBody = this.deps.getEditorBody();
     if (!editorBody) return;
+    const currentSize = FontSizeControl.clampFontSize(this.deps.getFontSize());
+
     if (this.isVertical) {
+      const pitchHeight = currentSize * 1.05;
+      const totalHeightPx = Math.ceil(this.deps.getKinsokuColumns() * pitchHeight + 76);
       editorBody.style.maxWidth = '';
       editorBody.style.width = 'max-content';
+      editorBody.style.maxHeight = `${totalHeightPx}px`;
+      editorBody.style.height = `${totalHeightPx}px`;
       return;
     }
-    const currentSize = FontSizeControl.clampFontSize(this.deps.getFontSize());
+
+    editorBody.style.maxHeight = '';
+    editorBody.style.height = '';
     const pitchWidth = currentSize * 1.03;
-    const totalWidthPx = Math.ceil(this.deps.getKinsokuColumns() * pitchWidth + 96 + 16);
+    const totalWidthPx = Math.ceil(this.deps.getKinsokuColumns() * pitchWidth + 96);
     editorBody.style.maxWidth = `${totalWidthPx}px`;
     editorBody.style.width = '100%';
   }

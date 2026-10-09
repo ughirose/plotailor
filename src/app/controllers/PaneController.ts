@@ -136,30 +136,17 @@ export class PaneController {
       this.deps.openSettingsModal();
     });
 
-    document.getElementById('menuExportAozora')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      btnMenu.setAttribute('aria-expanded', 'false');
-      this.deps.exportFullAozora('copy');
-      this.deps.openExportModal();
-    });
-
-    document.getElementById('menuExportMultiSite')?.addEventListener('click', () => {
+    const openExportHub = () => {
       dropdown.style.display = 'none';
       btnMenu.setAttribute('aria-expanded', 'false');
       this.deps.openExportModal();
-    });
+    };
 
-    document.getElementById('menuExportPoP')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      btnMenu.setAttribute('aria-expanded', 'false');
-      this.deps.exportPoPCertificate();
-    });
-
-    document.getElementById('menuExportCommercial')?.addEventListener('click', () => {
-      dropdown.style.display = 'none';
-      btnMenu.setAttribute('aria-expanded', 'false');
-      this.deps.openExportModal();
-    });
+    document.getElementById('menuExportHub')?.addEventListener('click', openExportHub);
+    document.getElementById('menuExportAozora')?.addEventListener('click', openExportHub);
+    document.getElementById('menuExportMultiSite')?.addEventListener('click', openExportHub);
+    document.getElementById('menuExportPoP')?.addEventListener('click', openExportHub);
+    document.getElementById('menuExportCommercial')?.addEventListener('click', openExportHub);
 
     document.getElementById('menuCollabOffload')?.addEventListener('click', () => {
       dropdown.style.display = 'none';

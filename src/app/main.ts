@@ -52,6 +52,7 @@ import { DualTrackTimelineEngine } from '../core/timeline/DualTrackTimeline.js';
 import { LiteraryExporter, normalizeAozoraMarkup } from '../core/export/LiteraryExporter.js';
 import { RevisionDiffSummarizer } from '../core/editor/RevisionDiffSummarizer.js';
 import { markdownBoldExtension } from '../core/editor/MarkdownBoldExtension.js';
+import { aozoraHeadingExtension } from '../core/editor/AozoraHeadingExtension.js';
 import { FontSizeControl, type FontMetrics } from '../ui/FontSizeControl.js';
 import { KinsokuEngine } from '../core/editor/KinsokuEngine.js';
 import { WritingVelocityWidget } from '../core/editor/WritingVelocityWidget.js';
@@ -854,6 +855,7 @@ export class PlotailorApp {
         keymap.of([...defaultKeymap, ...historyKeymap]),
         verticalWritingExtension(),
         markdownBoldExtension(),
+        aozoraHeadingExtension(),
         cm6ImeGuard(),
         createCompositionGuardExtension({ debounceMs: 150 }),
         multiLayerDecorationField,
@@ -903,6 +905,7 @@ export class PlotailorApp {
           if (update.selectionSet || update.docChanged) {
             this.updateCursorStats();
             this.updateHistoryUI();
+            this.ensureCursorVisible(update.view);
           }
         }),
         ...(this.collabController
@@ -1745,6 +1748,34 @@ export class PlotailorApp {
       const metrics = this.velocityWidget.getMetrics();
       if (metrics.cpm > 0) {
         this.fullscreenStatusBar.syncMetrics({ writingSpeedCpm: metrics.cpm });
+      }
+    }
+  }
+
+  private ensureCursorVisible(view: EditorView) {
+    if (view.composing) return;
+    const sel = view.state.selection.main;
+    const coords = view.coordsAtPos(sel.head);
+    if (!coords) return;
+
+    const scroller = view.scrollDOM;
+    const rect = scroller.getBoundingClientRect();
+
+    if (this.isVertical) {
+      // 縦書き: 水平方向（X軸）スクロール追従
+      const padding = 60;
+      if (coords.left < rect.left + padding) {
+        scroller.scrollLeft -= (rect.left + padding - coords.left);
+      } else if (coords.right > rect.right - padding) {
+        scroller.scrollLeft += (coords.right - (rect.right - padding));
+      }
+    } else {
+      // 横書き: 垂直方向（Y軸）スクロール追従
+      const padding = 40;
+      if (coords.top < rect.top + padding) {
+        scroller.scrollTop -= (rect.top + padding - coords.top);
+      } else if (coords.bottom > rect.bottom - padding) {
+        scroller.scrollTop += (coords.bottom - (rect.bottom - padding));
       }
     }
   }

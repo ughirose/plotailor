@@ -42,7 +42,7 @@ export class NarrativeInspectorDock {
   private archivedPrhRules: PlotailorPrhRule[] = [];
   private activeFilter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' | 'pov' | 'events' = 'all';
   private activeTier: InspectionTier = 'all';
-  private isScoreCardCollapsed: boolean = false;
+  private isScoreCardCollapsed: boolean = true;
 
   // Tier 3: Continuity Guard States
   private dagCycleReport: DagCycleReport | null = null;
@@ -340,24 +340,23 @@ export class NarrativeInspectorDock {
       <div class="narrative-inspector-dock" data-testid="narrative-inspector-dock">
         <!-- Top Score & Health Metric -->
         <div class="dock-card dock-score-card">
-          <div class="dock-card-header" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" data-action="toggle-score-card">
-            <span class="dock-card-title" style="display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="3層校正アーキテクチャ">
-              <span>🖋️ リアルタイム推敲・構文スコア</span>
-              <span class="model-badge" style="font-size: 10px; background: rgba(56, 139, 253, 0.15); color: var(--color-primary, #58a6ff); padding: 1px 6px; border-radius: 10px; border: 1px solid rgba(56, 139, 253, 0.3); font-weight: 600;">Ultra v15</span>
+          <div class="dock-card-header" style="display: flex; justify-content: space-between; align-items: center; gap: 8px; cursor: pointer; flex-wrap: nowrap; overflow: hidden;" data-action="toggle-score-card">
+            <span class="dock-card-title" style="display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1;" title="リアルタイム推敲・構文スコア (3層校正アーキテクチャ)">
+              <span style="font-weight: 600; font-size: 13px;">🖋️ リアルタイム推敲・構文スコア</span>
+              <span class="model-badge" style="font-size: 9px; background: rgba(56, 139, 253, 0.15); color: var(--color-primary, #58a6ff); padding: 0 5px; border-radius: 8px; border: 1px solid rgba(56, 139, 253, 0.3); font-weight: 600; flex-shrink: 0;">Ultra</span>
             </span>
 
-            <div style="display: inline-flex; align-items: center; gap: 8px;">
-              <span class="score-badge" style="color: ${scoreColor}; font-weight: 700; font-size: 15px; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 3px;">
+            <div style="display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;">
+              <span class="score-badge" style="color: ${scoreColor}; font-weight: 700; font-size: 14px; white-space: nowrap; display: inline-flex; align-items: baseline; gap: 2px;">
                 <span>${score}</span>
-                <span style="font-size: 11px; font-weight: 500; opacity: 0.85;">/ 100点</span>
+                <span style="font-size: 10px; font-weight: 500; opacity: 0.85;">/ 100点</span>
               </span>
               <button class="ide-btn" data-action="toggle-score-card" style="padding: 1px 5px; font-size: 10px; height: 18px;" title="スコア詳細領域の展開/最小化">
                 ${this.isScoreCardCollapsed ? '▼' : '▲'}
               </button>
             </div>
           </div>
-          ${!this.isScoreCardCollapsed ? `
-          <div class="dock-card-body">
+          <div class="dock-card-body" style="${this.isScoreCardCollapsed ? 'display: none;' : ''}">
             <div class="linter-metric-row">
               <span>構文警告: <strong>${res.syntacticItems.length} 件</strong></span>
               <span>主語抜け: <strong>${res.zeroPronounItems.length} 件</strong></span>
@@ -377,11 +376,10 @@ export class NarrativeInspectorDock {
             </div>
             ` : ''}
             <div class="score-criteria-hint" style="font-size: 11px; color: var(--color-text-dim); margin-top: 6px; padding: 4px 8px; background: rgba(0, 0, 0, 0.04); border-radius: 4px; line-height: 1.4; display: flex; align-items: center; justify-content: space-between; cursor: help;" title="💡 採点基準: 基礎点100点からの減点方式（構文・文体指摘: −8点/件、主語抜け: −5点/件、認識POV: −3点/件、禁則違反: −4点/件）&#10;📐 3層アーキテクチャ: Tier 1(構文・組版・誤打鍵) / Tier 2(POV・主語・事象DAG) / Tier 3(因果・伏線・迷子設定)">
-              <span>ℹ️ 採点基準・3層アーキテクチャ</span>
+              <span>ℹ️ 採点基準・3層校正アーキテクチャ</span>
               <span style="font-size: 10px; color: var(--color-gold);">詳細 (Hover)</span>
             </div>
           </div>
-          ` : ''}
         </div>
 
 
@@ -391,13 +389,13 @@ export class NarrativeInspectorDock {
             全階層 (${tier1Count + tier2Count + tier3Count})
           </button>
           <button class="tier-tab-btn ${this.activeTier === 'tier1' ? 'active' : ''}" data-action="tier" data-tier="tier1">
-            Tier 1: 決定論 (${tier1Count})
+            Tier 1 (決定論) (${tier1Count})
           </button>
           <button class="tier-tab-btn ${this.activeTier === 'tier2' ? 'active' : ''}" data-action="tier" data-tier="tier2">
-            Tier 2: 論理 (${tier2Count})
+            Tier 2 (論理) (${tier2Count})
           </button>
           <button class="tier-tab-btn ${this.activeTier === 'tier3' ? 'active' : ''}" data-action="tier" data-tier="tier3">
-            Tier 3: 連続性 (${tier3Count})
+            Tier 3 (連続性) (${tier3Count})
           </button>
         </div>
 
@@ -497,14 +495,19 @@ export class NarrativeInspectorDock {
 
         if (this.prhRules.length > 0 || this.archivedPrhRules.length > 0) {
           html += `
-            <div style="margin-top: 10px; padding: 6px 8px; background: rgba(0, 0, 0, 0.03); border-radius: 4px;">
-              <div style="font-size: 11px; font-weight: 600; color: var(--color-text-dim); margin-bottom: 4px;">登録済み表記ゆれ・呼称統一ルール (${this.prhRules.length}件):</div>
+            <div style="margin-top: 10px; padding: 6px 8px; background: rgba(0, 0, 0, 0.03); border-radius: 4px; border: 1px solid var(--color-border);">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="font-size: 11px; font-weight: 600; color: var(--color-gold);">登録済み表記ゆれ・呼称統一ルール (${this.prhRules.length}件)</span>
+                <span style="font-size: 10px; color: var(--color-text-dim);">PRH標準準拠</span>
+              </div>
           `;
           for (const rule of this.prhRules) {
             html += `
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 2px 0;">
-                <span>「${this.escapeHtml(rule.patterns.join('/'))}」➜ <strong>「${this.escapeHtml(rule.expected)}」</strong> [${rule.scope}]</span>
-                <button class="btn-delete-prh" data-action="delete-prh" data-id="${rule.id}" style="padding: 1px 4px; font-size: 10px; background: none; border: 1px solid rgba(248, 81, 73, 0.3); color: var(--color-danger, #f85149); border-radius: 2px; cursor: pointer;">削除</button>
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 6px; margin-bottom: 4px; background: var(--color-surface, #fff); border: 1px solid var(--color-border); border-radius: 3px;">
+                <span style="flex: 1; min-width: 0; padding-right: 6px;">「${this.escapeHtml(rule.patterns.join('/'))}」➜ <strong>「${this.escapeHtml(rule.expected)}」</strong> [${this.escapeHtml(rule.scope || 'all')}]</span>
+                <div style="display: flex; gap: 4px; flex-shrink: 0;">
+                  <button class="btn-delete-prh" data-action="delete-prh" data-id="${rule.id}" style="padding: 1px 6px; font-size: 10px; background: none; border: 1px solid rgba(248, 81, 73, 0.3); color: var(--color-danger, #f85149); border-radius: 2px; cursor: pointer;" title="この統一ルールを解除してゴミ箱へ移動します">解除</button>
+                </div>
               </div>
             `;
           }
@@ -794,11 +797,11 @@ export class NarrativeInspectorDock {
                   </div>
                 ` : ''}
                 <div style="display: flex; gap: 6px; margin-top: 6px;">
-                  <button class="btn-restore-stray" data-action="restore-stray" data-id="${stray.entityId}" style="padding: 2px 8px; font-size: 11px; background: var(--color-primary, #58a6ff); color: #fff; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;">
-                    再利用（復活）
+                  <button class="btn-restore-stray" data-action="restore-stray" data-id="${stray.entityId}" style="padding: 3px 8px; font-size: 11px; background: var(--color-primary, #58a6ff); color: #fff; border: none; border-radius: 3px; cursor: pointer; font-weight: bold;" title="左ペインの設定一覧（登場人物・世界観）へアクティブ復帰させます">
+                    設定一覧へ戻す（復活）
                   </button>
-                  <button class="btn-purge-stray" data-action="purge-stray" data-id="${stray.entityId}" style="padding: 2px 8px; font-size: 11px; background: rgba(248, 81, 73, 0.15); color: var(--color-danger, #f85149); border: 1px solid rgba(248, 81, 73, 0.3); border-radius: 3px; cursor: pointer;">
-                    完全破棄
+                  <button class="btn-purge-stray" data-action="purge-stray" data-id="${stray.entityId}" style="padding: 3px 8px; font-size: 11px; background: rgba(248, 81, 73, 0.15); color: var(--color-danger, #f85149); border: 1px solid rgba(248, 81, 73, 0.3); border-radius: 3px; cursor: pointer;" title="棚から完全に削除します">
+                    ゴミ箱へ移動
                   </button>
                 </div>
               </div>

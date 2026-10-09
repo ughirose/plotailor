@@ -390,6 +390,29 @@ export class ExportController {
     document.getElementById('btnDownloadPrhYaml')?.addEventListener('click', () => this.exportPrhYaml('download'));
     document.getElementById('btnCopyPrhJson')?.addEventListener('click', () => this.exportPrhJson('copy'));
     document.getElementById('btnDownloadPrhJson')?.addEventListener('click', () => this.exportPrhJson('download'));
+    document.getElementById('btnExportPoPModal')?.addEventListener('click', () => this.exportPoPCertificate());
+
+    // Export Hub Tabs Filtering
+    const tabBtns = document.querySelectorAll('.export-tab-btn');
+    const exportCards = document.querySelectorAll('.export-card');
+    tabBtns.forEach((tabBtn) => {
+      tabBtn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLElement;
+        const tabKey = target.dataset.exportTab || 'all';
+        tabBtns.forEach((b) => b.classList.remove('active'));
+        target.classList.add('active');
+
+        exportCards.forEach((card) => {
+          const cardEl = card as HTMLElement;
+          const cardCat = cardEl.dataset.exportCategory;
+          if (tabKey === 'all' || cardCat === tabKey) {
+            cardEl.style.display = 'flex';
+          } else {
+            cardEl.style.display = 'none';
+          }
+        });
+      });
+    });
 
     const menuExportCommercial = document.getElementById('menuExportCommercial');
     menuExportCommercial?.addEventListener('click', () => {

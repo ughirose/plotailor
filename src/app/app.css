@@ -3422,3 +3422,138 @@ body.theme-washi .fullscreen-status-bar .progress-gauge-track {
 body.theme-dark .cm-collab-selection-mark {
   mix-blend-mode: screen;
 }
+
+/* ==========================================================================
+   Export Hub Modal Enhancements
+   ========================================================================== */
+.export-modal-dialog {
+  max-width: 680px !important;
+  width: 95% !important;
+  max-height: 85vh !important;
+}
+
+.export-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.03);
+  border-bottom: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+
+body.theme-washi .export-tabs {
+  background: rgba(0, 0, 0, 0.04);
+  border-bottom-color: #d8ceba;
+}
+
+.export-tab-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--color-text-dim);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.export-tab-btn:hover {
+  color: var(--color-text);
+  background: rgba(207, 168, 92, 0.08);
+}
+
+.export-tab-btn.active {
+  background: var(--color-gold);
+  color: #000;
+  font-weight: 600;
+}
+
+.export-section-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.export-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.15s ease;
+}
+
+body.theme-washi .export-card {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: #dcd2be;
+}
+
+.export-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(207, 168, 92, 0.4);
+}
+
+.export-card.featured {
+  background: linear-gradient(135deg, rgba(207, 168, 92, 0.12) 0%, rgba(184, 143, 64, 0.06) 100%);
+  border: 1px solid var(--color-gold);
+}
+
+.export-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.export-card-title {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.export-card.featured .export-card-title {
+  color: var(--color-gold);
+}
+
+.export-card-desc {
+  font-size: 11px;
+  color: var(--color-text-dim);
+  line-height: 1.35;
+}
+
+.export-btn-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.export-btn-group .ide-btn {
+  white-space: nowrap !important;
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+  height: 26px !important;
+  line-height: 1 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 70px !important;
+  box-sizing: border-box !important;
+}
+
+.export-btn-group .ide-btn.btn-primary {
+  font-weight: 600;
+}
+

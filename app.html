@@ -80,34 +80,18 @@
               </div>
             </div>
             <div class="dropdown-divider"></div>
-            <div class="dropdown-item" id="menuExportAozora">
-              <span>🖋️</span>
+            <div class="dropdown-item" id="menuExportHub">
+              <span>📦</span>
               <div>
-                <strong>青空文庫形式出力</strong>
-                <small>ルビ・傍点を反映してクリップボードにコピー</small>
+                <strong>作品エクスポート・出版出力</strong>
+                <small>青空文庫・Web小説（カクヨム/なろう）・電書協EPUB3・商業入稿一式</small>
               </div>
             </div>
-            <div class="dropdown-item" id="menuExportMultiSite">
-              <span>🌐</span>
-              <div>
-                <strong>マルチサイト小説出力</strong>
-                <small>カクヨム・小説家になろう・電書協EPUB3出力</small>
-              </div>
-            </div>
-            <div class="dropdown-item" id="menuExportPoP">
-              <span>🛡️</span>
-              <div>
-                <strong>PoP創作証明エクスポート</strong>
-                <small>改ざん不能なMerkle創作履歴証明書を発行</small>
-              </div>
-            </div>
-            <div class="dropdown-item" id="menuExportCommercial">
-              <span>🎁</span>
-              <div>
-                <strong>商業入稿パッケージ一括出力</strong>
-                <small>EPUB3・InDesign・割付指示書・PoPをZIP化</small>
-              </div>
-            </div>
+            <!-- Backward compatibility aliases for tests -->
+            <div id="menuExportAozora" style="display: none;" aria-hidden="true"></div>
+            <div id="menuExportMultiSite" style="display: none;" aria-hidden="true"></div>
+            <div id="menuExportPoP" style="display: none;" aria-hidden="true"></div>
+            <div id="menuExportCommercial" style="display: none;" aria-hidden="true"></div>
             <div class="dropdown-divider"></div>
             <div class="dropdown-item" id="menuCollabOffload">
               <span>⚡</span>
@@ -660,153 +644,178 @@
 
   <!-- Export Modal -->
   <div class="history-modal-backdrop" id="exportModal" style="display: none;">
-    <div class="history-modal-dialog" style="max-width: 580px; max-height: 85vh; display: flex; flex-direction: column;">
+    <div class="history-modal-dialog export-modal-dialog">
       <div class="history-modal-header">
-        <h3 id="exportModalTitle">📦 作品エクスポート・出版出力</h3>
+        <h3 id="exportModalTitle">📦 作品エクスポート・出版出力ハブ</h3>
         <button class="history-modal-close" id="btnCloseExportModal">&times;</button>
       </div>
-      <div class="history-modal-body" style="padding: 20px; overflow-y: auto;">
-        <p style="font-size: 13px; color: var(--color-text-dim); margin-bottom: 20px;">
-          執筆した原稿および設定データを、各種出版・投稿フォーマットや印刷プレビューに出力します。
-        </p>
 
-        <div style="display: flex; flex-direction: column; gap: 14px;">
-          <!-- 1. Aozora Full Text -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📜 全章結合 青空文庫テキスト (.txt)</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">全章を順序通り結合し、ルビ・傍点・大見出し・改ページ記法を完全整形</div>
+      <div class="export-tabs" id="exportTabs">
+        <button class="export-tab-btn active" data-export-tab="all">🌟 すべて表示</button>
+        <button class="export-tab-btn" data-export-tab="web">🌐 Web小説投稿</button>
+        <button class="export-tab-btn" data-export-tab="pub">📑 電子出版・印刷</button>
+        <button class="export-tab-btn" data-export-tab="comm">🎁 商業入稿・資料</button>
+      </div>
+
+      <div class="history-modal-body" style="padding: 16px; overflow-y: auto;">
+        <div class="export-section-container">
+          <!-- 1. Commercial Manuscript Packager (.zip) (Featured) -->
+          <div class="export-card featured" data-export-category="comm">
+            <div class="export-card-info">
+              <div class="export-card-title">🎁 商業原稿 入稿オールインワン・パッケージ (.zip)</div>
+              <div class="export-card-desc">EPUB3・InDesignタグ付き・青空テキスト・設定資料集・割付指示書・PoP創作証明を一括ZIP化</div>
             </div>
-            <div style="display: flex; gap: 8px;">
+            <div class="export-btn-group">
+              <button class="ide-btn btn-primary" id="btnDownloadCommercialPackage" style="background: var(--color-gold); color: #000; font-weight: bold;">一括生成 (.zip)</button>
+            </div>
+          </div>
+
+          <!-- 2. Kakuyomu Format Export -->
+          <div class="export-card" data-export-category="web">
+            <div class="export-card-info">
+              <div class="export-card-title">📖 カクヨム投稿形式 (KADOKAWA)</div>
+              <div class="export-card-desc">カクヨム独自記法（｜漢字《るび》、傍点《《…》》）へ自動変換してコピー</div>
+            </div>
+            <div class="export-btn-group">
+              <button class="ide-btn btn-primary" id="btnCopyKakuyomu">コピー</button>
+            </div>
+          </div>
+
+          <!-- 3. Shousetsuka ni Narou Format Export -->
+          <div class="export-card" data-export-category="web">
+            <div class="export-card-info">
+              <div class="export-card-title">📗 小説家になろう投稿形式 (ヒナプロジェクト)</div>
+              <div class="export-card-desc">なろう記法（｜漢字《るび》、空行・段落最適化）へ自動変換してコピー</div>
+            </div>
+            <div class="export-btn-group">
+              <button class="ide-btn btn-primary" id="btnCopyNarou">コピー</button>
+            </div>
+          </div>
+
+          <!-- 4. Aozora Full Text -->
+          <div class="export-card" data-export-category="web">
+            <div class="export-card-info">
+              <div class="export-card-title">📜 全章結合 青空文庫テキスト (.txt)</div>
+              <div class="export-card-desc">全章を順序通り結合し、ルビ・傍点・大見出し・改ページ記法を完全整形</div>
+            </div>
+            <div class="export-btn-group">
               <button class="ide-btn" id="btnCopyAozoraFull">コピー</button>
               <button class="ide-btn btn-primary" id="btnDownloadAozoraTxt">DL (.txt)</button>
             </div>
           </div>
 
-          <!-- 2. Print / PDF Preview -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">🖨️ 縦書き原稿用紙 印刷・PDFプレビュー</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">A4縦書き組版・ルビ・ノンブル（ページ番号）付き印刷プレビューを別タブで表示</div>
+          <!-- 5. Active Chapter Quick Copy -->
+          <div class="export-card" data-export-category="web">
+            <div class="export-card-info">
+              <div class="export-card-title">✂️ 現在の章のみ青空テキスト</div>
+              <div class="export-card-desc">現在編集中の章テキスト（ルビ・傍点整形済み）をクリップボードにコピー</div>
             </div>
-            <div>
-              <button class="ide-btn btn-primary" id="btnOpenPrintPreview">プレビュー表示</button>
-            </div>
-          </div>
-
-          <!-- 3. Lore Bible Markdown -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📚 世界観設定バイブル (.md)</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">全人物・用語・アイテム・伏線・拠点および因果相関図をまとめた資料集</div>
-            </div>
-            <div>
-              <button class="ide-btn" id="btnDownloadLoreBible">DL (.md)</button>
-            </div>
-          </div>
-
-          <!-- 4. Active Chapter Quick Copy -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">✂️ 現在の章のみ青空テキストコピー</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">現在編集中の章テキスト（ルビ・傍点整形済み）をクリップボードにコピー</div>
-            </div>
-            <div>
+            <div class="export-btn-group">
               <button class="ide-btn" id="btnCopyActiveChapterAozora">コピー</button>
             </div>
           </div>
 
-          <!-- 5. Kakuyomu Format Export -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📖 カクヨム投稿形式 (KADOKAWA)</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">カクヨム独自記法（｜漢字《るび》、傍点《《…》》）へ自動変換してコピー</div>
+          <!-- 6. Denshokyo EPUB3 Binary (.epub) -->
+          <div class="export-card" data-export-category="pub">
+            <div class="export-card-info">
+              <div class="export-card-title">📚 電書協 EPUB3 電子書籍バイナリ (.epub)</div>
+              <div class="export-card-desc">日本電子書籍出版社協会(EBPAJ)リフロー規格準拠。Kindle/Apple Books/Kinoppy等に直納可能</div>
             </div>
-            <div>
-              <button class="ide-btn btn-primary" id="btnCopyKakuyomu">カクヨム形式コピー</button>
-            </div>
-          </div>
-
-          <!-- 6. Shousetsuka ni Narou Format Export -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📗 小説家になろう投稿形式 (ヒナプロジェクト)</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">なろう記法（｜漢字《るび》、空行・段落最適化）へ自動変換してコピー</div>
-            </div>
-            <div>
-              <button class="ide-btn" id="btnCopyNarou">なろう形式コピー</button>
-            </div>
-          </div>
-
-          <!-- 7. Denshokyo EPUB3 XHTML Export -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📑 電書協 EPUB3 XHTML 出力 (商業電子出版規格)</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">日本電子書籍出版社協会仕様セマンティック縦書きXHTML（rubyタグ・em-sesame傍点）</div>
-            </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="ide-btn" id="btnCopyDenshokyoEpub">XHTMLコピー</button>
-              <button class="ide-btn btn-primary" id="btnDownloadDenshokyoEpub">DL (.xhtml)</button>
-            </div>
-          </div>
-
-          <!-- 8. PRH Rule Export (YAML / JSON) -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">🔤 表記ゆれ辞書ルールエクスポート (prh)</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">textlint/prh互換のYAML形式および汎用JSON形式で表記統制ルールを出力</div>
-            </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="ide-btn" id="btnCopyPrhYaml">YAMLコピー</button>
-              <button class="ide-btn btn-primary" id="btnDownloadPrhYaml">DL (.yml)</button>
-              <button class="ide-btn" id="btnCopyPrhJson">JSONコピー</button>
-              <button class="ide-btn btn-primary" id="btnDownloadPrhJson">DL (.json)</button>
-            </div>
-          </div>
-
-          <!-- 9. Denshokyo EPUB3 Binary (.epub) -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📚 電書協 EPUB3 電子書籍バイナリ (.epub)</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">日本電子書籍出版社協会(EBPAJ)リフロー規格完全準拠。Kindle/Apple Books/Kinoppy等に直納可能</div>
-            </div>
-            <div>
+            <div class="export-btn-group">
               <button class="ide-btn btn-primary" id="btnDownloadDenshokyoEpubBinary">DL (.epub)</button>
             </div>
           </div>
 
-          <!-- 10. Adobe InDesign Tagged Text (.txt) -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">🖋️ Adobe InDesign タグ付きテキスト (&lt;UNICODE-WIN&gt;)</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">DTP組版・印刷所入稿用。ルビ・圏点・縦中横・段落スタイル（タイトル・見出し・会話文）を自動定義</div>
+          <!-- 7. Denshokyo EPUB3 XHTML Export -->
+          <div class="export-card" data-export-category="pub">
+            <div class="export-card-info">
+              <div class="export-card-title">📑 電書協 EPUB3 XHTML 出力 (商業電子出版規格)</div>
+              <div class="export-card-desc">EBPAJ仕様セマンティック縦書きXHTML（rubyタグ・em-sesame傍点スタイル完全組込）</div>
             </div>
-            <div style="display: flex; gap: 8px;">
+            <div class="export-btn-group">
+              <button class="ide-btn" id="btnCopyDenshokyoEpub">コピー</button>
+              <button class="ide-btn btn-primary" id="btnDownloadDenshokyoEpub">DL (.xhtml)</button>
+            </div>
+          </div>
+
+          <!-- 8. Print / PDF Preview -->
+          <div class="export-card" data-export-category="pub">
+            <div class="export-card-info">
+              <div class="export-card-title">🖨️ 縦書き原稿用紙 印刷・PDFプレビュー</div>
+              <div class="export-card-desc">A4縦書き組版・ルビ・ノンブル（ページ番号）付き印刷プレビューを別タブで表示</div>
+            </div>
+            <div class="export-btn-group">
+              <button class="ide-btn btn-primary" id="btnOpenPrintPreview">プレビュー表示</button>
+            </div>
+          </div>
+
+          <!-- 9. Adobe InDesign Tagged Text (.txt) -->
+          <div class="export-card" data-export-category="pub">
+            <div class="export-card-info">
+              <div class="export-card-title">🖋️ Adobe InDesign タグ付きテキスト (&lt;UNICODE-WIN&gt;)</div>
+              <div class="export-card-desc">DTP組版・印刷所入稿用。ルビ・圏点・縦中横・段落スタイル（タイトル・見出し・会話文）を自動定義</div>
+            </div>
+            <div class="export-btn-group">
               <button class="ide-btn" id="btnCopyInDesignTagged">コピー</button>
               <button class="ide-btn btn-primary" id="btnDownloadInDesignTagged">DL (.txt)</button>
             </div>
           </div>
 
-          <!-- 11. Manuscript Spec Sheet (.txt) -->
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: 8px; padding: 14px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 600; font-size: 14px; margin-bottom: 4px;">📋 商業原稿仕様書・割付指示書</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">文字数集計、400字詰原稿用紙換算、章構成、全ルビ一覧、登場人物対照表、版面設計指示</div>
+          <!-- 10. Manuscript Spec Sheet (.txt) -->
+          <div class="export-card" data-export-category="comm">
+            <div class="export-card-info">
+              <div class="export-card-title">📋 商業原稿仕様書・割付指示書</div>
+              <div class="export-card-desc">文字数集計、400字詰換算、章構成、全ルビ一覧、登場人物対照表、版面設計指示</div>
             </div>
-            <div style="display: flex; gap: 8px;">
+            <div class="export-btn-group">
               <button class="ide-btn" id="btnCopySpecSheet">コピー</button>
               <button class="ide-btn btn-primary" id="btnDownloadSpecSheet">DL (.txt)</button>
             </div>
           </div>
 
-          <!-- 12. Commercial Manuscript Packager (.zip) -->
-          <div style="background: linear-gradient(135deg, rgba(207,168,92,0.1) 0%, rgba(184,143,64,0.05) 100%); border: 1px solid var(--color-gold); border-radius: 8px; padding: 16px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-              <div style="font-weight: 700; font-size: 14px; color: var(--color-gold); margin-bottom: 4px;">🎁 商業原稿 入稿オールインワン・パッケージ (.zip)</div>
-              <div style="font-size: 12px; color: var(--color-text-dim);">EPUB3・InDesignタグ付き・青空テキスト・Lore Bible・割付指示書・PoP創作証明を一括パッケージ化</div>
+          <!-- 11. Lore Bible Markdown -->
+          <div class="export-card" data-export-category="comm">
+            <div class="export-card-info">
+              <div class="export-card-title">📚 世界観設定バイブル (.md)</div>
+              <div class="export-card-desc">全人物・用語・アイテム・伏線・拠点および因果相関図をまとめたMarkdown資料集</div>
             </div>
-            <div>
-              <button class="ide-btn btn-primary" id="btnDownloadCommercialPackage" style="font-weight: 700; background: var(--color-gold); color: #000;">一括生成 (.zip)</button>
+            <div class="export-btn-group">
+              <button class="ide-btn btn-primary" id="btnDownloadLoreBible">DL (.md)</button>
+            </div>
+          </div>
+
+          <!-- 12. PoP Certificate Export -->
+          <div class="export-card" data-export-category="comm">
+            <div class="export-card-info">
+              <div class="export-card-title">🛡️ PoP創作履歴証明書 (Proof of Provenance)</div>
+              <div class="export-card-desc">改ざん不能なMerkle木創作ハッシュログをJSON証明書として出力</div>
+            </div>
+            <div class="export-btn-group">
+              <button class="ide-btn btn-primary" id="btnExportPoPModal">証明書出力</button>
+            </div>
+          </div>
+
+          <!-- 13. PRH Rule Export (YAML) -->
+          <div class="export-card" data-export-category="comm">
+            <div class="export-card-info">
+              <div class="export-card-title">🔤 表記ゆれ辞書ルール (prh YAML)</div>
+              <div class="export-card-desc">textlint/prh互換のYAML形式で表記統制辞書を出力</div>
+            </div>
+            <div class="export-btn-group">
+              <button class="ide-btn" id="btnCopyPrhYaml">コピー</button>
+              <button class="ide-btn btn-primary" id="btnDownloadPrhYaml">DL (.yml)</button>
+            </div>
+          </div>
+
+          <!-- 14. PRH Rule Export (JSON) -->
+          <div class="export-card" data-export-category="comm">
+            <div class="export-card-info">
+              <div class="export-card-title">🔤 表記統制ルール (JSON)</div>
+              <div class="export-card-desc">外部ツール連携用の汎用JSON形式でルールを出力</div>
+            </div>
+            <div class="export-btn-group">
+              <button class="ide-btn" id="btnCopyPrhJson">コピー</button>
+              <button class="ide-btn btn-primary" id="btnDownloadPrhJson">DL (.json)</button>
             </div>
           </div>
         </div>

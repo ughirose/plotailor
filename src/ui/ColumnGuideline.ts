@@ -278,18 +278,19 @@ export class ColumnGuideline {
       // Guideline is a horizontal border at Y = paddingTop + (columns * pitch.height)
       const primaryY = pad.top + this.columns * pitch.height;
       const hangingY = pad.top + (this.columns + 1) * pitch.height;
+      const fullWidth = Math.max(this.container.scrollWidth, this.container.clientWidth, 3000);
 
       this.primaryLineEl.style.top = `${primaryY}px`;
       this.primaryLineEl.style.left = '0';
-      this.primaryLineEl.style.right = '0';
+      this.primaryLineEl.style.right = 'auto';
       this.primaryLineEl.style.bottom = 'auto';
-      this.primaryLineEl.style.width = 'auto';
+      this.primaryLineEl.style.width = `${fullWidth}px`;
 
       this.hangingLineEl.style.top = `${hangingY}px`;
       this.hangingLineEl.style.left = '0';
-      this.hangingLineEl.style.right = '0';
+      this.hangingLineEl.style.right = 'auto';
       this.hangingLineEl.style.bottom = 'auto';
-      this.hangingLineEl.style.width = 'auto';
+      this.hangingLineEl.style.width = `${fullWidth}px`;
 
       this.renderTicksVertical(pad.top, pitch.height);
     } else {

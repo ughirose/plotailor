@@ -344,25 +344,58 @@ export class LoreInspectorDock {
       for (const category of categories) {
         const isCollapsed = this.isPanelCollapsed(`category:${category}`);
         const items = groupedByCategory[category];
+
+        // termId ごとに集約して重複カードの生成を撲滅
+        const uniqueTermsMap = new Map<string, { primary: LoreOccurrence; variants: LoreOccurrence[]; isNearCursor: boolean }>();
+        for (const item of items) {
+          if (!uniqueTermsMap.has(item.termId)) {
+            uniqueTermsMap.set(item.termId, { primary: item, variants: [], isNearCursor: item.isNearCursor });
+          } else if (item.isNearCursor) {
+            uniqueTermsMap.get(item.termId)!.isNearCursor = true;
+          }
+          if (item.matchedText !== item.canonicalName) {
+            const entry = uniqueTermsMap.get(item.termId)!;
+            if (!entry.variants.some((v) => v.matchedText === item.matchedText)) {
+              entry.variants.push(item);
+            }
+          }
+        }
+
+        const catMap: Record<string, string> = {
+          character: '登場人物',
+          term: '重要用語',
+          item: 'アイテム・武具',
+          foreshadowing: '伏線',
+          location: '拠点・地名',
+        };
+        const displayCategory = catMap[category.toLowerCase()] || category;
+
         html += `<div class="dock-panel category-panel" data-category="${category}">`;
         html += `<div class="panel-header" data-action="toggle" data-target="category:${category}">`;
-        html += `<span class="panel-title">${category} (${items.length})</span>`;
+        html += `<span class="panel-title">${displayCategory} (${uniqueTermsMap.size})</span>`;
         html += `<span class="panel-toggle-icon">${isCollapsed ? '+' : '-'}</span>`;
         html += `</div>`;
 
         if (!isCollapsed) {
           html += `<div class="panel-body">`;
-          for (const item of items) {
-            html += `<div class="lore-item ${item.isNearCursor ? 'near-cursor' : ''}" data-term-id="${item.termId}" data-from="${item.position.from}" data-to="${item.position.to}">`;
-            html += `<div class="item-title" title="クリックで本文該当箇所へジャンプ">${item.canonicalName}</div>`;
-            if (item.matchedText !== item.canonicalName) {
-              html += `<div class="item-warning">表記ゆれ検出: "${item.matchedText}" -> "${item.canonicalName}"</div>`;
-              html += `<button class="btn-quick-replace" data-action="replace" data-term-id="${item.termId}">正式名称に置換</button>`;
+
+          for (const { primary, variants, isNearCursor } of uniqueTermsMap.values()) {
+            html += `<div class="lore-item ${isNearCursor ? 'near-cursor' : ''}" data-term-id="${primary.termId}" data-from="${primary.position.from}" data-to="${primary.position.to}">`;
+            html += `<div class="item-title" title="クリックで本文該当箇所へジャンプ">${primary.canonicalName}</div>`;
+            if (variants.length > 0) {
+              for (const v of variants) {
+                html += `
+                  <div style="margin: 4px 0; padding: 4px 6px; background: rgba(207, 168, 92, 0.1); border-left: 2px solid var(--color-gold, #cfa85c); border-radius: 2px;">
+                    <div class="item-warning" style="margin-bottom: 2px;">表記ゆれ検出: "${v.matchedText}" -> "${primary.canonicalName}"</div>
+                    <button class="btn-quick-replace" data-action="replace" data-term-id="${v.termId}" data-from="${v.position.from}" data-to="${v.position.to}">「${v.matchedText}」を正式名称に置換</button>
+                  </div>
+                `;
+              }
             }
-            if (item.description) {
-              html += `<div class="item-desc">${item.description}</div>`;
+            if (primary.description) {
+              html += `<div class="item-desc">${primary.description}</div>`;
             }
-            html += `<button class="btn-shelve" data-action="shelve" data-term-id="${item.termId}">未配置棚へ退避</button>`;
+            html += `<button class="btn-shelve" data-action="shelve" data-term-id="${primary.termId}">未配置棚へ退避</button>`;
             html += `</div>`;
           }
           html += `</div>`;
