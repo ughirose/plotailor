@@ -1021,7 +1021,13 @@ export class LoreController {
         if (statusInput) statusInput.value = ent.status || 'active';
         if (aliasesInput) aliasesInput.value = (ent.aliases || []).join(', ');
         if (descInput) descInput.value = ent.description;
-        if (heading) heading.innerHTML = `<span>✏️</span> 設定項目の編集: ${ent.name}`;
+        if (heading) {
+          heading.innerHTML = '';
+          const iconSpan = document.createElement('span');
+          iconSpan.textContent = '✏️ ';
+          heading.appendChild(iconSpan);
+          heading.appendChild(document.createTextNode(`設定項目の編集: ${ent.name}`));
+        }
         if (btnDel) btnDel.style.display = 'inline-block';
       }
     } else {
@@ -1135,7 +1141,12 @@ export class LoreController {
       const match = matches[0];
       const saveIndicator = document.getElementById('saveStatusIndicator');
       if (saveIndicator) {
-        saveIndicator.innerHTML = `💡 未配置設定「<strong>${match.matchedText}</strong>」検知 (Alt+Pで再バインド)`;
+        saveIndicator.innerHTML = '';
+        saveIndicator.appendChild(document.createTextNode('💡 未配置設定「'));
+        const strongEl = document.createElement('strong');
+        strongEl.textContent = match.matchedText;
+        saveIndicator.appendChild(strongEl);
+        saveIndicator.appendChild(document.createTextNode('」検知 (Alt+Pで再バインド)'));
         saveIndicator.style.color = 'var(--color-gold)';
       }
     }

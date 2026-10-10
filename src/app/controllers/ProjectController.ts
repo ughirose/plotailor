@@ -270,7 +270,12 @@ export class ProjectController {
         });
       });
     } catch (err) {
-      container.innerHTML = `<div style="color: var(--color-danger); padding: 12px;">作品一覧の読込に失敗しました: ${err}</div>`;
+      const errorDiv = document.createElement('div');
+      errorDiv.style.color = 'var(--color-danger)';
+      errorDiv.style.padding = '12px';
+      errorDiv.textContent = `作品一覧の読込に失敗しました: ${err}`;
+      container.innerHTML = '';
+      container.appendChild(errorDiv);
     }
   }
 
