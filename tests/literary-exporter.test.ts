@@ -40,8 +40,8 @@ describe('LiteraryExporter & Markup Converter', () => {
 
   it('should generate complete publication-ready Aozora full text for multiple chapters', () => {
     const chapters = [
-      { id: 'ch1', title: '第一章 黎明', content: '夜が明ける。' },
-      { id: 'ch2', title: '第二章 動乱', content: '兵が動く。' },
+      { id: 'ch1', title: '第一章 黎明', content: '[前書き]はじめに[前書き終わり]\n夜が明ける。// メモ\n[後書き]おわりに[後書き終わり]' },
+      { id: 'ch2', title: '第二章 動乱', content: '兵が動く。%% 伏線 %%' },
     ];
 
     const result = LiteraryExporter.exportAozoraFullText('運命の円環', chapters, {
@@ -52,8 +52,17 @@ describe('LiteraryExporter & Markup Converter', () => {
     expect(result).toContain('運命の円環');
     expect(result).toContain('テスト作家');
     expect(result).toContain('［＃大見出し］第一章 黎明［＃大見出し終わり］');
+
+    // Check foreword/afterword and comment stripping
+    expect(result).toContain('［＃前書き］\r\nはじめに\r\n［＃前書き終わり］');
+    expect(result).toContain('［＃後書き］\r\nおわりに\r\n［＃後書き終わり］');
+    expect(result).toContain('夜が明ける。');
+    expect(result).not.toContain('メモ');
+
     expect(result).toContain('［＃改ページ］');
     expect(result).toContain('［＃大見出し］第二章 動乱［＃大見出し終わり］');
+    expect(result).toContain('兵が動く。');
+    expect(result).not.toContain('伏線');
   });
 
   it('should export structured Lore Bible Markdown document', () => {
@@ -98,7 +107,7 @@ describe('LiteraryExporter & Markup Converter', () => {
 
   it('should export print-ready vertical HTML with CSS @page rules', () => {
     const chapters = [
-      { id: 'ch1', title: '第一章 黎明', content: '夜が明ける。｜太陽《たいよう》が昇る。' },
+      { id: 'ch1', title: '第一章 黎明', content: '[前書き]あ[前書き終わり]\n夜が明ける。｜太陽《たいよう》が昇る。// メモ\n[後書き]い[後書き終わり]' },
     ];
 
     const html = LiteraryExporter.exportPrintHtml('運命の円環', chapters, {
@@ -111,5 +120,10 @@ describe('LiteraryExporter & Markup Converter', () => {
     expect(html).toContain('@page');
     expect(html).toContain('運命の円環');
     expect(html).toContain('<ruby>太陽<rt>たいよう</rt></ruby>');
+
+    // Check foreword/afterword div generation and comment stripping
+    expect(html).toContain('<div class="foreword"><p>あ</p></div>');
+    expect(html).toContain('<div class="afterword"><p>い</p></div>');
+    expect(html).not.toContain('メモ');
   });
 });

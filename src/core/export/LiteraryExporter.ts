@@ -1,4 +1,5 @@
 import type { LoreEntity } from '../lore/LoreEntityManager.js';
+import { ChapterParser } from './ChapterParser.js';
 
 export interface ChapterExportInput {
   id: string;
@@ -109,12 +110,28 @@ export class LiteraryExporter {
         lines.push('');
       }
 
+      const parsed = ChapterParser.parse(ch.content || '');
+
       lines.push(`［＃${headingTag}］${ch.title}［＃${headingTag}終わり］`);
       lines.push('');
 
-      const normalized = normalizeAozoraMarkup(ch.content || '');
+      if (parsed.foreword) {
+        lines.push('［＃前書き］');
+        lines.push(normalizeAozoraMarkup(parsed.foreword));
+        lines.push('［＃前書き終わり］');
+        lines.push('');
+      }
+
+      const normalized = normalizeAozoraMarkup(parsed.content);
       lines.push(normalized);
       lines.push('');
+
+      if (parsed.afterword) {
+        lines.push('［＃後書き］');
+        lines.push(normalizeAozoraMarkup(parsed.afterword));
+        lines.push('［＃後書き終わり］');
+        lines.push('');
+      }
     });
 
     return lines.join('\r\n');
@@ -194,13 +211,19 @@ export class LiteraryExporter {
 
     const chaptersHtml = chapters
       .map((ch, idx) => {
-        const bodyHtml = convertAozoraToHtml(ch.content || '');
+        const parsed = ChapterParser.parse(ch.content || '');
+        const bodyHtml = convertAozoraToHtml(parsed.content);
+        const forewordHtml = parsed.foreword ? `<div class="foreword">${convertAozoraToHtml(parsed.foreword)}</div>` : '';
+        const afterwordHtml = parsed.afterword ? `<div class="afterword">${convertAozoraToHtml(parsed.afterword)}</div>` : '';
+
         return `
       <section class="chapter ${idx > 0 ? 'page-break' : ''}">
         <h2 class="chapter-title">${ch.title}</h2>
+        ${forewordHtml}
         <div class="chapter-content">
           ${bodyHtml}
         </div>
+        ${afterwordHtml}
       </section>
     `;
       })
@@ -267,6 +290,17 @@ export class LiteraryExporter {
       margin: 0;
       text-indent: 1em;
       text-align: justify;
+    }
+    .foreword, .afterword {
+      font-size: 0.9em;
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px dashed #ccc;
+      background: #fafafa;
+    }
+    .foreword p, .afterword p {
+      margin: 0;
+      text-indent: 1em;
     }
     ruby {
       ruby-align: center;
