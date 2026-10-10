@@ -100,8 +100,10 @@ export class PlotailorApp {
   private fontFamily = 'mincho';
   private leftPaneOpen = true;
   private rightPaneOpen = true;
+  private bottomDockOpen = false;
   private activeLeftTab = 'toc';
   private activeRightTab = 'linter'; // Default to Narrative Linter for immediate feedback
+  private activeBottomTab = 'lint-roller';
   private keystrokeCount = 0;
   private typingStartTime = Date.now();
   private latestNarrativeResult: NarrativeAnalysisResult | null = null;
@@ -616,6 +618,25 @@ export class PlotailorApp {
         this.renderRightPane();
       });
     });
+
+    // Bottom Dock Tabs
+    const bottomTabBtns = document.querySelectorAll('.ide-bottom-dock .pane-tab-btn');
+    bottomTabBtns.forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        const target = e.currentTarget as HTMLButtonElement;
+        bottomTabBtns.forEach((b) => b.classList.remove('active'));
+        target.classList.add('active');
+        this.activeBottomTab = target.dataset.bottomTab || 'lint-roller';
+        this.renderBottomDock();
+      });
+    });
+
+    // Toggle Bottom Dock
+    const btnToggleBottomDock = document.getElementById('btnToggleBottomDock');
+    btnToggleBottomDock?.addEventListener('click', () => this.toggleBottomDock());
+
+    const btnCloseBottomDock = document.getElementById('btnCloseBottomDock');
+    btnCloseBottomDock?.addEventListener('click', () => this.toggleBottomDock(false));
 
     // Project Management Modal
     const btnOpenProj = document.getElementById('btnOpenProjectModal');
@@ -1559,6 +1580,23 @@ export class PlotailorApp {
     }
   }
 
+  private toggleBottomDock(forceOpen?: boolean) {
+    if (forceOpen !== undefined) {
+      this.bottomDockOpen = forceOpen;
+    } else {
+      this.bottomDockOpen = !this.bottomDockOpen;
+    }
+
+    const dock = document.getElementById('ideBottomDock');
+    if (dock) {
+      dock.style.display = this.bottomDockOpen ? 'flex' : 'none';
+    }
+
+    if (this.bottomDockOpen) {
+      this.renderBottomDock();
+    }
+  }
+
   private initHamburgerMenu(): void {
     const btnMenu = document.getElementById('btnHamburgerMenu');
     const dropdown = document.getElementById('hamburgerDropdown');
@@ -2468,6 +2506,124 @@ export class PlotailorApp {
               </tr>
               ${rows}
             </table>
+          </div>
+        </div>
+      `;
+    } else if (this.activeRightTab === 'stray-lore') {
+      const shelvedEntities = this.loreManager.getEntities().filter(e => e.status === 'shelved');
+      shelvedEntities.sort((a, b) => calculateManualScore(b) - calculateManualScore(a));
+
+      container.innerHTML = `
+        <div class="dock-card">
+          <div class="dock-card-header">
+            <span class="dock-card-title">📦 迷子設定棚 (Stray Lore)</span>
+            <span style="font-size: 11px; color: var(--color-text-dim);">未配置: ${shelvedEntities.length}</span>
+          </div>
+          <div class="dock-card-body" style="padding: 0; max-height: 500px; overflow-y: auto;">
+            ${shelvedEntities.length === 0
+              ? '<div style="color: var(--color-text-dim); font-size: 12px; padding: 12px; text-align: center;">迷子の設定はありません。</div>'
+              : shelvedEntities.map(ent => `
+                <div class="stray-lore-item" style="padding: 10px; border-bottom: 1px solid var(--color-border); cursor: pointer; display: flex; justify-content: space-between; align-items: flex-start; transition: background 0.15s;">
+                  <div>
+                    <div style="font-weight: 600; color: var(--color-text); font-size: 13px;">${ent.name}</div>
+                    <div style="color: var(--color-text-dim); font-size: 11px; margin-top: 2px;">スコア (Smanual): ${calculateManualScore(ent)}</div>
+                  </div>
+                  <button class="ide-btn btn-promote-lore" data-id="${ent.id}" style="font-size: 10px; padding: 2px 6px;">復帰</button>
+                </div>
+              `).join('')}
+          </div>
+        </div>
+      `;
+
+      container.querySelectorAll('.btn-promote-lore').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const id = (e.currentTarget as HTMLElement).dataset.id;
+          if (id) this.promoteShelvedLore(id);
+        });
+      });
+    }
+  }
+
+  public renderBottomDock() {
+    const container = document.getElementById('bottomDockContent');
+    if (!container) return;
+
+    if (this.activeBottomTab === 'timeline') {
+      container.innerHTML = `
+        <div class="dock-card" style="margin-top: 10px; height: 100%;">
+          <div class="dock-card-title">🌙 帝国星辰暦 742年</div>
+          <div class="dock-card-body">
+            現在の日付: 第4月 14日（絶対日: 2,450）<br>
+            第一衛星月相: 満月（1.00） | 第二衛星月相: 満月（0.98）<br>
+            <strong style="color: var(--color-gold);">✦ 今夜: 二重満月合（Conjunction）</strong>
+          </div>
+          <div class="dual-track-container" id="dualTrackContainer" style="margin-top: 10px;">
+            ${this.renderTimelineSvg()}
+          </div>
+        </div>
+      `;
+    } else if (this.activeBottomTab === 'lint-roller') {
+      container.innerHTML = `
+        <div class="dock-card" style="margin-top: 10px; height: 100%;">
+          <div class="dock-card-header">
+            <span class="dock-card-title">🔍 Tier 1: Lint Roller</span>
+          </div>
+          <div class="dock-card-body">
+            <p style="font-size: 12px; color: var(--color-text-dim);">
+              ほころび検知（設定矛盾・移動時間破綻・未回収伏線の走査）
+            </p>
+            <p style="font-size: 12px; margin-top: 8px;">
+              [プレースホルダー: ここにLint Rollerの診断結果が表示されます]
+            </p>
+          </div>
+        </div>
+      `;
+    } else if (this.activeBottomTab === 'logic-guard') {
+      container.innerHTML = `
+        <div class="dock-card" style="margin-top: 10px; height: 100%;">
+          <div class="dock-card-header">
+            <span class="dock-card-title">🛡️ Tier 2: Logic Guard</span>
+          </div>
+          <div class="dock-card-body">
+            <p style="font-size: 12px; color: var(--color-text-dim);">
+              論理的整合性の監査（因果律・フラグ管理・状態遷移の走査）
+            </p>
+            <p style="font-size: 12px; margin-top: 8px;">
+              [プレースホルダー: ここにLogic Guardの監査結果が表示されます]
+            </p>
+          </div>
+        </div>
+      `;
+    } else if (this.activeBottomTab === 'continuity-guard') {
+      container.innerHTML = `
+        <div class="dock-card" style="margin-top: 10px; height: 100%;">
+          <div class="dock-card-header">
+            <span class="dock-card-title">👁️ Tier 3: Continuity Guard</span>
+          </div>
+          <div class="dock-card-body">
+            <p style="font-size: 12px; color: var(--color-text-dim);">
+              連続性と視点の監査（POVバグ・情報隔離の走査）
+            </p>
+            <p style="font-size: 12px; margin-top: 8px;">
+              [プレースホルダー: ここにContinuity Guardの監査結果が表示されます]
+            </p>
+          </div>
+        </div>
+      `;
+    } else if (this.activeBottomTab === 'harmonic-truth') {
+      container.innerHTML = `
+        <div class="dock-card" style="margin-top: 10px; height: 100%;">
+          <div class="dock-card-header">
+            <span class="dock-card-title">🎼 Harmonic Truth Sync</span>
+          </div>
+          <div class="dock-card-body">
+            <p style="font-size: 12px; color: var(--color-text-dim);">
+              世界設定と本文の調和・同期状態（オントロジーのラウンドトリップ）
+            </p>
+            <p style="font-size: 12px; margin-top: 8px;">
+              [プレースホルダー: ここにHarmonic Truthの同期ステータスが表示されます]
+            </p>
           </div>
         </div>
       `;

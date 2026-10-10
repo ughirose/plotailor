@@ -189,6 +189,7 @@
           <button class="pane-tab-btn" data-dock-tab="linter">推敲・文体</button>
           <button class="pane-tab-btn" data-dock-tab="causality">因果相関図</button>
           <button class="pane-tab-btn" data-dock-tab="pop">PoP創作証明</button>
+          <button class="pane-tab-btn" data-dock-tab="stray-lore">迷子設定棚</button>
           <button class="pane-tab-btn" data-dock-tab="history">📜 履歴</button>
           <button class="pane-tab-btn" data-dock-tab="help">❓ ヘルプ</button>
         </div>
@@ -203,7 +204,10 @@
       <div class="bottom-dock-header">
         <div class="bottom-dock-tabs">
           <button class="pane-tab-btn active" data-bottom-tab="timeline">タイムライン</button>
-          <button class="pane-tab-btn" data-bottom-tab="lint-roller">Lint Roller 診断</button>
+          <button class="pane-tab-btn" data-bottom-tab="lint-roller">Tier 1: Lint Roller</button>
+          <button class="pane-tab-btn" data-bottom-tab="logic-guard">Tier 2: Logic Guard</button>
+          <button class="pane-tab-btn" data-bottom-tab="continuity-guard">Tier 3: Continuity Guard</button>
+          <button class="pane-tab-btn" data-bottom-tab="harmonic-truth">Harmonic Truth Sync</button>
         </div>
         <button class="ide-btn" id="btnCloseBottomDock" style="padding: 1px 6px; font-size: 11px;">✕</button>
       </div>
@@ -213,6 +217,8 @@
     <!-- Bottom Status Bar -->
     <footer class="ide-footer">
       <div class="ide-footer-left">
+        <button class="ide-btn" id="btnToggleBottomDock" title="ドックの開閉" style="padding: 1px 6px; font-size: 11px;">🔍 監査ドック</button>
+        <span>|</span>
         <span>行: <strong id="cursorLine">1</strong>, 列: <strong id="cursorCol">1</strong></span>
         <span>|</span>
         <span>選択: <strong id="selectionLength">0</strong></span>
