@@ -21,19 +21,16 @@ export interface PrintHtmlOptions {
 
 /**
  * Converts internal Plotailor ruby & bouten markup into standard Aozora Bunko notation.
- * - `《《...》》` -> `［＃傍点］...［＃傍点終わり］`
+ * - `《《傍点》》` or `<<<<傍点>>>>` -> `［＃傍点］傍点［＃傍点終わり］`
  * - `<<...>>` -> `《...》`
- * - `<<<<...>>>>` -> `［＃傍点］...［＃傍点終わり］`
  * - `漢字《るび》` without `｜` -> `｜漢字《るび》` when preceding characters need boundary.
  */
 export function normalizeAozoraMarkup(text: string): string {
   if (!text) return '';
 
-  // 1. Bouten: <<<<text>>>> -> ［＃傍点］text［＃傍点終わり］
+  // 1. Bouten: <<<<text>>>> or 《《text》》 -> ［＃傍点］text［＃傍点終わり］
   let result = text.replace(/<{4}(.+?)>{4}/g, '［＃傍点］$1［＃傍点終わり］');
-
-  // 1.5 Kakuyomu bouten: 《《text》》 -> ［＃傍点］text［＃傍点終わり］
-  result = result.replace(/《《([^》\n]+?)》》/g, '［＃傍点］$1［＃傍点終わり］');
+  result = result.replace(/《《(.+?)》》/g, '［＃傍点］$1［＃傍点終わり］');
 
   // 2. Double angle bracket ruby: <<ruby>> -> 《ruby》
   result = result.replace(/<<([^>]+?)>>/g, '《$1》');
@@ -49,57 +46,36 @@ export function normalizeAozoraMarkup(text: string): string {
 }
 
 /**
- * Converts Aozora Bunko & Kakuyomu markup into clean HTML <ruby> and <span class="bouten bouten-dot"> tags.
+ * Converts Aozora Bunko and Plotailor markup into clean HTML <ruby> and <span class="bouten"> tags.
  */
 export function convertAozoraToHtml(text: string): string {
   if (!text) return '';
 
-  // 1. First process Kakuyomu bouten 《《...》》 before HTML escape
-  let working = text.replace(/《《([^》\n]+?)》》/g, '［＃傍点］$1［＃傍点終わり］');
-
-  // 2. Process <<ruby>> before HTML escape
-  working = working.replace(/<<([^>]+?)>>/g, '《$1》');
-
-  // 3. Process <<<<bouten>>>>
-  working = working.replace(/<{4}(.+?)>{4}/g, '［＃傍点］$1［＃傍点終わり］');
-
-  // 4. Normalize ruby pipe boundaries
-  working = normalizeAozoraMarkup(working);
-
-  // 5. HTML escape entities
-  let html = working
+  let html = text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
-  // 6. Bouten: ［＃「...」に傍点］
-  html = html.replace(/［＃「([^」\n]+)」に傍点］/g, '<span class="bouten bouten-dot">$1</span>');
+  // 1. Bouten: ［＃傍点］...［＃傍点終わり］, 《《...》》, <<<<...>>>>
+  html = html.replace(/［＃傍点］(.*?)［＃傍点終わり］/g, '<span class="bouten">$1</span>');
+  html = html.replace(/《《(.*?)》》/g, '<span class="bouten">$1</span>');
+  html = html.replace(/(?:&lt;){4}(.*?)(?:&gt;){4}/g, '<span class="bouten">$1</span>');
 
-  // 7. Bouten: ［＃傍点］...［＃傍点終わり］
-  html = html.replace(/［＃傍点］(.*?)［＃傍点終わり］/g, '<span class="bouten bouten-dot">$1</span>');
-
-  // 8. Standard Aozora ruby: ｜親文字《るび》
+  // 2. Standard Aozora Ruby with ｜: ｜親文字《るび》
   html = html.replace(/｜([^《\n]+?)《([^》\n]+?)》/g, '<ruby>$1<rt>$2</rt></ruby>');
 
-  // 9. Fallback ruby without ｜: 漢字《るび》
+  // 3. Angle bracket ruby with base text: 親文字&lt;&lt;るび&gt;&gt;
+  html = html.replace(/([\u4E00-\u9FFF々ヶ〆仝\u30A1-\u30FAーa-zA-Z0-9]+)&lt;&lt;([^&]+?)&gt;&gt;/g, '<ruby>$1<rt>$2</rt></ruby>');
+
+  // 4. Fallback ruby without ｜: 親文字《るび》
   html = html.replace(/([\u4E00-\u9FFF々ヶ〆仝\u30A1-\u30FAー]+)《([^》\n]+?)》/g, '<ruby>$1<rt>$2</rt></ruby>');
 
-  // 10. Headings: ［＃大見出し］...［＃大見出し終わり］, ［＃中見出し］...［＃中見出し終わり］
-  html = html.replace(/［＃大見出し］([^［\n]+)［＃大見出し終わり］/g, '<h2 class="aozora-heading-large">$1</h2>');
-  html = html.replace(/［＃中見出し］([^［\n]+)［＃中見出し終わり］/g, '<h3 class="aozora-heading-medium">$1</h3>');
+  // 5. Clean up Aozora page break commands
+  html = html.replace(/［＃改ページ］/g, '<div class="page-break"></div>');
 
-  // 11. Page breaks: ［＃改ページ］, ［＃改丁］
-  html = html.replace(/［＃改[ペ丁]ージ?］/g, '<div class="page-break"></div>');
-
-  // 12. Paragraphs formatting
+  // Paragraphs
   const lines = html.split('\n');
-  return lines.map((l) => {
-    const trimmed = l.trim();
-    if (trimmed.startsWith('<h2') || trimmed.startsWith('<h3') || trimmed.startsWith('<div class="page-break"')) {
-      return l;
-    }
-    return `<p>${l || '&nbsp;'}</p>`;
-  }).join('\n');
+  return lines.map((l) => `<p>${l || '&nbsp;'}</p>`).join('\n');
 }
 
 export class LiteraryExporter {
@@ -299,21 +275,9 @@ export class LiteraryExporter {
       font-size: 0.55em;
       letter-spacing: 0;
     }
-    .bouten, .bouten-dot {
+    .bouten {
       text-emphasis: filled dot;
       -webkit-text-emphasis: filled dot;
-    }
-    .aozora-heading-large {
-      font-size: 1.4em;
-      font-weight: 700;
-      margin: 1.5em 0 1em;
-      letter-spacing: 0.1em;
-    }
-    .aozora-heading-medium {
-      font-size: 1.2em;
-      font-weight: 600;
-      margin: 1.2em 0 0.8em;
-      letter-spacing: 0.08em;
     }
     @media print {
       body {
@@ -334,17 +298,6 @@ export class LiteraryExporter {
   ${chaptersHtml}
 </body>
 </html>`;
-  }
-
-  /**
-   * Generates print and PDF preview HTML pipeline (alias for exportPrintHtml).
-   */
-  public static exportPrintPreview(
-    workTitle: string,
-    chapters: ChapterExportInput[],
-    options: PrintHtmlOptions = {}
-  ): string {
-    return LiteraryExporter.exportPrintHtml(workTitle, chapters, options);
   }
 
   /**
