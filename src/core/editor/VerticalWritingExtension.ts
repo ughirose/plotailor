@@ -108,8 +108,15 @@ export function getVerticalPosAtCoords(
   }
 
   if (coords.x < minLeft) {
-    // Clicked in empty space to the left of the last column: jump to end of document
-    return view.state.doc.length;
+    // Clicked in empty space to the left of the last column: project onto last column according to Y coordinate
+    const lastBox = lineBoxes.reduce((prev, curr) => (curr.rect.left < prev.rect.left ? curr : prev), lineBoxes[0]);
+    const lastLine = view.state.doc.lineAt(lastBox.pos);
+    if (coords.y <= lastBox.rect.top) return lastLine.from;
+    if (coords.y >= lastBox.rect.bottom) return lastLine.to;
+    const height = lastBox.rect.height || 1;
+    const progress = Math.max(0, Math.min(1, (coords.y - lastBox.rect.top) / height));
+    const charOffset = Math.round(progress * lastLine.length);
+    return Math.min(lastLine.to, lastLine.from + charOffset);
   }
   if (coords.x > maxRight) {
     // Clicked to the right of the first column: project onto first column according to Y coordinate
@@ -318,6 +325,20 @@ const verticalMouseHandler = EditorView.domEventHandlers({
             cleanupDragListeners();
             return;
           }
+
+          // Auto-scroll canvas wrapper when dragging near edges
+          const canvasWrapper = view.dom.closest('.canvas-wrapper') as HTMLElement | null;
+          if (canvasWrapper) {
+            const rect = canvasWrapper.getBoundingClientRect();
+            const edgeThreshold = 50;
+            const scrollSpeed = 15;
+            if (moveEvent.clientX < rect.left + edgeThreshold) {
+              canvasWrapper.scrollLeft -= scrollSpeed;
+            } else if (moveEvent.clientX > rect.right - edgeThreshold) {
+              canvasWrapper.scrollLeft += scrollSpeed;
+            }
+          }
+
           const movePos = getVerticalPosAtCoords(view, { x: moveEvent.clientX, y: moveEvent.clientY });
           if (movePos !== null) {
             view.dispatch({
@@ -348,14 +369,14 @@ const verticalMouseHandler = EditorView.domEventHandlers({
 const verticalWheelHandler = EditorView.domEventHandlers({
   wheel(event: WheelEvent, view: EditorView) {
     if (!isVerticalMode(view)) return false;
+    // canvasWrapper が存在する場合は main.ts の ScrollNormalizer が正規化処理を行うため二重発火を抑止
+    const canvasWrapper = (view.dom.closest('.canvas-wrapper') || document.getElementById('canvasWrapper')) as HTMLElement | null;
+    if (canvasWrapper) {
+      return false;
+    }
     if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
       event.preventDefault();
-      const canvasWrapper = view.dom.closest('.canvas-wrapper') as HTMLElement | null;
-      if (canvasWrapper) {
-        canvasWrapper.scrollLeft -= event.deltaY;
-      } else {
-        view.scrollDOM.scrollLeft -= event.deltaY;
-      }
+      view.scrollDOM.scrollLeft -= event.deltaY;
       return true;
     }
     return false;

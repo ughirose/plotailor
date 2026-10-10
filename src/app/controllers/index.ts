@@ -6,3 +6,5 @@ export * from './ChapterController.js';
 export * from './LoreController.js';
 export * from './ViewController.js';
 export * from './ProjectController.js';
+export * from './EditorLifecycleController.js';
+export * from './ToolbarBindingController.js';

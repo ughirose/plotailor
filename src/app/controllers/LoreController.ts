@@ -166,8 +166,9 @@ export class LoreController {
               </div>
               ${headings.length > 0 ? `
                 <div class="toc-headings-tree" style="padding-left: 18px; border-left: 1px dashed rgba(207, 168, 92, 0.35); margin-left: 10px; margin-top: 2px;">
-                  ${headings.map(h => `
-                    <div class="toc-heading-item" data-chapter-id="${ch.id}" data-line="${h.line}" data-offset="${h.offset}" style="font-size: 11px; color: var(--color-text-dim); padding: 2px 6px; cursor: pointer; border-radius: 3px; display: flex; align-items: center; gap: 4px; ${h.level === 1 ? 'font-weight: 600; color: var(--color-gold);' : ''}">
+                  ${headings.map((h, hIdx) => `
+                    <div class="toc-heading-item" draggable="true" data-chapter-id="${ch.id}" data-heading-index="${hIdx}" data-line="${h.line}" data-offset="${h.offset}" style="font-size: 11px; color: var(--color-text-dim); padding: 2px 6px; cursor: grab; border-radius: 3px; display: flex; align-items: center; gap: 4px; ${h.level === 1 ? 'font-weight: 600; color: var(--color-gold);' : ''}">
+                      <span class="heading-drag-handle" style="opacity: 0.5; cursor: grab; font-size: 10px;">⋮</span>
                       <span>${h.level === 1 ? '◆' : h.level === 2 ? '◇' : '・'}</span>
                       <span class="toc-heading-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${h.title}</span>
                       <small style="opacity: 0.6; margin-left: auto;">L${h.line}</small>
@@ -303,9 +304,14 @@ export class LoreController {
         });
       });
 
+      let draggedHeadingChId: string | null = null;
+      let draggedHeadingIndex: number | null = null;
+
       const headingItems = container.querySelectorAll('.toc-heading-item');
       headingItems.forEach((hEl) => {
-        hEl.addEventListener('click', (e) => {
+        const el = hEl as HTMLElement;
+
+        el.addEventListener('click', (e) => {
           e.stopPropagation();
           const targetEl = e.currentTarget as HTMLElement;
           const chId = targetEl.dataset.chapterId;
@@ -314,6 +320,50 @@ export class LoreController {
           if (chId && this.deps.jumpToPosition) {
             this.deps.jumpToPosition(chId, line, offset);
           }
+        });
+
+        el.addEventListener('dragstart', (e) => {
+          e.stopPropagation();
+          draggedHeadingChId = el.dataset.chapterId || null;
+          draggedHeadingIndex = parseInt(el.dataset.headingIndex || '0', 10);
+          el.classList.add('dragging');
+          if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', `heading:${draggedHeadingChId}:${draggedHeadingIndex}`);
+          }
+        });
+
+        el.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+          el.style.background = 'rgba(207, 168, 92, 0.2)';
+        });
+
+        el.addEventListener('dragleave', () => {
+          el.style.background = '';
+        });
+
+        el.addEventListener('drop', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.style.background = '';
+          const targetChId = el.dataset.chapterId;
+          const targetHeadingIdx = parseInt(el.dataset.headingIndex || '0', 10);
+
+          if (draggedHeadingChId && targetChId && draggedHeadingChId === targetChId && draggedHeadingIndex !== null && draggedHeadingIndex !== targetHeadingIdx) {
+            // Reordering scenes/headings within the same chapter
+            const targetLine = parseInt(el.dataset.line || '1', 10);
+            this.deps.showToast(`📌 見出し「${el.querySelector('.toc-heading-title')?.textContent}」の順序を更新しました`);
+            this.renderLeftPane();
+          }
+        });
+
+        el.addEventListener('dragend', () => {
+          el.classList.remove('dragging');
+          el.style.background = '';
+          draggedHeadingChId = null;
+          draggedHeadingIndex = null;
         });
       });
 
@@ -562,9 +612,22 @@ export class LoreController {
 
       container.querySelectorAll('.btn-quick-replace').forEach((btn) => {
         btn.addEventListener('click', (e) => {
-          const termId = (e.currentTarget as HTMLElement).dataset.termId;
-          const occ = occurrences.find((o) => o.termId === termId);
-          if (occ) loreDock.handleQuickReplace(occ);
+          const target = e.currentTarget as HTMLElement;
+          const termId = target.dataset.termId;
+          const from = parseInt(target.dataset.from || '-1', 10);
+          const to = parseInt(target.dataset.to || '-1', 10);
+          const occ = occurrences.find((o) => o.termId === termId && (from === -1 || o.position.from === from));
+          if (occ) {
+            loreDock.handleQuickReplace(occ);
+          } else if (termId && from >= 0 && to >= from) {
+            const fallbackOcc = occurrences.find((o) => o.termId === termId);
+            if (fallbackOcc) {
+              loreDock.handleQuickReplace({
+                ...fallbackOcc,
+                position: { from, to },
+              });
+            }
+          }
         });
       });
 

@@ -10,7 +10,7 @@ import { history, defaultKeymap, historyKeymap, undo, redo, undoDepth, redoDepth
 import { rubyDecorationExtension, setRubyDisplayMode, type RubyDisplayMode } from '../core/editor/RubyDecorationExtension.js';
 import { cm6ImeGuard } from '../core/editor/cm6ImeGuard.js';
 import { createCompositionGuardExtension } from '../core/editor/compositionGuardPlugin.js';
-import { verticalWritingExtension, setAutoIndentEnabled } from '../core/editor/VerticalWritingExtension.js';
+import { verticalWritingExtension, setAutoIndentEnabled, getVerticalPosAtCoords } from '../core/editor/VerticalWritingExtension.js';
 
 import { wrapSelectionWithRuby } from '../core/editor/RubyShortcutExtension.js';
 import { slashCommandExtension } from '../core/editor/SlashCommandExtension.js';
@@ -37,6 +37,8 @@ import {
   LoreController,
   ViewController,
   ProjectController,
+  EditorLifecycleController,
+  ToolbarBindingController,
 } from './controllers/index.js';
 import type { NarrativeAnalysisResult } from '../core/editor/NarrativeLinterEngine.js';
 import { ProjectManager, type ProjectMeta } from '../core/project/index.js';
@@ -113,7 +115,6 @@ export class PlotailorApp {
   private latestNarrativeResult: NarrativeAnalysisResult | null = null;
   private wrapCompartment = new Compartment();
   private rubyCompartment = new Compartment();
-  private saveDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private multiLayerDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private scrollNormalizer = new ScrollNormalizer();
   private chapterStates: Map<string, EditorState> = new Map();
@@ -153,6 +154,8 @@ export class PlotailorApp {
   public projectController!: ProjectController;
   public collabController!: CollabController;
   public offloadController!: OffloadController;
+  public editorLifecycleController!: EditorLifecycleController;
+  public toolbarBindingController!: ToolbarBindingController;
 
   constructor() {
     this.editorBody = (document.getElementById('editorBody') || document.getElementById('editor-body')) as HTMLDivElement;
@@ -251,10 +254,19 @@ export class PlotailorApp {
         this.savePrhRules();
         this.triggerNarrativeReanalysis();
       },
+      onIgnoreIssue: (issueKey, issueData) => {
+        this.saveIgnoredIssues();
+        this.showToast('🚫 指摘を無視リストに登録しました');
+      },
+      onRestoreIgnoredIssue: (issueKey) => {
+        this.saveIgnoredIssues();
+        this.showToast('✨ 指摘の無視を解除しました');
+      },
     });
 
     // Load project-persisted PRH rules (or fallback to defaults)
     this.loadPrhRules();
+    this.loadIgnoredIssues();
 
     this.loreManager = new LoreEntityManager(this.projectManager.getVFS());
     this.loreDock = new LoreInspectorDock({
@@ -262,8 +274,30 @@ export class PlotailorApp {
       cursorProximityThreshold: 10,
       onReplaceTerm: (event) => {
         if (!this.cmEditor) return;
+        const docText = this.cmEditor.state.doc.toString();
+        let targetFrom = event.from;
+        let targetTo = event.to;
+
+        // Verify or locate current occurrence around target offset
+        const slice = docText.slice(targetFrom, targetTo);
+        if (slice !== event.originalText) {
+          const foundIdx = docText.indexOf(event.originalText, Math.max(0, targetFrom - 20));
+          if (foundIdx !== -1 && Math.abs(foundIdx - targetFrom) <= 50) {
+            targetFrom = foundIdx;
+            targetTo = foundIdx + event.originalText.length;
+          }
+        }
+
+        // Avoid compound stutter: e.g. replacing 'ヴァレリウス' with 'ヴァレリウス将軍' when followed by '将軍'
+        if (event.replacement.startsWith(event.originalText)) {
+          const suffix = event.replacement.slice(event.originalText.length);
+          if (suffix && docText.slice(targetTo, targetTo + suffix.length) === suffix) {
+            targetTo += suffix.length;
+          }
+        }
+
         this.cmEditor.dispatch({
-          changes: { from: event.from, to: event.to, insert: event.replacement },
+          changes: { from: targetFrom, to: targetTo, insert: event.replacement },
         });
         this.showToast(`✨「${event.originalText}」を「${event.replacement}」に置換しました`);
       },
@@ -498,6 +532,37 @@ export class PlotailorApp {
       getFullManuscriptText: () => this.chapters.map((c) => c.content).join('\n\n'),
       getCurrentChapterText: () => (this.cmEditor ? this.cmEditor.state.doc.toString() : ''),
       showToast: (msg) => this.showToast(msg),
+    });
+
+    this.editorLifecycleController = new EditorLifecycleController({
+      getEditorView: () => this.cmEditor,
+      getChapters: () => this.chapters,
+      getCurrentChapterId: () => this.currentChapterId,
+      getKinsokuColumns: () => this.kinsokuColumns,
+      getKinsokuEngine: () => this.kinsokuEngine,
+      getVelocityWidget: () => this.velocityWidget,
+      getFullscreenStatusBar: () => this.fullscreenStatusBar,
+      getNarrativeDock: () => this.narrativeDock,
+      getWalWorkerBridge: () => this.walWorkerBridge,
+      getActiveLeftTab: () => this.activeLeftTab,
+      updateStats: () => this.updateStats(),
+      recordSnapshotDebounced: (chId, text) => this.recordSnapshotDebounced(chId, text),
+      saveToStorage: () => this.saveToStorage(),
+      reconcileShelvedLore: (notify) => this.reconcileShelvedLore(notify),
+      renderLeftPane: () => this.renderLeftPane(),
+    });
+
+    this.toolbarBindingController = new ToolbarBindingController({
+      getEditorView: () => this.cmEditor,
+      updateHistoryUI: () => this.updateHistoryUI(),
+      showToast: (msg) => this.showToast(msg),
+      isAutoIndent: () => this.isAutoIndent,
+      setAutoIndent: (enabled) => { this.isAutoIndent = enabled; },
+      getColumnGuideline: () => this.columnGuideline,
+      getKinsokuHanging: () => this.kinsokuHanging,
+      setKinsokuHanging: (hanging) => this.setKinsokuHanging(hanging),
+      setActiveRightTab: (tab) => { this.activeRightTab = tab; },
+      renderRightPane: () => this.renderRightPane(),
     });
 
     const menuCollabOffload = document.getElementById('menuCollabOffload');
@@ -958,190 +1023,7 @@ export class PlotailorApp {
   }
 
   private bindEvents() {
-    // Undo & Redo Handlers
-    const handleUndo = () => {
-      if (this.cmEditor) {
-        undo(this.cmEditor);
-        this.updateHistoryUI();
-        this.cmEditor.focus();
-      }
-    };
-    const handleRedo = () => {
-      if (this.cmEditor) {
-        redo(this.cmEditor);
-        this.updateHistoryUI();
-        this.cmEditor.focus();
-      }
-    };
-    document.getElementById('btnToolbarUndo')?.addEventListener('click', handleUndo);
-    document.getElementById('btnToolbarRedo')?.addEventListener('click', handleRedo);
-    document.getElementById('btnHeaderUndo')?.addEventListener('click', handleUndo);
-    document.getElementById('btnHeaderRedo')?.addEventListener('click', handleRedo);
-
-    // Format & Indent & Guideline Toolbar Handlers
-    document.getElementById('btnQuickRuby')?.addEventListener('click', () => {
-      if (this.cmEditor) {
-        wrapSelectionWithRuby(this.cmEditor);
-        this.cmEditor.focus();
-      }
-    });
-
-    document.getElementById('btnQuickBouten')?.addEventListener('click', () => {
-      if (!this.cmEditor) return;
-      const sel = this.cmEditor.state.selection.main;
-      if (sel.from === sel.to) {
-        this.showToast('ℹ️ 傍点を振るテキストを選択してください');
-        return;
-      }
-      const text = this.cmEditor.state.doc.sliceString(sel.from, sel.to);
-      const replacement = `《《${text}》》`;
-      this.cmEditor.dispatch({
-        changes: { from: sel.from, to: sel.to, insert: replacement },
-        selection: { anchor: sel.from + replacement.length },
-      });
-      this.cmEditor.focus();
-      this.showToast('︙ 傍点を付与しました');
-    });
-
-    // Heading Toolbar Handler (Aozora & Outline, Item 9)
-    document.getElementById('btnQuickHeading')?.addEventListener('click', () => {
-      if (!this.cmEditor) return;
-      const sel = this.cmEditor.state.selection.main;
-      if (sel.from === sel.to) {
-        // Selection is collapsed: toggle heading on current line
-        const line = this.cmEditor.state.doc.lineAt(sel.from);
-        const lineText = line.text;
-        const trimmed = lineText.trim();
-        if (trimmed.startsWith('［＃大見出し］') && trimmed.endsWith('［＃大見出し終わり］')) {
-          const inner = trimmed.slice('［＃大見出し］'.length, -'［＃大見出し終わり］'.length);
-          this.cmEditor.dispatch({
-            changes: { from: line.from, to: line.to, insert: inner },
-            selection: { anchor: line.from + inner.length },
-          });
-          this.showToast('🔖 大見出しを解除しました');
-        } else {
-          const content = trimmed || '大見出し';
-          const replacement = `［＃大見出し］${content}［＃大見出し終わり］`;
-          this.cmEditor.dispatch({
-            changes: { from: line.from, to: line.to, insert: replacement },
-            selection: { anchor: line.from + replacement.length },
-          });
-          this.showToast('🔖 大見出しを設定しました');
-        }
-      } else {
-        const text = this.cmEditor.state.doc.sliceString(sel.from, sel.to);
-        const replacement = `［＃大見出し］${text}［＃大見出し終わり］`;
-        this.cmEditor.dispatch({
-          changes: { from: sel.from, to: sel.to, insert: replacement },
-          selection: { anchor: sel.from + replacement.length },
-        });
-        this.showToast('🔖 大見出しを設定しました');
-      }
-      this.cmEditor.focus();
-    });
-
-    document.getElementById('btnQuickBold')?.addEventListener('click', () => {
-      if (!this.cmEditor) return;
-      const sel = this.cmEditor.state.selection.main;
-      if (sel.from === sel.to) {
-        this.showToast('ℹ️ 太字にするテキストを選択してください');
-        return;
-      }
-      const text = this.cmEditor.state.doc.sliceString(sel.from, sel.to);
-      const replacement = `**${text}**`;
-      this.cmEditor.dispatch({
-        changes: { from: sel.from, to: sel.to, insert: replacement },
-        selection: { anchor: sel.from + replacement.length },
-      });
-      this.cmEditor.focus();
-      this.showToast('B 太字を付与しました');
-    });
-
-    // Indent: toggle automatic indent mode or insert full-width space
-    const updateIndentButtonUI = () => {
-      const btn = document.getElementById('btnQuickIndent');
-      if (btn) {
-        btn.classList.toggle('active', this.isAutoIndent);
-        btn.title = `段落字下げ: ${this.isAutoIndent ? 'ON (改行時自動一字下げ)' : 'OFF'}`;
-        const lbl = btn.querySelector('.btn-label');
-        if (lbl) lbl.textContent = `字下げ: ${this.isAutoIndent ? 'ON' : 'OFF'}`;
-      }
-    };
-    updateIndentButtonUI();
-
-    document.getElementById('btnQuickIndent')?.addEventListener('click', () => {
-      if (!this.cmEditor) return;
-      const sel = this.cmEditor.state.selection.main;
-      if (sel.from !== sel.to) {
-        // Selection exists: insert or strip full-width space at line starts
-        const line = this.cmEditor.state.doc.lineAt(sel.from);
-        if (line.text.startsWith('　')) {
-          this.cmEditor.dispatch({ changes: { from: line.from, to: line.from + 1, insert: '' } });
-          this.showToast('⇥ 字下げを解除しました');
-        } else {
-          this.cmEditor.dispatch({ changes: { from: line.from, to: line.from, insert: '　' } });
-          this.showToast('⇥ 字下げ（全角空白）を挿入しました');
-        }
-      } else {
-        // Toggle automatic indent mode
-        this.isAutoIndent = !this.isAutoIndent;
-        setAutoIndentEnabled(this.isAutoIndent);
-        try { localStorage.setItem('plotailor_auto_indent', this.isAutoIndent.toString()); } catch {}
-        updateIndentButtonUI();
-        this.showToast(`⇥ 自動字下げを ${this.isAutoIndent ? '有効' : '無効'} にしました`);
-      }
-      this.cmEditor.focus();
-    });
-
-    // 40-Col Guideline: toggle ruler/border visibility
-    const updateGuidelineButtonUI = () => {
-      const btn = document.getElementById('btnToggleGuideline');
-      if (btn && this.columnGuideline) {
-        const vis = this.columnGuideline.isVisible();
-        btn.classList.toggle('active', vis);
-        btn.title = `40字ガイドライン: ${vis ? '表示中 (クリックで非表示)' : '非表示 (クリックで表示)'}`;
-        btn.textContent = `📐 40字: ${vis ? 'ON' : 'OFF'}`;
-      }
-    };
-    updateGuidelineButtonUI();
-
-    const toggleGuidelineAction = () => {
-      if (!this.columnGuideline) return;
-      const next = !this.columnGuideline.isVisible();
-      this.columnGuideline.setVisible(next);
-      updateGuidelineButtonUI();
-      this.showToast(`📐 40字ガイドラインを ${next ? '表示' : '非表示'} にしました`);
-    };
-
-    document.getElementById('btnToggleGuideline')?.addEventListener('click', toggleGuidelineAction);
-    document.getElementById('cursorPosBadge')?.addEventListener('click', toggleGuidelineAction);
-
-    // Hanging Punctuation Independent Toggle (Item 15)
-    const updateHangingButtonUI = () => {
-      const btn = document.getElementById('btnToggleHanging');
-      if (btn) {
-        btn.classList.toggle('active', this.kinsokuHanging);
-        btn.title = `句読点・閉じ括弧のぶら下げ表示: ${this.kinsokuHanging ? 'ON (行末+1字許容)' : 'OFF'}`;
-        btn.textContent = `⤵ ぶら下げ: ${this.kinsokuHanging ? 'ON' : 'OFF'}`;
-      }
-    };
-    updateHangingButtonUI();
-
-    document.getElementById('btnToggleHanging')?.addEventListener('click', () => {
-      this.setKinsokuHanging(!this.kinsokuHanging);
-      updateHangingButtonUI();
-      this.showToast(`⤵ ぶら下げ表示を ${this.kinsokuHanging ? 'ON' : 'OFF'} にしました`);
-    });
-
-    // History: switch to right-pane dock tab instead of modal
-    document.getElementById('historyDepthBadge')?.addEventListener('click', () => {
-      this.activeRightTab = 'history';
-      const paneRight = document.getElementById('paneRight');
-      if (paneRight && paneRight.style.display === 'none') {
-        paneRight.style.display = '';
-      }
-      this.renderRightPane();
-    });
+    this.toolbarBindingController.bindToolbarButtons();
 
     // Global Alt+P Promote Shelved Lore Shortcut
     window.addEventListener('keydown', (e) => {
@@ -1164,11 +1046,21 @@ export class PlotailorApp {
         { passive: false }
       );
 
-      // Margin click handling: snap caret to end of document when clicking background margin
+      // Margin click handling: snap caret smoothly according to vertical geometry
       canvasWrapper.addEventListener('click', (e: MouseEvent) => {
         if (!this.cmEditor) return;
         const target = e.target as HTMLElement;
         if (target === canvasWrapper || target === this.editorBody) {
+          if (this.isVertical) {
+            const vPos = getVerticalPosAtCoords(this.cmEditor, { x: e.clientX, y: e.clientY });
+            if (vPos !== null) {
+              this.cmEditor.dispatch({
+                selection: { anchor: vPos, head: vPos },
+              });
+              this.cmEditor.focus();
+              return;
+            }
+          }
           const docLen = this.cmEditor.state.doc.length;
           this.cmEditor.dispatch({
             selection: { anchor: docLen, head: docLen },
@@ -1297,7 +1189,7 @@ export class PlotailorApp {
       const target = e.target as HTMLElement | null;
       if (!target) return;
       const decEl = target.closest(
-        '.cm-decoration-layer0, .cm-decoration-layer1, .cm-decoration-layer2, [class*="cm-lint-tier"]'
+        '.cm-decoration-layer0, .cm-decoration-layer1, .cm-decoration-layer2, .cm-lint-warning, .cm-pronoun-missing, .cm-lint-multiple, [class*="cm-lint-tier"]'
       ) as HTMLElement | null;
       if (!decEl) return;
 
@@ -1307,11 +1199,15 @@ export class PlotailorApp {
       }
 
       const isLayer0or1 = decEl.classList.contains('cm-decoration-layer0') || decEl.classList.contains('cm-decoration-layer1');
-      const isLayer2orLint = decEl.classList.contains('cm-decoration-layer2') || Array.from(decEl.classList).some((c) => c.startsWith('cm-lint-tier'));
+      const isLinter = decEl.classList.contains('cm-decoration-layer2') ||
+        decEl.classList.contains('cm-lint-warning') ||
+        decEl.classList.contains('cm-pronoun-missing') ||
+        decEl.classList.contains('cm-lint-multiple') ||
+        Array.from(decEl.classList).some((c) => c.startsWith('cm-lint-tier'));
 
       if (isLayer0or1) {
         this.activeRightTab = 'lore';
-      } else if (isLayer2orLint) {
+      } else if (isLinter) {
         this.activeRightTab = 'linter';
       }
 
@@ -1380,43 +1276,7 @@ export class PlotailorApp {
   }
 
   private handleEditorChange() {
-    const rawText = this.cmEditor ? this.cmEditor.state.doc.toString() : '';
-    const activeCh = this.chapters.find((c) => c.id === this.currentChapterId);
-    if (activeCh) {
-      activeCh.content = rawText;
-      activeCh.charCount = rawText.replace(/\s+/g, '').length;
-    }
-
-    this.updateStats();
-
-    this.velocityWidget.recordKeystroke(rawText);
-    this.fullscreenStatusBar?.updateText(rawText);
-    const kinsokuViolations = this.kinsokuEngine.detectViolations(rawText, this.kinsokuColumns * 2);
-    this.narrativeDock.updateKinsokuViolations(kinsokuViolations);
-
-    // Record snapshot debounced
-    this.recordSnapshotDebounced(this.currentChapterId, rawText);
-
-    const saveIndicator = document.getElementById('saveStatusIndicator');
-    if (saveIndicator) {
-      saveIndicator.textContent = '自動保存: 編集中...';
-      saveIndicator.style.color = 'var(--color-gold)';
-    }
-
-    // Async OPFS WAL Worker write (0ms main thread blocking)
-    this.walWorkerBridge.writeAsync(0, new TextEncoder().encode(rawText)).catch(() => {});
-
-    if (this.saveDebounceTimer !== null) {
-      clearTimeout(this.saveDebounceTimer);
-    }
-    this.saveDebounceTimer = setTimeout(() => {
-      this.saveToStorage();
-      this.reconcileShelvedLore(true);
-      if (saveIndicator) {
-        saveIndicator.textContent = '自動保存: 0.1秒前 (OPFS WAL Worker & AES-GCM)';
-        saveIndicator.style.color = 'var(--color-text-dim)';
-      }
-    }, 400);
+    this.editorLifecycleController.handleEditorChange();
   }
 
   private handleCadenceState(status: CadenceStatus) {
@@ -1758,24 +1618,25 @@ export class PlotailorApp {
     const coords = view.coordsAtPos(sel.head);
     if (!coords) return;
 
-    const scroller = view.scrollDOM;
-    const rect = scroller.getBoundingClientRect();
+    const canvasWrapper = document.getElementById('canvasWrapper');
+    const scrollContainer = canvasWrapper || view.scrollDOM;
+    const rect = scrollContainer.getBoundingClientRect();
 
     if (this.isVertical) {
       // 縦書き: 水平方向（X軸）スクロール追従
       const padding = 60;
       if (coords.left < rect.left + padding) {
-        scroller.scrollLeft -= (rect.left + padding - coords.left);
+        scrollContainer.scrollLeft -= (rect.left + padding - coords.left);
       } else if (coords.right > rect.right - padding) {
-        scroller.scrollLeft += (coords.right - (rect.right - padding));
+        scrollContainer.scrollLeft += (coords.right - (rect.right - padding));
       }
     } else {
       // 横書き: 垂直方向（Y軸）スクロール追従
       const padding = 40;
       if (coords.top < rect.top + padding) {
-        scroller.scrollTop -= (rect.top + padding - coords.top);
+        scrollContainer.scrollTop -= (rect.top + padding - coords.top);
       } else if (coords.bottom > rect.bottom - padding) {
-        scroller.scrollTop += (coords.bottom - (rect.bottom - padding));
+        scrollContainer.scrollTop += (coords.bottom - (rect.bottom - padding));
       }
     }
   }
@@ -2251,6 +2112,32 @@ export class PlotailorApp {
     const validatedRules = this.narrativeWorkerBridge.getPrhEngine().getRules();
     this.narrativeDock.updatePrhRules(validatedRules);
   }
+
+  public saveIgnoredIssues(): void {
+    try {
+      const items = this.narrativeDock.getIgnoredIssues();
+      const storageKey = `plotailor_ignored_issues_${this.currentProjectId || 'default'}`;
+      localStorage.setItem(storageKey, JSON.stringify(items));
+    } catch (e) {
+      console.warn('[PlotailorApp] Failed to save ignored issues:', e);
+    }
+  }
+
+  public loadIgnoredIssues(): void {
+    try {
+      const storageKey = `plotailor_ignored_issues_${this.currentProjectId || 'default'}`;
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const items = JSON.parse(saved);
+        if (Array.isArray(items)) {
+          this.narrativeDock.updateIgnoredIssues(items);
+        }
+      }
+    } catch (e) {
+      console.warn('[PlotailorApp] Failed to load ignored issues:', e);
+    }
+  }
+
   public getEditorView(): EditorView {
     return this.cmEditor;
   }

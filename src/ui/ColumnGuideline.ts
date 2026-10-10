@@ -201,6 +201,24 @@ export class ColumnGuideline {
   public getCharacterPitch(): { width: number; height: number } {
     if (typeof document !== 'undefined' && this.container) {
       try {
+        // 1. 実機エディタ内の実際の行 (.cm-line) が存在する場合、その実ピクセルから高さを算出
+        const realLine = this.container.querySelector('.cm-line');
+        if (realLine && realLine.textContent && realLine.textContent.length >= 10) {
+          const range = document.createRange();
+          range.selectNodeContents(realLine);
+          const rects = range.getClientRects();
+          if (rects.length > 0) {
+            const firstRect = rects[0];
+            const avgCharHeight = firstRect.height / realLine.textContent.length;
+            if (avgCharHeight >= this.fontSize * 0.9 && avgCharHeight <= this.fontSize * 1.5) {
+              return {
+                width: Number((avgCharHeight * (1 + 0.03)).toFixed(2)),
+                height: Number(avgCharHeight.toFixed(2)),
+              };
+            }
+          }
+        }
+
         const testSpan = document.createElement('span');
         testSpan.style.visibility = 'hidden';
         testSpan.style.position = 'absolute';
@@ -278,7 +296,14 @@ export class ColumnGuideline {
       // Guideline is a horizontal border at Y = paddingTop + (columns * pitch.height)
       const primaryY = pad.top + this.columns * pitch.height;
       const hangingY = pad.top + (this.columns + 1) * pitch.height;
-      const fullWidth = Math.max(this.container.scrollWidth, this.container.clientWidth, 3000);
+      const parentWrapper = this.container.closest('.canvas-wrapper') || this.container.parentElement;
+      const fullWidth = Math.max(
+        this.container.scrollWidth,
+        this.container.clientWidth,
+        parentWrapper ? parentWrapper.scrollWidth : 0,
+        parentWrapper ? parentWrapper.clientWidth : 0,
+        10000
+      );
 
       this.primaryLineEl.style.top = `${primaryY}px`;
       this.primaryLineEl.style.left = '0';

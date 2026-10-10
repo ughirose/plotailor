@@ -7,17 +7,18 @@
   --color-bg-dark: #0e1117;
   --color-bg-sidebar: #131720;
   --color-bg-panel: #161b22;
+  --color-surface: #1c2128;
   --color-border: #2d333b;
   --color-border-subtle: #21262d;
-  --color-gold: #cfa85c;
-  --color-gold-hover: #dfba6e;
-  --color-gold-subtle: rgba(207, 168, 92, 0.15);
+  --color-gold: #c29d59;
+  --color-gold-hover: #d4b06c;
+  --color-gold-subtle: rgba(194, 157, 89, 0.12);
   --color-text-main: #e6edf3;
   --color-text-muted: #8b949e;
   --color-text-dim: #6e7681;
   --color-accent: #388bfd;
   --color-success: #3fb950;
-  --color-warning: #d29922;
+  --color-warning: #c68e17;
   --color-danger: #f85149;
 
   /* Literary Canvas (Washi & Night) */
@@ -614,14 +615,15 @@ html, body {
   left: 0;
   right: 0;
   bottom: 0;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   height: 100%;
+  overflow: visible;
 }
 
 .column-guideline-container.mode-vertical .column-guideline-line {
   position: absolute;
   left: 0;
-  right: 0;
   height: 1px;
   border-top: 1px dashed rgba(207, 168, 92, 0.45);
 }

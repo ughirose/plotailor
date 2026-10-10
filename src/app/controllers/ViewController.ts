@@ -123,31 +123,59 @@ export class ViewController {
     this.deps.showToast(`執筆方向を「${this.isVertical ? '縦書き' : '横書き'}」に切り替えました`);
   }
 
+  private wrapMode: 'column' | 'screen' | 'off' = 'column';
+
+  public getWrapMode(): 'column' | 'screen' | 'off' {
+    return this.wrapMode;
+  }
+
   public updateEditorWidth(): void {
     const editorBody = this.deps.getEditorBody();
     if (!editorBody) return;
     const currentSize = FontSizeControl.clampFontSize(this.deps.getFontSize());
 
     if (this.isVertical) {
-      const pitchHeight = currentSize * 1.05;
-      const totalHeightPx = Math.ceil(this.deps.getKinsokuColumns() * pitchHeight + 76);
-      editorBody.style.maxWidth = '';
-      editorBody.style.width = 'max-content';
-      editorBody.style.maxHeight = `${totalHeightPx}px`;
-      editorBody.style.height = `${totalHeightPx}px`;
+      if (this.wrapMode === 'column') {
+        const pitchHeight = currentSize * 1.05;
+        const totalHeightPx = Math.ceil(this.deps.getKinsokuColumns() * pitchHeight + 76);
+        editorBody.style.maxWidth = '';
+        editorBody.style.width = 'max-content';
+        editorBody.style.maxHeight = `${totalHeightPx}px`;
+        editorBody.style.height = `${totalHeightPx}px`;
+      } else {
+        editorBody.style.maxWidth = '';
+        editorBody.style.width = 'max-content';
+        editorBody.style.maxHeight = '100%';
+        editorBody.style.height = '100%';
+      }
       return;
     }
 
     editorBody.style.maxHeight = '';
     editorBody.style.height = '';
-    const pitchWidth = currentSize * 1.03;
-    const totalWidthPx = Math.ceil(this.deps.getKinsokuColumns() * pitchWidth + 96);
-    editorBody.style.maxWidth = `${totalWidthPx}px`;
-    editorBody.style.width = '100%';
+    if (this.wrapMode === 'column') {
+      const pitchWidth = currentSize * 1.03;
+      const totalWidthPx = Math.ceil(this.deps.getKinsokuColumns() * pitchWidth + 96);
+      editorBody.style.maxWidth = `${totalWidthPx}px`;
+      editorBody.style.width = '100%';
+    } else {
+      editorBody.style.maxWidth = '100%';
+      editorBody.style.width = '100%';
+    }
   }
 
   public toggleWrap(): void {
-    this.isLineWrapping = !this.isLineWrapping;
+    if (this.wrapMode === 'column') {
+      this.wrapMode = 'off';
+      this.isLineWrapping = false;
+    } else if (this.wrapMode === 'off') {
+      this.wrapMode = 'screen';
+      this.isLineWrapping = true;
+    } else {
+      this.wrapMode = 'column';
+      this.isLineWrapping = true;
+    }
+
     const cm = this.deps.getEditorView();
     if (cm) {
       cm.dispatch({
@@ -161,13 +189,17 @@ export class ViewController {
       editorBody.classList.toggle('no-wrap', !this.isLineWrapping);
     }
 
+    this.updateEditorWidth();
+
     const btn = document.getElementById('btnToggleWrap');
     if (btn) {
-      btn.textContent = `折り返し: ${this.isLineWrapping ? 'ON' : 'OFF'}`;
+      const label = this.wrapMode === 'column' ? `${this.deps.getKinsokuColumns()}字指定` : this.wrapMode === 'screen' ? '画面基準' : 'OFF';
+      btn.textContent = `折り返し: ${label}`;
     }
 
     this.deps.saveToStorage();
-    this.deps.showToast(`📐 文字折り返しを「${this.isLineWrapping ? 'ON' : 'OFF'}」に設定しました`);
+    const modeDesc = this.wrapMode === 'column' ? `${this.deps.getKinsokuColumns()}字折り返し` : this.wrapMode === 'screen' ? '画面幅に合わせる' : '折り返しなし';
+    this.deps.showToast(`📐 文字折り返しを「${modeDesc}」に設定しました`);
   }
 
   public getRubyButtonLabel(): string {

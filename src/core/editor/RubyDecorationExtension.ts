@@ -349,31 +349,14 @@ export function parseAndBuildDecorations(
         widgets.push(widget.range(match.rawFrom, match.rawTo));
       }
     } else if (match.type === 'bouten') {
-      const displayTo = displayFrom + match.text.length;
-      const currentDelta = match.text.length - (match.rawTo - match.rawFrom);
-      accumulatedDelta += currentDelta;
-
-      spans.push({
-        rawFrom: match.rawFrom,
-        rawTo: match.rawTo,
-        displayFrom,
-        displayTo,
-        delta: accumulatedDelta,
-      });
-
       if (!isSelected && !isComposingHere) {
-        if (mode !== 'off') {
-          const widget = Decoration.replace({
-            widget: new BoutenWidget(match.text),
-          });
-          widgets.push(widget.range(match.rawFrom, match.rawTo));
-        } else {
-          // Off mode for bouten: strip markup, keep pure text
-          const widget = Decoration.replace({
-            widget: new RubyOffWidget(match.text),
-          });
-          widgets.push(widget.range(match.rawFrom, match.rawTo));
-        }
+        const widget = Decoration.replace({
+          widget:
+            mode === 'off'
+              ? new RubyOffWidget(match.text)
+              : new BoutenWidget(match.text),
+        });
+        widgets.push(widget.range(match.rawFrom, match.rawTo));
       }
     }
   }

@@ -24,6 +24,8 @@ export interface NarrativeInspectorDockOptions {
   onAddPrhRule?: (rule: Partial<PlotailorPrhRule>) => void;
   onDeletePrhRule?: (ruleId: string) => void;
   onRestorePrhRule?: (ruleId: string) => void;
+  onIgnoreIssue?: (issueKey: string, issueData: any) => void;
+  onRestoreIgnoredIssue?: (issueKey: string) => void;
   geometryBridge?: VerticalInspectorGeometryBridge | BridgeLayoutOptions;
 }
 
@@ -40,7 +42,8 @@ export class NarrativeInspectorDock {
   private kinsokuViolations: KinsokuViolation[] = [];
   private prhRules: PlotailorPrhRule[] = [];
   private archivedPrhRules: PlotailorPrhRule[] = [];
-  private activeFilter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' | 'pov' | 'events' = 'all';
+  private ignoredIssues: Map<string, { key: string; label: string; message: string; snippet?: string; time: number }> = new Map();
+  private activeFilter: 'all' | 'syntactic' | 'zero-pronoun' | 'kinsoku' | 'pov' | 'events' | 'ignored' = 'all';
   private activeTier: InspectionTier = 'all';
   private isScoreCardCollapsed: boolean = true;
 
@@ -60,6 +63,8 @@ export class NarrativeInspectorDock {
   private onAddPrhRule?: (rule: Partial<PlotailorPrhRule>) => void;
   private onDeletePrhRule?: (ruleId: string) => void;
   private onRestorePrhRule?: (ruleId: string) => void;
+  private onIgnoreIssue?: (issueKey: string, issueData: any) => void;
+  private onRestoreIgnoredIssue?: (issueKey: string) => void;
 
   constructor(options: NarrativeInspectorDockOptions = {}) {
     this.onJumpToTarget = options.onJumpToTarget;
@@ -70,11 +75,43 @@ export class NarrativeInspectorDock {
     this.onAddPrhRule = options.onAddPrhRule;
     this.onDeletePrhRule = options.onDeletePrhRule;
     this.onRestorePrhRule = options.onRestorePrhRule;
+    this.onIgnoreIssue = options.onIgnoreIssue;
+    this.onRestoreIgnoredIssue = options.onRestoreIgnoredIssue;
 
     if (options.geometryBridge instanceof VerticalInspectorGeometryBridge) {
       this.geometryBridge = options.geometryBridge;
     } else {
       this.geometryBridge = new VerticalInspectorGeometryBridge(options.geometryBridge);
+    }
+  }
+
+  public updateIgnoredIssues(issues: Array<{ key: string; label: string; message: string; snippet?: string; time: number }>): void {
+    this.ignoredIssues.clear();
+    for (const item of issues) {
+      this.ignoredIssues.set(item.key, item);
+    }
+  }
+
+  public getIgnoredIssues(): Array<{ key: string; label: string; message: string; snippet?: string; time: number }> {
+    return Array.from(this.ignoredIssues.values());
+  }
+
+  public isIssueIgnored(key: string): boolean {
+    return this.ignoredIssues.has(key);
+  }
+
+  public ignoreIssue(item: { key: string; label: string; message: string; snippet?: string }): void {
+    const data = { ...item, time: Date.now() };
+    this.ignoredIssues.set(item.key, data);
+    if (this.onIgnoreIssue) {
+      this.onIgnoreIssue(item.key, data);
+    }
+  }
+
+  public restoreIgnoredIssue(key: string): void {
+    this.ignoredIssues.delete(key);
+    if (this.onRestoreIgnoredIssue) {
+      this.onRestoreIgnoredIssue(key);
     }
   }
 
@@ -117,6 +154,10 @@ export class NarrativeInspectorDock {
 
     // 1. Tier 1: Syntactic linter & kinsoku items
     for (const item of this.currentResult.syntacticItems) {
+      if (this.ignoredIssues.has(`syn:${item.ruleType}:${item.from}:${item.previewText || ''}`) ||
+          this.ignoredIssues.has(`rule:${item.ruleType}:${item.previewText || ''}`)) {
+        continue;
+      }
       const p = this.geometryBridge.calculateTierDecorationPlacement(
         {
           id: item.id,
@@ -153,6 +194,10 @@ export class NarrativeInspectorDock {
     // 2. Tier 2: Zero Pronoun & POV & Event items
     for (let i = 0; i < this.currentResult.zeroPronounItems.length; i++) {
       const zp = this.currentResult.zeroPronounItems[i];
+      if (this.ignoredIssues.has(`zp:${zp.from}:${zp.predicateText}`) ||
+          this.ignoredIssues.has(`zp-pred:${zp.predicateText}`)) {
+        continue;
+      }
       const id = `zp-${i}-${zp.from}`;
       const p = this.geometryBridge.calculateTierDecorationPlacement(
         {
@@ -171,6 +216,9 @@ export class NarrativeInspectorDock {
 
     if (this.currentResult.povItems) {
       for (const pov of this.currentResult.povItems) {
+        if (this.ignoredIssues.has(`pov:${pov.from}:${pov.to}`)) {
+          continue;
+        }
         const id = pov.id || `pov-${pov.from}-${pov.to}`;
         const p = this.geometryBridge.calculateTierDecorationPlacement(
           {
@@ -319,22 +367,35 @@ export class NarrativeInspectorDock {
     const scoreColor =
       score >= 85 ? 'var(--color-success, #3fb950)' : score >= 65 ? 'var(--color-gold, #cfa85c)' : 'var(--color-danger, #f85149)';
 
+    const unignoredSyntacticItems = res.syntacticItems.filter(
+      (item) => !this.ignoredIssues.has(`syn:${item.ruleType}:${item.from}:${item.previewText || ''}`) &&
+                !this.ignoredIssues.has(`rule:${item.ruleType}:${item.previewText || ''}`)
+    );
+    const unignoredZPItems = res.zeroPronounItems.filter(
+      (item) => !this.ignoredIssues.has(`zp:${item.from}:${item.predicateText}`) &&
+                !this.ignoredIssues.has(`zp-pred:${item.predicateText}`)
+    );
+    const unignoredPOVItems = (res.povItems || []).filter(
+      (item) => !this.ignoredIssues.has(`pov:${item.from}:${item.to}`)
+    );
+
     const showSyntactic = this.activeFilter === 'all' || this.activeFilter === 'syntactic';
     const showZP = this.activeFilter === 'all' || this.activeFilter === 'zero-pronoun';
     const showKinsoku = this.activeFilter === 'all' || this.activeFilter === 'kinsoku';
     const showPOV = this.activeFilter === 'all' || this.activeFilter === 'pov';
     const showEvents = this.activeFilter === 'all' || this.activeFilter === 'events';
+    const showIgnored = this.activeFilter === 'ignored';
 
-    const povCount = res.povItems?.length || 0;
+    const povCount = unignoredPOVItems.length;
     const eventCount = (res.eventActionItems?.length || 0) + (res.connectiveItems?.length || 0) + (res.entitySpanItems?.length || 0);
 
-    const tier1Count = res.syntacticItems.length + this.kinsokuViolations.length;
-    const tier2Count = povCount + res.zeroPronounItems.length + eventCount;
+    const tier1Count = unignoredSyntacticItems.length + this.kinsokuViolations.length;
+    const tier2Count = povCount + unignoredZPItems.length + eventCount;
     const tier3Count = (this.dagCycleReport?.cycles?.length || 0) + this.unresolvedForeshadowings.length + this.strayLoreItems.length;
 
-    const showTier1 = this.activeTier === 'all' || this.activeTier === 'tier1';
-    const showTier2 = this.activeTier === 'all' || this.activeTier === 'tier2';
-    const showTier3 = this.activeTier === 'all' || this.activeTier === 'tier3';
+    const showTier1 = !showIgnored && (this.activeTier === 'all' || this.activeTier === 'tier1');
+    const showTier2 = !showIgnored && (this.activeTier === 'all' || this.activeTier === 'tier2');
+    const showTier3 = !showIgnored && (this.activeTier === 'all' || this.activeTier === 'tier3');
 
     let html = `
       <div class="narrative-inspector-dock" data-testid="narrative-inspector-dock">
@@ -358,8 +419,8 @@ export class NarrativeInspectorDock {
           </div>
           <div class="dock-card-body" style="${this.isScoreCardCollapsed ? 'display: none;' : ''}">
             <div class="linter-metric-row">
-              <span>構文警告: <strong>${res.syntacticItems.length} 件</strong></span>
-              <span>主語抜け: <strong>${res.zeroPronounItems.length} 件</strong></span>
+              <span>構文警告: <strong>${unignoredSyntacticItems.length} 件</strong></span>
+              <span>主語抜け: <strong>${unignoredZPItems.length} 件</strong></span>
               ${povCount > 0 ? `<span>POV注意: <strong>${povCount} 件</strong></span>` : ''}
               ${this.kinsokuViolations.length > 0 ? `<span>禁則違反: <strong>${this.kinsokuViolations.length} 件</strong></span>` : ''}
             </div>
@@ -402,13 +463,13 @@ export class NarrativeInspectorDock {
         <!-- Filter Sub-tabs (Inline within Dock) -->
         <div class="dock-filter-bar">
           <button class="filter-btn ${this.activeFilter === 'all' ? 'active' : ''}" data-action="filter" data-filter="all">
-            すべて (${res.totalWarnings + this.kinsokuViolations.length + eventCount})
+            すべて (${unignoredSyntacticItems.length + unignoredZPItems.length + povCount + this.kinsokuViolations.length + eventCount})
           </button>
           <button class="filter-btn ${this.activeFilter === 'syntactic' ? 'active' : ''}" data-action="filter" data-filter="syntactic">
-            構文 (${res.syntacticItems.length})
+            構文 (${unignoredSyntacticItems.length})
           </button>
           <button class="filter-btn ${this.activeFilter === 'zero-pronoun' ? 'active' : ''}" data-action="filter" data-filter="zero-pronoun">
-            主語 (${res.zeroPronounItems.length})
+            主語 (${unignoredZPItems.length})
           </button>
           ${povCount > 0 ? `
           <button class="filter-btn ${this.activeFilter === 'pov' ? 'active' : ''}" data-action="filter" data-filter="pov">
@@ -425,6 +486,9 @@ export class NarrativeInspectorDock {
             禁則 (${this.kinsokuViolations.length})
           </button>
           ` : ''}
+          <button class="filter-btn ${this.activeFilter === 'ignored' ? 'active' : ''}" data-action="filter" data-filter="ignored" style="${this.ignoredIssues.size > 0 ? 'color: var(--color-gold); font-weight: 600;' : ''}">
+            🚫 無視 (${this.ignoredIssues.size})
+          </button>
         </div>
     `;
 
@@ -440,19 +504,20 @@ export class NarrativeInspectorDock {
       `;
     } else {
       // 1. Syntactic Linter Warnings Section (Tier 1)
-      if (showTier1 && showSyntactic && res.syntacticItems.length > 0) {
+      if (showTier1 && showSyntactic && unignoredSyntacticItems.length > 0) {
         html += `
           <div class="dock-section-title">
             <span>⚠️ Tier 1: 構文・組版・タイポ指摘（Lint Roller）</span>
-            <span class="section-count">${res.syntacticItems.length}</span>
+            <span class="section-count">${unignoredSyntacticItems.length}</span>
           </div>
         `;
 
-        for (const item of res.syntacticItems) {
+        for (const item of unignoredSyntacticItems) {
           const ruleLabel = this.getRuleLabel(item.ruleType);
           const ruleBadgeClass = this.getRuleBadgeClass(item.ruleType);
-          const sameLineCount = res.syntacticItems.filter((o) => o.line === item.line).length +
-            res.zeroPronounItems.filter((o) => o.line === item.line).length;
+          const sameLineCount = unignoredSyntacticItems.filter((o) => o.line === item.line).length +
+            unignoredZPItems.filter((o) => o.line === item.line).length;
+          const issueKey = `syn:${item.ruleType}:${item.from}:${item.previewText || ''}`;
 
           html += `
             <div class="linter-issue-card cursor-pointer" data-action="jump" data-from="${item.from}" data-to="${item.to}" title="クリックしてエディタの該当箇所へジャンプ">
@@ -461,7 +526,21 @@ export class NarrativeInspectorDock {
                   <span class="issue-tag ${ruleBadgeClass}">${ruleLabel}</span>
                   ${sameLineCount > 1 ? `<span class="issue-tag" style="background: rgba(248, 81, 73, 0.15); color: var(--color-danger); border: 1px solid rgba(248, 81, 73, 0.3);">⚠️ 同行${sameLineCount}件</span>` : ''}
                 </div>
-                <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
+                  <button
+                    class="btn-ignore-issue"
+                    data-action="ignore-issue"
+                    data-key="${issueKey}"
+                    data-label="${ruleLabel}"
+                    data-message="${this.escapeHtml(item.message)}"
+                    data-snippet="${this.escapeHtml(item.snippet || '')}"
+                    style="padding: 1px 5px; font-size: 10px; background: none; border: 1px solid var(--color-border); color: var(--color-text-dim); border-radius: 3px; cursor: pointer;"
+                    title="この指摘を無視（次回以降非表示）"
+                  >
+                    ✕ 無視
+                  </button>
+                </div>
               </div>
               <div class="issue-message">${this.escapeHtml(item.message)}</div>
               ${item.snippet ? `
@@ -503,7 +582,7 @@ export class NarrativeInspectorDock {
           `;
           for (const rule of this.prhRules) {
             html += `
-              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 6px; margin-bottom: 4px; background: var(--color-surface, #fff); border: 1px solid var(--color-border); border-radius: 3px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 4px 6px; margin-bottom: 4px; background: var(--color-surface, var(--color-bg-dark)); color: var(--color-text-main); border: 1px solid var(--color-border); border-radius: 3px;">
                 <span style="flex: 1; min-width: 0; padding-right: 6px;">「${this.escapeHtml(rule.patterns.join('/'))}」➜ <strong>「${this.escapeHtml(rule.expected)}」</strong> [${this.escapeHtml(rule.scope || 'all')}]</span>
                 <div style="display: flex; gap: 4px; flex-shrink: 0;">
                   <button class="btn-delete-prh" data-action="delete-prh" data-id="${rule.id}" style="padding: 1px 6px; font-size: 10px; background: none; border: 1px solid rgba(248, 81, 73, 0.3); color: var(--color-danger, #f85149); border-radius: 2px; cursor: pointer;" title="この統一ルールを解除してゴミ箱へ移動します">解除</button>
@@ -563,17 +642,18 @@ export class NarrativeInspectorDock {
       }
 
       // 3. Zero Pronoun Resolution Section (Tier 2)
-      if (showTier2 && showZP && res.zeroPronounItems.length > 0) {
+      if (showTier2 && showZP && unignoredZPItems.length > 0) {
         html += `
           <div class="dock-section-title" style="margin-top: 14px;">
             <span>👤 Tier 2: 主語抜け・ゼロ代名詞（Zero Pronoun）</span>
-            <span class="section-count">${res.zeroPronounItems.length}</span>
+            <span class="section-count">${unignoredZPItems.length}</span>
           </div>
         `;
 
-        for (const item of res.zeroPronounItems) {
-          const sameLineCount = res.syntacticItems.filter((o) => o.line === item.line).length +
-            res.zeroPronounItems.filter((o) => o.line === item.line).length;
+        for (const item of unignoredZPItems) {
+          const sameLineCount = unignoredSyntacticItems.filter((o) => o.line === item.line).length +
+            unignoredZPItems.filter((o) => o.line === item.line).length;
+          const issueKey = `zp:${item.from}:${item.predicateText}`;
 
           html += `
             <div class="linter-issue-card zp-card" data-action="jump" data-from="${item.from}" data-to="${item.to}">
@@ -582,7 +662,21 @@ export class NarrativeInspectorDock {
                   <span class="issue-tag zp-tag">主語抜け（ガ格）</span>
                   ${sameLineCount > 1 ? `<span class="issue-tag" style="background: rgba(248, 81, 73, 0.15); color: var(--color-danger); border: 1px solid rgba(248, 81, 73, 0.3);">⚠️ 同行${sameLineCount}件</span>` : ''}
                 </div>
-                <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
+                  <button
+                    class="btn-ignore-issue"
+                    data-action="ignore-issue"
+                    data-key="${issueKey}"
+                    data-label="主語抜け"
+                    data-message="述語「${this.escapeHtml(item.predicateText)}」の主語抜け"
+                    data-snippet="${this.escapeHtml(item.snippet || '')}"
+                    style="padding: 1px 5px; font-size: 10px; background: none; border: 1px solid var(--color-border); color: var(--color-text-dim); border-radius: 3px; cursor: pointer;"
+                    title="この指摘を無視（次回以降非表示）"
+                  >
+                    ✕ 無視
+                  </button>
+                </div>
               </div>
               <div class="issue-message">述語: <strong>「${this.escapeHtml(item.predicateText)}」</strong></div>
               ${item.snippet ? `
@@ -627,15 +721,16 @@ export class NarrativeInspectorDock {
       }
 
       // 4. POV (Epistemic / Internal Sensation) Section (Tier 2)
-      if (showTier2 && showPOV && res.povItems && res.povItems.length > 0) {
+      if (showTier2 && showPOV && unignoredPOVItems.length > 0) {
         html += `
           <div class="dock-section-title" style="margin-top: 14px;">
             <span>👁️ Tier 2: 認識POV・内面描写（Epistemic POV）</span>
-            <span class="section-count">${res.povItems.length}</span>
+            <span class="section-count">${unignoredPOVItems.length}</span>
           </div>
         `;
 
-        for (const item of res.povItems) {
+        for (const item of unignoredPOVItems) {
+          const issueKey = `pov:${item.from}:${item.to}`;
           html += `
             <div class="linter-issue-card cursor-pointer" data-action="jump" data-from="${item.from}" data-to="${item.to}" title="クリックしてエディタの該当箇所へジャンプ">
               <div class="issue-header">
@@ -643,7 +738,21 @@ export class NarrativeInspectorDock {
                   <span class="issue-tag" style="background: rgba(188, 140, 255, 0.15); color: var(--color-purple, #bc8cff); border: 1px solid rgba(188, 140, 255, 0.3);">認識POV</span>
                   <span class="issue-tag" style="background: rgba(207, 168, 92, 0.15); color: var(--color-gold); border: 1px solid rgba(207, 168, 92, 0.3);">${(item.epistemicScore * 100).toFixed(0)}%</span>
                 </div>
-                <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <span class="issue-pos">行 ${item.line}, 列 ${item.col}</span>
+                  <button
+                    class="btn-ignore-issue"
+                    data-action="ignore-issue"
+                    data-key="${issueKey}"
+                    data-label="認識POV"
+                    data-message="${this.escapeHtml(item.message)}"
+                    data-snippet="${this.escapeHtml(item.snippet || '')}"
+                    style="padding: 1px 5px; font-size: 10px; background: none; border: 1px solid var(--color-border); color: var(--color-text-dim); border-radius: 3px; cursor: pointer;"
+                    title="この指摘を無視（次回以降非表示）"
+                  >
+                    ✕ 無視
+                  </button>
+                </div>
               </div>
               <div class="issue-message">${this.escapeHtml(item.message)}</div>
               ${item.snippet ? `
@@ -810,6 +919,51 @@ export class NarrativeInspectorDock {
           html += `</div>`;
         }
       }
+
+      // 7. Ignored Issues Section (when activeFilter === 'ignored')
+      if (showIgnored) {
+        html += `
+          <div class="dock-section-title" style="margin-top: 14px;">
+            <span>🚫 無視された推敲・文体指摘 (${this.ignoredIssues.size}件)</span>
+          </div>
+        `;
+
+        if (this.ignoredIssues.size === 0) {
+          html += `
+            <div class="dock-empty-state" style="padding: 20px 10px;">
+              <p style="font-size: 12px; color: var(--color-text-dim);">現在、無視設定された指摘はありません。</p>
+            </div>
+          `;
+        } else {
+          for (const item of this.ignoredIssues.values()) {
+            html += `
+              <div class="linter-issue-card" style="opacity: 0.85; border-left: 3px solid var(--color-border);">
+                <div class="issue-header">
+                  <div style="display: flex; gap: 4px; align-items: center;">
+                    <span class="issue-tag" style="background: rgba(207, 168, 92, 0.15); color: var(--color-gold);">${this.escapeHtml(item.label)}</span>
+                    <span class="issue-tag" style="background: rgba(0,0,0,0.06); color: var(--color-text-dim);">無視中</span>
+                  </div>
+                  <button
+                    class="btn-restore-ignored-issue"
+                    data-action="unignore-issue"
+                    data-key="${this.escapeHtml(item.key)}"
+                    style="padding: 1px 6px; font-size: 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); color: #38bdf8; border-radius: 2px; cursor: pointer;"
+                    title="この指摘の無視を解除して再表示します"
+                  >
+                    復元
+                  </button>
+                </div>
+                <div class="issue-message" style="margin-top: 4px;">${this.escapeHtml(item.message)}</div>
+                ${item.snippet ? `
+                  <div class="issue-snippet" style="background: rgba(0, 0, 0, 0.05); padding: 4px 6px; margin: 4px 0; border-radius: 3px; font-size: 11px; color: var(--color-text-dim);">
+                    「${this.escapeHtml(item.snippet)}」
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }
+        }
+      }
     }
 
     html += `</div>`;
@@ -940,6 +1094,37 @@ export class NarrativeInspectorDock {
         const id = target.dataset.id;
         if (id && this.onRestorePrhRule) {
           this.onRestorePrhRule(id);
+        }
+      });
+    });
+
+    // Ignore Issue
+    container.querySelectorAll('[data-action="ignore-issue"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = e.currentTarget as HTMLElement;
+        const key = target.dataset.key;
+        if (key) {
+          const label = target.dataset.label || '指摘';
+          const message = target.dataset.message || '';
+          const snippet = target.dataset.snippet || '';
+          this.ignoreIssue({ key, label, message, snippet });
+          container.innerHTML = this.renderHTML();
+          this.bindEvents(container);
+        }
+      });
+    });
+
+    // Un-ignore (Restore) Issue
+    container.querySelectorAll('[data-action="unignore-issue"]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const target = e.currentTarget as HTMLElement;
+        const key = target.dataset.key;
+        if (key) {
+          this.restoreIgnoredIssue(key);
+          container.innerHTML = this.renderHTML();
+          this.bindEvents(container);
         }
       });
     });

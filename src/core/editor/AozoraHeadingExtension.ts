@@ -55,12 +55,12 @@ export function parseAndBuildHeadingDecorations(view: EditorView): DecorationSet
       );
 
       if (!isSelected) {
-        // カーソル非接触時: タグを非表示にし、本文を見出しスタイルで装飾
-        widgets.push(Decoration.replace({}).range(rawFrom, contentFrom));
+        // カーソル非接触時: タグをCSSで不可視・縮小化し、本文を見出しスタイルで装飾（DOM削除による再計算崩れを物理遮断）
+        widgets.push(Decoration.mark({ class: 'cm-heading-tag-hidden' }).range(rawFrom, contentFrom));
         if (contentTo > contentFrom) {
           widgets.push(Decoration.mark({ class: spec.cssClass }).range(contentFrom, contentTo));
         }
-        widgets.push(Decoration.replace({}).range(contentTo, rawTo));
+        widgets.push(Decoration.mark({ class: 'cm-heading-tag-hidden' }).range(contentTo, rawTo));
       } else {
         // カーソル接触時: 編集のためタグを表示しつつ、見出しスタイルも維持
         if (contentTo > contentFrom) {
@@ -72,12 +72,55 @@ export function parseAndBuildHeadingDecorations(view: EditorView): DecorationSet
     }
   }
 
+  // Scan Markdown headings (#, ##, ###)
+  const mdHeadingRegex = /^(\s*)(#{1,3})\s+(.*)$/gm;
+  let mdMatch: RegExpExecArray | null;
+  while ((mdMatch = mdHeadingRegex.exec(docText)) !== null) {
+    const rawFrom = mdMatch.index;
+    const rawTo = rawFrom + mdMatch[0].length;
+    const prefixLen = mdMatch[1].length;
+    const hashesLen = mdMatch[2].length;
+    const tagFrom = rawFrom + prefixLen;
+    const contentFrom = tagFrom + hashesLen + 1; // skip '# '
+    const contentTo = rawTo;
+
+    const level = hashesLen;
+    const cssClass = level === 1 ? 'cm-heading-daimidashi' : level === 2 ? 'cm-heading-nakamidashi' : 'cm-heading-komidashi';
+
+    const isSelected = selectionRanges.some(
+      (r) => r.from <= rawTo && r.to >= rawFrom
+    );
+
+    if (!isSelected) {
+      if (contentFrom > tagFrom) {
+        widgets.push(Decoration.mark({ class: 'cm-heading-tag-hidden' }).range(tagFrom, contentFrom));
+      }
+      if (contentTo > contentFrom) {
+        widgets.push(Decoration.mark({ class: cssClass }).range(contentFrom, contentTo));
+      }
+    } else {
+      if (contentTo > contentFrom) {
+        widgets.push(Decoration.mark({ class: cssClass }).range(contentFrom, contentTo));
+      }
+    }
+  }
+
   // RangeSet は offset 昇順でソートが必要
   widgets.sort((a, b) => a.from - b.from || a.to - b.to);
   return Decoration.set(widgets, true);
 }
 
 const headingTheme = EditorView.theme({
+  '.cm-heading-tag-hidden': {
+    opacity: '0 !important',
+    fontSize: '0px !important',
+    letterSpacing: '0 !important',
+    display: 'inline-block !important',
+    width: '0 !important',
+    height: '0 !important',
+    overflow: 'hidden !important',
+    pointerEvents: 'none !important',
+  },
   '.cm-heading-daimidashi': {
     fontSize: '1.35em !important',
     fontWeight: '700 !important',
@@ -106,8 +149,14 @@ export const aozoraHeadingPlugin = ViewPlugin.fromClass(
 
     update(update: ViewUpdate) {
       if (update.view.composing) return;
-      if (update.docChanged || update.selectionSet) {
+      if (update.docChanged) {
         this.decorations = parseAndBuildHeadingDecorations(update.view);
+      } else if (update.selectionSet) {
+        // selectionSet 時は、カーソルが見出し行・タグ付近に存在する場合のみ再計算
+        const text = update.view.state.doc.toString();
+        if (text.includes('［＃')) {
+          this.decorations = parseAndBuildHeadingDecorations(update.view);
+        }
       }
     }
   },
